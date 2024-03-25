@@ -123,6 +123,14 @@ function xmldb_report_usage_monitor_upgrade($oldversion)
         // Punto de guardado de la versión 2023080107.
         upgrade_plugin_savepoint(true, 2023080107, 'report', 'usage_monitor');
     }
+    if ($oldversion < 20240401001) {
+        // Aquí no se necesitan cambios en la base de datos,
+        // solo actualizamos el punto de guardado de la versión del plugin.
+
+        // Actualiza la versión guardada del plugin en la base de datos.
+        upgrade_plugin_savepoint(true, 20240401001, 'report', 'usage_monitor');
+    }
+
     return true;
 }
 // Función para mostrar la notificación de recomendación si shell_exec está disponible.
