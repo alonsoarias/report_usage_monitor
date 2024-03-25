@@ -21,10 +21,11 @@
  * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
-$plugin->version   = 2023080201;  // Versión del plugin (compatible con Moodle 3.5 y superiores).
-$plugin->requires  = 2018050800;  // Versión mínima requerida de Moodle (Moodle 3.5).
-$plugin->component = 'report_usage_monitor'; // Nombre del componente del plugin.
-$plugin->maturity = MATURITY_STABLE; // Nivel de madurez del plugin.
-$plugin->release  = '3.0.1';        // Número de versión de la versión estable.
+ defined('MOODLE_INTERNAL') || die();
+ 
+ $plugin->component = 'report_usage_monitor'; // Nombre completo del plugin, como se declaró en el archivo `pluginname/version.php`.
+ $plugin->version   = 20240401001;  // La nueva versión en formato YYYYMMDDXX.
+ $plugin->requires  = 2020061500;   // Versión mínima de Moodle requerida - esto corresponde a Moodle 3.9.
+ $plugin->supported = [39, 311];    // Versión de Moodle soportada - desde 3.9 (39) hasta 3.11 (311) inclusive.
+ $plugin->release   = '3.0.9';     // El número de versión legible por humanos.
+ $plugin->maturity  = MATURITY_STABLE; // El nivel de madurez del plugin.
