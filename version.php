@@ -26,6 +26,5 @@
  $plugin->component = 'report_usage_monitor'; // Nombre completo del plugin, como se declaró en el archivo `pluginname/version.php`.
  $plugin->version   = 20240401002;  // Nueva versión del plugin.
  $plugin->requires  = 2022041900;   // Versión mínima de Moodle requerida - Moodle 4.0.
- $plugin->supported = [400];        // Versión de Moodle soportada: desde 4.0 en adelante.
- $plugin->release   = '3.11';     // El número de versión legible por humanos.
+ $plugin->release   = '4.3';     // El número de versión legible por humanos.
  $plugin->maturity  = MATURITY_STABLE; // El nivel de madurez del plugin.
