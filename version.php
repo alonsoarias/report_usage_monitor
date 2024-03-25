@@ -27,5 +27,5 @@
  $plugin->version   = 20240401001;  // La nueva versión en formato YYYYMMDDXX.
  $plugin->requires  = 2020061500;   // Versión mínima de Moodle requerida - esto corresponde a Moodle 3.9.
  $plugin->supported = [39, 311];    // Versión de Moodle soportada - desde 3.9 (39) hasta 3.11 (311) inclusive.
- $plugin->release   = '3.0.9';     // El número de versión legible por humanos.
+ $plugin->release   = '3.11';     // El número de versión legible por humanos.
  $plugin->maturity  = MATURITY_STABLE; // El nivel de madurez del plugin.
