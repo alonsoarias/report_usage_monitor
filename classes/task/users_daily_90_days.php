@@ -53,20 +53,21 @@ class users_daily_90_days extends \core\task\scheduled_task
     /**
      * Ejecutar la tarea para calcular los usuarios principales en los últimos 90 días.
      */
-    public function execute()
-    {
+    public function execute() {
         global $DB, $CFG;
         require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
-
-        // Obtener el número máximo de accesos en los últimos 90 días.
-        $users_90_days = $DB->get_records_sql(max_userdaily_for_90_days(get_string('dateformatsql', 'report_usage_monitor')));
-        foreach ($users_90_days as $log) {
-            $users_90_days = array(
-                "fecha"  => $log->fecha,
-                "usuarios"  =>  $log->usuarios,
-            );
-            set_config('max_userdaily_for_90_days_date', $users_90_days['fecha'], 'report_usage_monitor');
-            set_config('max_userdaily_for_90_days_users', $users_90_days['usuarios'], 'report_usage_monitor');
+    
+        // Asumiendo que la función max_userdaily_for_90_days devuelve una consulta SQL correcta.
+        $sql = max_userdaily_for_90_days(get_string('dateformatsql', 'report_usage_monitor'));
+        $users_90_days_records = $DB->get_records_sql($sql);
+        foreach ($users_90_days_records as $record) {
+            // Asegúrate de que el nombre de la columna en tu consulta SQL sea 'usuarios'.
+            // Si no, reemplaza 'usuarios' con el nombre de columna correcto.
+            if (isset($record->usuarios)) {
+                set_config('max_userdaily_for_90_days_date', $record->fecha, 'report_usage_monitor');
+                set_config('max_userdaily_for_90_days_users', $record->usuarios, 'report_usage_monitor');
+            }
         }
     }
+    
 }
