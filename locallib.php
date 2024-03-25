@@ -29,15 +29,18 @@
  * @param string $format Formato de fecha para la consulta SQL.
  * @return string Consulta SQL para obtener la lista de usuarios.
  */
-function report_user_daily_sql($format)
-{
+function report_user_daily_sql($format) {
+    $tenDaysAgo = date('Y/m/d', strtotime('-10 days'));
+    $yesterday = date('Y/m/d', strtotime('-1 day'));
+
     return "SELECT FROM_UNIXTIME(`timecreated`, '$format') as fecha, count(DISTINCT`userid`) as conteo_accesos_unicos
     FROM {logstore_standard_log}
     WHERE `action`='loggedin' 
-    AND FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') BETWEEN DATE_SUB(CURDATE(), INTERVAL 10 DAY) AND DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+    AND `timecreated` BETWEEN UNIX_TIMESTAMP('$tenDaysAgo') AND UNIX_TIMESTAMP('$yesterday')
     GROUP by fecha 
     ORDER BY fecha DESC";
 }
+
 
 /**
  * Obtener datos del top de usuarios máximos diarios.
@@ -93,14 +96,17 @@ function insert_top_sql($fecha, $cantidad_usuarios)
  * @param string $format Formato de fecha para la consulta SQL.
  * @return string Consulta SQL para obtener la cantidad de usuarios conectados.
  */
-function user_limit_daily_sql($format)
-{
-    return "SELECT count(DISTINCT`userid`) as conteo_accesos_unicos ,FROM_UNIXTIME(`timecreated`, '$format') as fecha
+function user_limit_daily_sql() {
+    $yesterdayStart = strtotime('-1 day midnight');
+    $todayStart = strtotime('today midnight');
+
+    return "SELECT COUNT(DISTINCT `userid`) as conteo_accesos_unicos, FROM_UNIXTIME(`timecreated`, '%Y-%m-%d') as fecha
     FROM {logstore_standard_log}
-    WHERE `action`='loggedin' 
-    AND FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') = DATE_SUB(CURDATE(), INTERVAL 1 DAY)
-    GROUP by fecha";
+    WHERE `action` = 'loggedin'
+    AND `timecreated` >= $yesterdayStart AND `timecreated` < $todayStart
+    GROUP BY fecha";
 }
+
 
 /*Obtener el límite diario de usuarios.*/
 /**
@@ -108,15 +114,18 @@ function user_limit_daily_sql($format)
  *
  * @return string Consulta SQL para obtener el límite diario de usuarios.
  */
-function user_limit_daily_task()
-{
-    return "SELECT UNIX_TIMESTAMP(STR_TO_DATE(x.fecha, '%Y/%m/%d')) as fecha,x.conteo_accesos_unicos FROM (
-        SELECT FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') as fecha, count(DISTINCT`userid`) as conteo_accesos_unicos 
-        FROM {logstore_standard_log}
-        WHERE `action`='loggedin' 
-        AND FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') = DATE_SUB(CURDATE(), INTERVAL 1 DAY) 
-        GROUP by fecha) as x;";
+function user_limit_daily_task() {
+    // Calculamos las marcas de tiempo UNIX para el inicio y el final del día anterior.
+    $startOfYesterday = strtotime('-1 day midnight');
+    $endOfYesterday = strtotime('today midnight') - 1;
+
+    return "SELECT FROM_UNIXTIME(timecreated, '%Y-%m-%d') AS fecha, COUNT(DISTINCT userid) AS conteo_accesos_unicos
+    FROM {logstore_standard_log}
+    WHERE action = 'loggedin'
+    AND timecreated BETWEEN $startOfYesterday AND $endOfYesterday
+    GROUP BY fecha";
 }
+
 /**
  * Recuperar los usuarios conectados recientemente para hoy.
  *
@@ -133,15 +142,18 @@ function users_today()
  * @param string $format Formato de fecha para la consulta SQL.
  * @return string Consulta SQL para obtener el número máximo de accesos en los últimos 90 días.
  */
-function max_userdaily_for_90_days($format)
-{
-    return "SELECT UNIX_TIMESTAMP(STR_TO_DATE(x.fecha, '$format')) as fecha, x.conteo_accesos_unicos as usuarios FROM (
-        SELECT FROM_UNIXTIME(`timecreated`, '$format') as fecha ,count(DISTINCT`userid`) as conteo_accesos_unicos 
-        FROM {logstore_standard_log}
-        WHERE `action`='loggedin' 
-        AND FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') >= DATE_SUB(NOW(), INTERVAL 90 DAY) GROUP by fecha) as x
-        ORDER BY usuarios DESC LIMIT 1";
+function max_userdaily_for_90_days($format) {
+    // Calculamos la marca de tiempo UNIX para 90 días atrás desde la medianoche de hoy.
+    $ninetyDaysAgo = strtotime('-90 days midnight');
+
+    return "SELECT FROM_UNIXTIME(timecreated, '$format') AS fecha, COUNT(DISTINCT userid) AS conteo_accesos_unicos
+    FROM {logstore_standard_log}
+    WHERE action = 'loggedin'
+    AND timecreated >= $ninetyDaysAgo
+    GROUP BY FROM_UNIXTIME(timecreated, '%Y-%m-%d')
+    ORDER BY conteo_accesos_unicos DESC LIMIT 1";
 }
+
 /**
  * Calcular el tamaño de la base de datos.
  *
@@ -238,11 +250,14 @@ function notification_table()
      * @param int $precision (Opcional) Precisión para redondear el resultado.
      * @return float Tamaño en GB redondeado.
      */
-    function display_size_in_gb($size, $precision = 2)
-    {
+    function display_size_in_gb($size, $precision = 2) {
+        // Asegurarse de que $size sea numérico, convirtiéndolo a un número si es necesario.
+        $size = is_numeric($size) ? $size : 0;
+    
         $gb_size = $size / (1024 * 1024 * 1024); // Convertir bytes a GB
         return round($gb_size, $precision);
     }
+    
     /**
      * Calcula el porcentaje de uso del espacio en disco y devuelve un color según el rango de uso.
      *
