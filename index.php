@@ -156,7 +156,7 @@ if ($viewtab == 'userstopnum') {
 
     // Convertir los tamaños a GB para la tabla y agregar la etiqueta "GB"
     $used_space_gb_db = display_size_in_gb($updatestring7, 2);
-    $used_space_total = display_size_in_gb(($updatestring6 + $updatestring7), 2);
+    $used_space_total = display_size_in_gb((floatval($updatestring6) + floatval($updatestring7)), 2);
     // Obtener la cuota de disco desde la configuración
     $disk_quota_gb = get_config('report_usage_monitor', 'disk_quota');
     $free_space = $disk_quota_gb - $used_space_total;
