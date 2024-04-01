@@ -171,7 +171,7 @@ if ($viewtab == 'userstopnum') {
     $chart->set_labels(array(get_string('sizeusage', 'report_usage_monitor') . ' (GB)', get_string('sizedatabase', 'report_usage_monitor') . ' (GB)')); // Agregar la etiqueta "GB" a las leyendas
 
     // Convertir los tamaños a GB para la gráfica
-    $used_space_total_gb = display_size_in_gb(($updatestring6 + $updatestring7), 2);
+    $used_space_total_gb = display_size_in_gb((floatval($updatestring6) + floatval($updatestring7)), 2);
     $used_space_gb_db = display_size_in_gb($updatestring7, 2);
 
 
