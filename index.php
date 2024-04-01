@@ -104,10 +104,7 @@ if ($viewtab == 'userstopnum') {
         $userdaily_recordstop = $DB->get_records_sql($userdailytop);
         $data = [];
         foreach ($userdaily_recordstop as $log) {
-            $table->data[] = array(
-                $log->fecha,
-                $log->cantidad_usuarios
-            );
+            // Eliminada la línea problemática que intentaba añadir datos a $table->data.
             $data[$log->fecha] = $log->cantidad_usuarios;
         }
         uksort($data, 'compararFechas');
@@ -117,10 +114,11 @@ if ($viewtab == 'userstopnum') {
             array_values($data)
         );
         $chart->add_series($series);
-
+    
         // Mostrar la gráfica
         echo $OUTPUT->render($chart);
     }
+    
     echo $OUTPUT->heading(get_string('lastusers', 'report_usage_monitor'));
     $table = new html_table();
     $table->head = array(
