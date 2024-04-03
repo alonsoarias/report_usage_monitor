@@ -57,7 +57,7 @@ if ($ADMIN->fulltree) {
         // Detectar el path de 'du' automáticamente si el sistema operativo es Linux
         if (PHP_OS_FAMILY === 'Linux') {
             $pathToDu = shell_exec('which du');
-            $pathToDu = trim($pathToDu); // Quita el salto de línea al final
+            $pathToDu = trim($pathToDu ?? ''); // Asegura que no se pase null a trim()
 
             // Comprobar que $pathToDu no esté vacío y que el archivo exista.
             if (!empty($pathToDu) && file_exists($pathToDu)) {
