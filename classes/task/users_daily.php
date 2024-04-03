@@ -23,75 +23,80 @@
  * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 o posterior
  */
 
-namespace report_usage_monitor\task;
 
-// Esta línea protege el archivo para que no pueda ser accedido directamente por una URL.
+namespace report_usage_monitor\task;
 defined('MOODLE_INTERNAL') || die();
 
-
-
-/**
- * Tarea para calcular los usuarios diarios.
- *
- * @package     report_usage_monitor
- * @category    admin
- * @copyright   2023 Soporte IngeWeb <soporte@ingeweb.co>
- * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 o posterior
- */
-class users_daily extends \core\task\scheduled_task
-{
-
-    /**
-     * Obtener el nombre de la tarea tal como se muestra en las pantallas de administración.
-     *
-     * @return string
-     *
-     * @throws \coding_exception
-     */
-    public function get_name()
-    {
+class users_daily extends \core\task\scheduled_task {
+    
+    public function get_name() {
         return get_string('getlastusers', 'report_usage_monitor');
     }
 
-    /**
-     * Ejecutar la tarea.
-     */
-    public function execute()
-    {
+    public function execute() {
         global $DB, $CFG;
         require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
 
+        // Usa la función debugging() de Moodle para verificar el estado del debugging.
+        $debugging = debugging("", DEBUG_DEVELOPER);
+
+        $array_daily_top = [];
+
         // Obtener el top de usuarios diarios.
         $userdailytop = report_user_daily_top_task();
-        $userdaily_recordstop = $DB->get_records_sql($userdailytop);
-        foreach ($userdaily_recordstop as $log) {
-            $array_daily_top[] = array(
-                "usuarios"  =>  $log->cantidad_usuarios,
-                "fecha"  => $log->fecha,
-            );
+        if ($debugging) {
+            mtrace("Ejecutando consulta: $userdailytop");
         }
-        $menor = min($array_daily_top);
+        $userdaily_records = $DB->get_records_sql($userdailytop);
+        foreach ($userdaily_records as $record) {
+            $array_daily_top[] = [
+                "usuarios" => $record->cantidad_usuarios,
+                "fecha" => $record->fecha,
+            ];
+        }
 
-        // Obtener el límite diario de usuarios.
+        // Corrige el uso de min() verificando si $array_daily_top está vacío.
+        if (!empty($array_daily_top)) {
+            $menor = min(array_column($array_daily_top, 'usuarios'));
+        } else {
+            $menor = null;
+        }
+
+        // Verificar si hay que insertar un nuevo registro de usuarios.
         $users_daily = user_limit_daily_task();
         $users_daily_record = $DB->get_records_sql($users_daily);
+        $users = [];
         foreach ($users_daily_record as $log) {
-            $users = array(
-                "usuarios"  =>  $log->conteo_accesos_unicos,
-                "fecha"  => $log->fecha,
-            );
+            $users = [
+                "usuarios" => $log->conteo_accesos_unicos,
+                "fecha" => $log->fecha,
+            ];
+            // Solo se espera un registro, así que se puede salir del bucle.
+            break;
         }
 
-        // Insertar el registro si el top de usuarios diarios no tiene 10 registros.
-        if (count($array_daily_top) < 10) {
-            insert_top_sql($users["fecha"], $users["usuarios"]);
+        if (empty($array_daily_top) || count($array_daily_top) < 10) {
+            // Se inserta si la tabla está vacía o tiene menos de 10 registros.
+            insert_top_sql($users['fecha'], $users['usuarios']);
+            if ($debugging) {
+                mtrace("Insertando nuevo registro.");
+            }
         } else {
-            // Actualizar el top de usuarios diarios si el número de usuarios actuales es mayor o igual al menor registro en el top.
-            if ($users["usuarios"] >= $menor["usuarios"]) {
-                update_min_top_sql($users["fecha"], $users["usuarios"], $menor["fecha"]);
+            // Se actualiza si hay 10 o más registros y el nuevo registro tiene más usuarios.
+            if (!is_null($menor) && $users['usuarios'] >= $menor) {
+                // La función update_min_top_sql debe identificar correctamente cuál registro actualizar.
+                update_min_top_sql($users['fecha'], $users['usuarios'], $menor);
+                if ($debugging) {
+                    mtrace("Actualizando registro existente.");
+                }
             }
         }
 
         set_config('lastexecution', time(), 'report_usage_monitor');
+        if ($debugging) {
+            mtrace("Tarea completada.");
+        }
     }
 }
+
+// Las funciones insert_top_sql y update_min_top_sql deben estar definidas en locallib.php o donde corresponda.
