@@ -232,17 +232,24 @@ function notification_table()
         return $size;
     }
     /**
-     * Convierte el tamaño dado en bytes a GB y lo redondea a la precisión especificada.
-     *
-     * @param int $size Tamaño en bytes.
-     * @param int $precision (Opcional) Precisión para redondear el resultado.
-     * @return float Tamaño en GB redondeado.
-     */
-    function display_size_in_gb($size, $precision = 2)
-    {
-        $gb_size = $size / (1024 * 1024 * 1024); // Convertir bytes a GB
-        return round($gb_size, $precision);
+ * Convierte el tamaño de bytes a gigabytes.
+ *
+ * @param mixed $sizeInBytes El tamaño en bytes que se quiere convertir.
+ * @param int $precision El número de decimales a mostrar.
+ * @return string El tamaño en gigabytes, formateado como cadena.
+ */
+function display_size_in_gb($sizeInBytes, $precision = 2) {
+    // Verifica si el valor es numérico y no es null.
+    if (!is_numeric($sizeInBytes) || $sizeInBytes === null) {
+        debugging("display_size_in_gb: se esperaba un valor numérico, recibido: " . var_export($sizeInBytes, true), DEBUG_DEVELOPER);
+        return '0 GB'; // Retorna '0 GB' como un valor seguro por defecto.
     }
+
+    // Conversión de bytes a GB.
+    $sizeInGb = $sizeInBytes / (1024 * 1024 * 1024);
+    return round($sizeInGb, $precision) . ' GB';
+}
+
     /**
      * Calcula el porcentaje de uso del espacio en disco y devuelve un color según el rango de uso.
      *
