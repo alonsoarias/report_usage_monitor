@@ -247,7 +247,7 @@ function display_size_in_gb($sizeInBytes, $precision = 2) {
 
     // Conversión de bytes a GB.
     $sizeInGb = $sizeInBytes / (1024 * 1024 * 1024);
-    return round($sizeInGb, $precision) . ' GB';
+    return round($sizeInGb, $precision);
 }
 
     /**
