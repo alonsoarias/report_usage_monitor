@@ -123,7 +123,7 @@ function xmldb_report_usage_monitor_upgrade($oldversion)
         // Punto de guardado de la versión 2023080107.
         upgrade_plugin_savepoint(true, 2023080107, 'report', 'usage_monitor');
     }
-    if ($oldversion < 20240401001) {
+    if ($oldversion < 2024040101) {
         // Aquí no se necesitan cambios en la base de datos,
         // solo actualizamos el punto de guardado de la versión del plugin.
 
