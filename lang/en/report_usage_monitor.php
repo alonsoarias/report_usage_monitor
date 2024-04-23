@@ -79,7 +79,7 @@ $string['messagehtml1'] = '<p>The platform <a href="{$a->siteurl}" target="_blan
 $string['messagehtml2'] = '
 <p>Dear users,</p>
 <p>The platform <a href="{$a->siteurl}" target="_blank"><strong>{$a->sitename}</strong></a> has reached 90% of its assigned storage capacity. Below are the current system statistics for your review:</p>
-<table border="1" style="border-collapse: collapse; width: 100%;">
+<table border="1" style="border-collapse: collapse; width: 50%;">
     <tr>
         <th style="padding: 8px; background-color: #f2f2f2;">Description</th>
         <th style="padding: 8px; background-color: #f2f2f2;">Detail</th>
