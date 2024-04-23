@@ -326,19 +326,19 @@ function notification_table()
      * This function constructs and sends an email when the number of unique users for the previous day
      * exceeds the configured threshold. It uses Moodle's internal email system to handle the sending process.
      *
-     * @param int $numberofusers The number of unique users that accessed the system.
+     * @param int $usage The number of unique users that accessed the system.
      * @param string $fecha The date for which the threshold was exceeded.
      *
      * @return bool Returns true if the email was successfully queued for sending, false otherwise.
      */
-    function email_notify_user_limit($numberofusers, $fecha, $percentage)
+    function email_notify_user_limit($usage, $fecha, $percentage)
     {
         global $CFG;
         $site = get_site();
         $a = new stdClass();
         $a->sitename  = format_string($site->fullname);
         $a->threshold = get_config('report_usage_monitor', 'max_daily_users_threshold');
-        $a->numberofusers = $numberofusers;
+        $a->usage = $usage;
         $a->lastday = $fecha;
         $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php?view=userstopnum';
         $a->siteurl = $CFG->wwwroot;
@@ -385,8 +385,8 @@ function notification_table()
         $a->databasesize = display_size(get_config('report_usage_monitor', 'totalusagereadabledb'));
         $a->backupcount = get_config('backup', 'backup_auto_max_kept');
         $a->threshold = get_config('report_usage_monitor', 'max_daily_users_threshold');
-        $a->numberofusers = $userAccessCount; // Assuming this function exists and fetches the current number of daily users.
-        $a->userpercentage = calculate_user_threshold_percentage($a->numberofusers, $a->threshold); // Assuming this function calculates the percentage.
+        $a->usage = $userAccessCount; // Assuming this function exists and fetches the current number of daily users.
+        $a->userpercentage = calculate_user_threshold_percentage($a->usage, $a->threshold); // Assuming this function calculates the percentage.
         $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php?view=diskusage';
         $a->siteurl = $CFG->wwwroot;
 
@@ -411,4 +411,9 @@ function notification_table()
         if ($previous_noemailever) $CFG->noemailever = $previous_noemailever;
 
         return true;
+    }
+
+    function calculate_user_threshold_percentage($usage, $threshold)
+    {
+        return ($threshold > 0) ? round(($usage / $threshold) * 100, 2) : 0;
     }
