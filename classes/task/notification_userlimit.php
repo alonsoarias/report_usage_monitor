@@ -27,8 +27,15 @@ class notification_userlimit extends \core\task\scheduled_task
 
     public function execute()
     {
-        global $DB, $CFG;
+        global $CFG, $DB;
         require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
+        $this->notify_user_limit();
+    }
+
+    private function notify_user_limit()
+    {
+        global $DB;
+        $reportconfig = get_config('report_usage_monitor');
         $lastday_users = user_limit_daily_sql(get_string('dateformatsql', 'report_usage_monitor'));
         $lastday_users_records = $DB->get_records_sql($lastday_users);
         foreach ($lastday_users_records as $item) {
