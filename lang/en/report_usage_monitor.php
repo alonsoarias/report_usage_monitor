@@ -83,7 +83,6 @@ $string['messagehtml2'] = '<p>The platform <a href="{$a->siteurl}" target="_blan
 <p>Database size: <strong>{$a->databasesize}</strong></p>
 <p>Moodledata size: <strong>{$a->moodledata}</strong></p>
 <p>Number of backups per course: <strong>{$a->backupcount}</strong></p>
-<p>Users*: <strong>{$a->numberofusers}</strong></p>
 <p>Set threshold for maximum daily users: <strong>{$a->threshold}</strong> users</p>
 <strong>Monitor URL: </strong> {$a->referer}
 <br>
