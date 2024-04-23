@@ -164,17 +164,17 @@ function notification_table()
 {
     global $DB;
     $table = '<h2>' . get_string('lastusers', 'report_usage_monitor') . '</h2>
-    <table class="text-center" border="1" style="width: 30%;">
+    <table border="1" style="border-collapse: collapse; width: 50%;">
     <tr>
-        <th>' . get_string('date', 'report_usage_monitor') . '</th>
-        <th>' . get_string('usersquantity', 'report_usage_monitor') . '</th>
+        <thstyle="padding: 8px; background-color: #f2f2f2;">' . get_string('date', 'report_usage_monitor') . '</th>
+        <thstyle="padding: 8px; background-color: #f2f2f2;">' . get_string('usersquantity', 'report_usage_monitor') . '</th>
     </tr>';
     $userdaily = report_user_daily_sql(get_string('dateformatsql', 'report_usage_monitor'));
     $userdaily_records = $DB->get_records_sql($userdaily);
     foreach ($userdaily_records as $log) {
         $table .= '<tr>
-        <td>' . $log->fecha . '</td>
-        <td>' . $log->conteo_accesos_unicos . '</td>
+        <td style="padding: 8px;">' . $log->fecha . '</td>
+        <td style="padding: 8px;">' . $log->conteo_accesos_unicos . '</td>
         </tr>'; ?>
             <?php
         }
