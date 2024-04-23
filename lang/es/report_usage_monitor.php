@@ -47,8 +47,8 @@ $string['max_userdaily_for_90_days'] = 'Máximo de usuarios diarios en los últi
 $string['users_today'] = 'Cantidad de usuarios diarios el día de hoy: {$a}';
 $string['sizeusage'] = 'Total de uso de disco';
 $string['sizedatabase'] = 'Tamaño base de datos';
-$string['subjectemail1'] = 'Límite de usuarios diarios superado';
-$string['subjectemail2'] = 'Alerta de espacio en disco';
+$string['subjectemail1'] = 'Límite de usuarios diarios superado plataforma:';
+$string['subjectemail2'] = 'Alerta de espacio en disco plataforma:';
 $string['userstopnum'] = 'Usuarios diarios';
 $string['processdisknotificationtask'] = 'Tarea de notificación del uso del disco';
 $string['processuserlimitnotificationtask'] = 'Tarea de notificación del límite de usuarios diarios';
@@ -76,16 +76,48 @@ $string['messagehtml1'] = '<p>La plataforma <a href="{$a->siteurl}" target="_bla
 <hr>
 <i><p>Este mensaje ha sido generado automáticamente por "Usage Report" de <a href="https://ingeweb.co/" target="_blank" ><strong>ingeweb.co</strong></a></p>
 *Se contabilizan usuarios distintos que se autenticaron en la fecha indicada. Usuarios que se autentican más de una vez solo cuenta una vez.<i>';
-$string['messagehtml2'] = '<p>La plataforma <a href="{$a->siteurl}" target="_blank" ><strong>\'{$a->sitename}\'</strong></a> ha superado el 90% del espacio en disco asignado</p>
-<p>Espacio en disco asignado: {$a->quotadisk} </p>
-<p>Espacio en disco usado: <strong>{$a->diskusage}</strong></p>
-<p>Porcentaje de uso del disco: <strong>{$a->percentage}%</strong></p>
-<p>Tamaño de la base de datos: <strong>{$a->databasesize}</strong></p>
-<p>Tamaño de Moodledata: <strong>{$a->moodledata}</strong></p>
-<p>Cantidad de copias de seguridad por curso: <strong>{$a->backupcount}</strong></p>
-<p>Umbral establecido de usuarios máximos diarios: <strong>{$a->threshold}</strong> usuarios</p>
-<strong>Url del monitor: </strong> {$a->referer}
-<br>
+$string['messagehtml2'] = '
+<p>La plataforma <a href="{$a->siteurl}" target="_blank"><strong>{$a->sitename}</strong></a> ha alcanzado el 90% de su capacidad de almacenamiento asignada. A continuación se presentan las estadísticas actuales del sistema para su revisión:</p>
+<table border="1" style="border-collapse: collapse; width: 100%;">
+    <tr>
+        <th style="padding: 8px; background-color: #f2f2f2;">Descripción</th>
+        <th style="padding: 8px; background-color: #f2f2f2;">Detalle</th>
+    </tr>
+    <tr>
+        <td style="padding: 8px;">Espacio en disco asignado</td>
+        <td style="padding: 8px;"><strong>{$a->quotadisk}</strong></td>
+    </tr>
+    <tr>
+        <td style="padding: 8px;">Espacio en disco usado</td>
+        <td style="padding: 8px;"><strong>{$a->diskusage}</strong></td>
+    </tr>
+    <tr>
+        <td style="padding: 8px;">Porcentaje de uso del disco</td>
+        <td style="padding: 8px;"><strong>{$a->percentage}%</strong></td>
+    </tr>
+    <tr>
+        <td style="padding: 8px;">Tamaño de la base de datos</td>
+        <td style="padding: 8px;"><strong>{$a->databasesize}</strong></td>
+    </tr>
+    <tr>
+        <td style="padding: 8px;">Cantidad de copias de seguridad por curso</td>
+        <td style="padding: 8px;"><strong>{$a->backupcount}</strong></td>
+    </tr>
+    <tr>
+        <td style="padding: 8px;">Umbral establecido de usuarios máximos diarios</td>
+        <td style="padding: 8px;"><strong>{$a->threshold} usuarios</strong></td>
+    </tr>
+    <tr>
+        <td style="padding: 8px;">Número actual de usuarios</td>
+        <td style="padding: 8px;"><strong>{$a->numberofusers} usuarios</strong></td>
+    </tr>
+    <tr>
+        <td style="padding: 8px;">Porcentaje del umbral de usuarios</td>
+        <td style="padding: 8px;"><strong>{$a->userpercentage}%</strong></td>
+    </tr>
+</table>
+<p>Es crucial gestionar adecuadamente el almacenamiento para evitar problemas de rendimiento. Por favor, acceda al <a href="{$a->referer}" target="_blank">panel de control del sistema</a> para más detalles.</p>
 <hr>
-<i><p>Este mensaje ha sido generado automáticamente por "Usage Report" de <a href="https://ingeweb.co/" target="_blank" ><strong>ingeweb.co</strong></a></p><i>';
+<p>Este mensaje ha sido generado automáticamente por "Usage Report" de <a href="https://ingeweb.co/" target="_blank"><strong>ingeweb.co</strong></a>. Por favor, no responda a este mensaje.</p>
+';
 $string['reportinfotext'] = 'Este plugin ha sido creado para otro caso de éxito de <strong>IngeWeb</strong>. Visítenos en <a target="_blank" href="http://ingeweb.co/">IngeWeb - Soluciones para triunfar en Internet</a>.';
