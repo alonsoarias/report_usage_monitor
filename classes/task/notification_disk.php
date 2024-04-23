@@ -23,51 +23,50 @@ class notification_disk extends \core\task\scheduled_task {
         return get_string('processdisknotificationtask', 'report_usage_monitor');
     }
 
-    public function execute()
-    {
-        global $CFG, $DB;
+    public function execute() {
+        global $CFG;
         require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
 
-        // Ejecutar notificaciones sin comprobar intervalos
         $this->notify_disk_usage();
     }
 
     private function calculate_notification_interval($disk_percent) {
-        if ($disk_percent >= 99.9) {
-            return 12 * 60 * 60; // 12 hours
-        } elseif ($disk_percent > 98.5) {
-            return 24 * 60 * 60; // 1 day
-        } elseif ($disk_percent >= 90) {
-            return 5 * 24 * 60 * 60; // 5 days
+        $thresholds = [
+            99.9 => 12 * 60 * 60,   // 12 hours
+            98.5 => 24 * 60 * 60,   // 1 day
+            90 => 5 * 24 * 60 * 60, // 5 days
+        ];
+
+        foreach ($thresholds as $threshold => $interval) {
+            if ($disk_percent >= $threshold) {
+                return $interval;
+            }
         }
-        return PHP_INT_MAX; // No notification needed if under 90%
+
+        return 0; // No notification if under 90%
     }
 
-    private function notify_disk_usage()
-    {
+    private function notify_disk_usage() {
+        global $DB; // Ensure global DB object is available
         $reportconfig = get_config('report_usage_monitor');
         $quotadisk = ((int) $reportconfig->disk_quota * 1024) * 1024 * 1024;
-
-        $disk_usage_readable = isset($reportconfig->totalusagereadable) ? (int) $reportconfig->totalusagereadable : 0;
-        $disk_usage_readadb = isset($reportconfig->totalusagereadadb) ? (int) $reportconfig->totalusagereadadb : 0;
-        $disk_usage = $disk_usage_readable + $disk_usage_readadb;
+        $disk_usage = ((int) $reportconfig->totalusagereadable + (int) $reportconfig->totalusagereadadb) ?: 0;
         $disk_percent = ($quotadisk > 0) ? ($disk_usage / $quotadisk) * 100 : 0;
 
-        // Get user access count using the provided snippet
-        $userAccessCount = $this->get_total_user_access_count();
+        $notification_interval = $this->calculate_notification_interval($disk_percent);
+        $last_notificationdisk_time = get_config('report_usage_monitor', 'last_notificationdisk_time');
+        $current_time = time();
 
-        // Call the disk limit notification function with user access count
-        email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAccessCount);
+        if ($current_time - $last_notificationdisk_time >= $notification_interval) {
+            $userAccessCount = $this->get_total_user_access_count();
+            email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAccessCount);
+            set_config('last_notificationdisk_time', $current_time, 'report_usage_monitor');
+        }
     }
 
-    private function get_total_user_access_count()
-    {
+    private function get_total_user_access_count() {
         global $DB;
         $lastday_users = user_limit_daily_sql(get_string('dateformatsql', 'report_usage_monitor'));
-        $lastday_users_records = $DB->get_records_sql($lastday_users);
-        foreach ($lastday_users_records as $item) {
-            $totalAccessCount = $item->conteo_accesos_unicos;
-        }
-        return $totalAccessCount;
+        return (int) $DB->get_field_sql($lastday_users);
     }
 }
