@@ -47,7 +47,7 @@ class notification extends \core\task\scheduled_task
      */
     public function get_name()
     {
-        return get_string('processnotificationstask', 'report_usage_monitor');
+        return get_string('processdisknotificationtask', 'report_usage_monitor');
     }
 
     /**
