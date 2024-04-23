@@ -54,12 +54,22 @@ $tasks = array(
         'month' => '*',
         'dayofweek' => '*'
     ),
-    // Tarea para procesar notificaciones sobre el espacio en disco y los límites de usuarios diarios.
+    // Tarea para procesar notificaciones sobre el espacio en disco.
     array(
-        'classname' => 'report_usage_monitor\task\notification',
+        'classname' => 'report_usage_monitor\task\notification_disk',
         'blocking' => 0,
         'minute' => '0',
-        'hour' => '8',
+        'hour' => '*/6',  // Cada 6 horas
+        'day' => '*',
+        'month' => '*',
+        'dayofweek' => '*'
+    ),
+    // Tarea para procesar notificaciones sobre los límites de usuarios diarios.
+    array(
+        'classname' => 'report_usage_monitor\task\notification_userlimit',
+        'blocking' => 0,
+        'minute' => '0',
+        'hour' => '2',  // Una vez al día a las 2 AM
         'day' => '*',
         'month' => '*',
         'dayofweek' => '*'
