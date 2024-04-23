@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - https://moodle.org/
+// This file is part of Moodle - http://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -12,7 +12,7 @@
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 namespace report_usage_monitor\task;
 
@@ -29,6 +29,7 @@ class notification_userlimit extends \core\task\scheduled_task
     {
         global $CFG, $DB;
         require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
+
         $this->notify_user_limit();
     }
 
@@ -40,7 +41,7 @@ class notification_userlimit extends \core\task\scheduled_task
         $lastday_users_records = $DB->get_records_sql($lastday_users);
 
         foreach ($lastday_users_records as $item) {
-            $users_percent = $this->calculate_user_threshold_percentage($item->conteo_accesos_unicos, get_config('report_usage_monitor', 'max_daily_users_threshold'));
+            $users_percent = calculate_user_threshold_percentage($item->conteo_accesos_unicos, get_config('report_usage_monitor', 'max_daily_users_threshold'));
             $notification_interval = $this->calculate_notification_interval($users_percent);
 
             $last_notificationusers_time = get_config('report_usage_monitor', 'last_notificationusers_time');
@@ -68,10 +69,5 @@ class notification_userlimit extends \core\task\scheduled_task
         }
 
         return 0; // No notification if under 90%
-    }
-
-    private function calculate_user_threshold_percentage($numberofusers, $threshold)
-    {
-        return ($threshold > 0) ? round(($numberofusers / $threshold) * 100, 2) : 0;
     }
 }
