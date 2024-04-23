@@ -128,8 +128,16 @@ function xmldb_report_usage_monitor_upgrade($oldversion)
         // solo actualizamos el punto de guardado de la versión del plugin.
 
         // Actualiza la versión guardada del plugin en la base de datos.
-        upgrade_plugin_savepoint(true, 20240401001, 'report', 'usage_monitor');
+        upgrade_plugin_savepoint(true, 2024040101, 'report', 'usage_monitor');
     }
+    if ($oldversion < 2024042201) {
+        // Aquí no se necesitan cambios en la base de datos,
+        // solo actualizamos el punto de guardado de la versión del plugin.
+
+        // Actualiza la versión guardada del plugin en la base de datos.
+        upgrade_plugin_savepoint(true, 2024042201, 'report', 'usage_monitor');
+    }
+
 
     return true;
 }
