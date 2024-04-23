@@ -36,7 +36,7 @@ defined('MOODLE_INTERNAL') || die();
  * @copyright   2023 Soporte IngeWeb <soporte@ingeweb.co>
  * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 o posterior
  */
-class notification extends \core\task\scheduled_task
+class notification_disk extends \core\task\scheduled_task
 {
 
     /**
