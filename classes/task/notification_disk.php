@@ -50,7 +50,7 @@ class notification_disk extends \core\task\scheduled_task {
         global $DB; // Ensure global DB object is available
         $reportconfig = get_config('report_usage_monitor');
         $quotadisk = ((int) $reportconfig->disk_quota * 1024) * 1024 * 1024;
-        $disk_usage = ((int) $reportconfig->totalusagereadable + (int) $reportconfig->totalusagereadadb) ?: 0;
+        $disk_usage = ((int) $reportconfig->totalusagereadable + (int) $reportconfig->totalusagereadabledb) ?: 0;
         $disk_percent = ($quotadisk > 0) ? ($disk_usage / $quotadisk) * 100 : 0;
 
         $notification_interval = $this->calculate_notification_interval($disk_percent);
