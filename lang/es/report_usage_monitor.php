@@ -74,10 +74,16 @@ $string['messagehtml1'] = '<p>La plataforma <a href="{$a->siteurl}" target="_bla
 <hr>
 <i><p>Este mensaje ha sido generado automáticamente por "Usage Report" de <a href="https://ingeweb.co/" target="_blank" ><strong>ingeweb.co</strong></a></p>
 *Se contabilizan usuarios distintos que se autenticaron en la fecha indicada. Usuarios que se autentican más de una vez solo cuenta una vez.<i>';
-$string['messagehtml2'] = '<p>La plataforma <a href="{$a->siteurl}" target="_blank" ><strong>\'{$a->sitename}\'</strong></a> ha superado el 90% de espacio en disco asignado</p>
+$string['messagehtml2'] = '<p>La plataforma <a href="{$a->siteurl}" target="_blank" ><strong>\'{$a->sitename}\'</strong></a> ha superado el 90% del espacio en disco asignado</p>
 <p>Espacio en disco asignado: {$a->quotadisk} </p>
 <p>Espacio en disco usado: <strong>{$a->diskusage}</strong></p>
-<strong>Url monitor: </strong> {$a->referer}
+<p>Porcentaje de uso del disco: <strong>{$a->percentage}%</strong></p>
+<p>Tamaño de la base de datos: <strong>{$a->databasesize}</strong></p>
+<p>Tamaño de Moodledata: <strong>{$a->moodledata}</strong></p>
+<p>Cantidad de copias de seguridad por curso: <strong>{$a->backupcount}</strong></p>
+<p>Usuarios*: <strong>{$a->numberofusers}</strong></p>
+<p>Umbral establecido de usuarios máximos diarios: <strong>{$a->threshold}</strong> usuarios</p>
+<strong>Url del monitor: </strong> {$a->referer}
 <br>
 <hr>
 <i><p>Este mensaje ha sido generado automáticamente por "Usage Report" de <a href="https://ingeweb.co/" target="_blank" ><strong>ingeweb.co</strong></a></p><i>';
