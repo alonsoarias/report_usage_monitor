@@ -14,88 +14,52 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-/**
- * Tarea programada para enviar notificaciones sobre el uso del disco y los límites diarios de usuarios.
- *
- * @package     report_usage_monitor
- * @category    admin
- * @copyright   2023 Soporte IngeWeb <soporte@ingeweb.co>
- * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 o posterior
- */
-
 namespace report_usage_monitor\task;
 
-// Prevenir el acceso directo a este archivo.
 defined('MOODLE_INTERNAL') || die();
 
-/**
- * Tarea programada para notificar el espacio en disco y los límites diarios de usuarios.
- *
- * @package     report_usage_monitor
- * @category    admin
- * @copyright   2023 Soporte IngeWeb <soporte@ingeweb.co>
- * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 o posterior
- */
-class notification_disk extends \core\task\scheduled_task
-{
-
-    /**
-     * Obtener el nombre de la tarea tal como se muestra en las pantallas de administración.
-     *
-     * @return string
-     * @throws \coding_exception
-     */
-    public function get_name()
-    {
+class notification_disk extends \core\task\scheduled_task {
+    public function get_name() {
         return get_string('processdisknotificationtask', 'report_usage_monitor');
     }
 
-    /**
-     * Ejecutar la tarea para procesar las notificaciones sobre el espacio en disco y los límites diarios de usuarios.
-     */
-    public function execute()
-    {
-        global $DB, $CFG;
+    public function execute() {
+        global $CFG, $DB;
         require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
 
-        // Obtener la configuración de report_usage_monitor.
         $reportconfig = get_config('report_usage_monitor');
-        $quotadisk = ((int) $reportconfig->disk_quota * 1024) * 1024 * 1024; // Cuota de espacio en disco asignada (en bytes).
-        $disk_usage = (int) $reportconfig->totalusagereadable + $reportconfig->totalusagereadadb; // Uso de espacio en disco (en bytes).
-        $disk_percent = ($disk_usage / $quotadisk) * 100; // Porcentaje de uso del disco.
+        $quotadisk = ((int) $reportconfig->disk_quota * 1024) * 1024 * 1024;
+        
+        // Check if the property exists before trying to use it
+        $disk_usage = (int) $reportconfig->totalusagereadable + (isset($reportconfig->totalusagereadadb) ? $reportconfig->totalusagereadadb : 0);
+        
+        $disk_percent = ($disk_usage / $quotadisk) * 100;
 
-        // Verificar si el espacio en disco supera el umbral de advertencia (90%).
-        if ($disk_percent >= 90) {
-            // Verificar si ha pasado el tiempo de notificación requerido (5 días).
-            $last_notified = (int) $reportconfig->last_notification_time; // Última vez que se envió una notificación (marca de tiempo UNIX).
-            $notification_interval = 5 * 24 * 60 * 60; // 5 días en segundos.
-            $time_difference = time() - $last_notified;
-            if ($time_difference >= $notification_interval) {
-                // Notificar cuando el espacio en disco está en el rango del 90% al 95% y ha pasado el tiempo de notificación requerido.
-                email_notify_disk($quotadisk, $disk_usage);
-                set_config('last_notification_time', time(), 'report_usage_monitor');
+        $last_notified = (int) $reportconfig->last_notification_time;
+        $current_time = time();
+        $notification_interval = $this->calculate_notification_interval($disk_percent);
+        $time_difference = $current_time - $last_notified;
+
+        if ($time_difference >= $notification_interval) {
+            // Ensure the function email_notify_disk is available
+            if (function_exists('email_notify_disk_limit')) {
+                email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent);
+                set_config('last_notification_time', $current_time, 'report_usage_monitor');
+            } else {
+                // Handle the error if the function does not exist
+                debugging('Function email_notify_disk_limit does not exist', DEBUG_DEVELOPER);
             }
         }
+    }
 
-        // Verificar si el espacio en disco supera el límite (95%).
-        if ($disk_percent >= 95) {
-            // Notificar diariamente si el espacio en disco supera el 95%.
-            email_notify_disk($quotadisk, $disk_usage);
-            set_config('last_notification_time', time(), 'report_usage_monitor');
+    private function calculate_notification_interval($disk_percent) {
+        if ($disk_percent >= 99.9) {
+            return 12 * 60 * 60; // 12 hours
+        } elseif ($disk_percent > 98.5) {
+            return 24 * 60 * 60; // 1 day
+        } elseif ($disk_percent >= 90) {
+            return 5 * 24 * 60 * 60; // 5 days
         }
-
-        // Restablecer la última notificación si el espacio en disco está por debajo del umbral de advertencia.
-        if ($disk_percent < 90) {
-            set_config('last_notification_time', 0, 'report_usage_monitor');
-        }
-
-        // Notificar límite diario de usuarios.
-        $lastday_users = user_limit_daily_sql(get_string('dateformatsql', 'report_usage_monitor'));
-        $lastday_users_records = $DB->get_records_sql($lastday_users);
-        foreach ($lastday_users_records as $item) {
-            if ($item->conteo_accesos_unicos >= get_config('report_usage_monitor', 'max_daily_users_threshold')) {
-                email_notify_user_limit($item->conteo_accesos_unicos, $item->fecha);
-            }
-        }
+        return PHP_INT_MAX; // No notification needed if under 90%
     }
 }
