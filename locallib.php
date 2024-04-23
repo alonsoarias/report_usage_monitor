@@ -362,7 +362,7 @@ function notification_table()
      *
      * @return bool Returns true if the email is successfully sent, otherwise returns false.
      */
-    function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent)
+    function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent )
     {
         global $CFG;
         $site = get_site();
@@ -376,7 +376,6 @@ function notification_table()
         $a->databasesize = display_size(get_config('report_usage_monitor', 'totalusagereadabledb'));
         $a->moodledata = display_size(get_config('report_usage_monitor', 'totalusagedataroot'));
         $a->backupcount = get_config('backup', 'backup_auto_max_kept');
-        $a->numberofusers = get_daily_user_count();
         $a->threshold = get_config('report_usage_monitor', 'max_daily_users_threshold');
         $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php?view=diskusage';
         $a->siteurl = $CFG->wwwroot;
