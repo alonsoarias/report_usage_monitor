@@ -232,23 +232,24 @@ function notification_table()
         return $size;
     }
     /**
- * Convierte el tamaño de bytes a gigabytes.
- *
- * @param mixed $sizeInBytes El tamaño en bytes que se quiere convertir.
- * @param int $precision El número de decimales a mostrar.
- * @return string El tamaño en gigabytes, formateado como cadena.
- */
-function display_size_in_gb($sizeInBytes, $precision = 2) {
-    // Verifica si el valor es numérico y no es null.
-    if (!is_numeric($sizeInBytes) || $sizeInBytes === null) {
-        debugging("display_size_in_gb: se esperaba un valor numérico, recibido: " . var_export($sizeInBytes, true), DEBUG_DEVELOPER);
-        return '0 GB'; // Retorna '0 GB' como un valor seguro por defecto.
-    }
+     * Convierte el tamaño de bytes a gigabytes.
+     *
+     * @param mixed $sizeInBytes El tamaño en bytes que se quiere convertir.
+     * @param int $precision El número de decimales a mostrar.
+     * @return string El tamaño en gigabytes, formateado como cadena.
+     */
+    function display_size_in_gb($sizeInBytes, $precision = 2)
+    {
+        // Verifica si el valor es numérico y no es null.
+        if (!is_numeric($sizeInBytes) || $sizeInBytes === null) {
+            debugging("display_size_in_gb: se esperaba un valor numérico, recibido: " . var_export($sizeInBytes, true), DEBUG_DEVELOPER);
+            return '0 GB'; // Retorna '0 GB' como un valor seguro por defecto.
+        }
 
-    // Conversión de bytes a GB.
-    $sizeInGb = $sizeInBytes / (1024 * 1024 * 1024);
-    return round($sizeInGb, $precision);
-}
+        // Conversión de bytes a GB.
+        $sizeInGb = $sizeInBytes / (1024 * 1024 * 1024);
+        return round($sizeInGb, $precision);
+    }
 
     /**
      * Calcula el porcentaje de uso del espacio en disco y devuelve un color según el rango de uso.
@@ -282,11 +283,14 @@ function display_size_in_gb($sizeInBytes, $precision = 2) {
     /**
      * Generate a user info object based on provided parameters.
      *
-     * @param      string  $email  plain text email address.
-     * @param      string  $name   (optional) plain text real name.
-     * @param      int     $id     (optional) user ID
+     * This function creates a standardized user object that can be used for email operations within Moodle.
+     * It sanitizes and sets default values for user details.
      *
-     * @return     object  user info.
+     * @param string $email Plain text email address.
+     * @param string $name Optional plain text real name.
+     * @param int $id Optional user ID, default is -99 which typically signifies a non-persistent user.
+     *
+     * @return object Returns a user object with email, name, and other related properties.
      */
     function generate_email_user($email, $name = '', $id = -99)
     {
@@ -307,6 +311,18 @@ function display_size_in_gb($sizeInBytes, $precision = 2) {
         $emailuser->alternatename = '';
         return $emailuser;
     }
+
+    /**
+     * Sends an email notification when the daily user limit is exceeded.
+     *
+     * This function constructs and sends an email when the number of unique users for the previous day
+     * exceeds the configured threshold. It uses Moodle's internal email system to handle the sending process.
+     *
+     * @param int $numberofusers The number of unique users that accessed the system.
+     * @param string $fecha The date for which the threshold was exceeded.
+     *
+     * @return bool Returns true if the email was successfully queued for sending, false otherwise.
+     */
     function email_notify_user_limit($numberofusers, $fecha)
     {
         global $CFG;
@@ -318,7 +334,7 @@ function display_size_in_gb($sizeInBytes, $precision = 2) {
         $a->lastday = $fecha;
         $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php?view=userstopnum';
         $a->siteurl = $CFG->wwwroot;
-        $a->percentaje = ((($numberofusers - get_config('report_usage_monitor', 'max_daily_users_threshold')) / get_config('report_usage_monitor', 'max_daily_users_threshold')) * 100);
+        $a->percentage = ((($numberofusers - get_config('report_usage_monitor', 'max_daily_users_threshold')) / get_config('report_usage_monitor', 'max_daily_users_threshold')) * 100);
         $a->table = notification_table();
         $toemail = generate_email_user(get_config('report_usage_monitor', 'email'), '');
         $fromemail = generate_email_user($CFG->noreplyaddress, format_string($CFG->supportname));
@@ -332,26 +348,58 @@ function display_size_in_gb($sizeInBytes, $precision = 2) {
         if ($previous_noemailever) $CFG->noemailever = $previous_noemailever;
         return true;
     }
-
-    function email_notify_disk_limit($quotadisk, $disk_usage)
+    /**
+     * Sends an email notification based on disk usage limits.
+     *
+     * This function receives disk usage data and the calculated disk usage percentage as parameters,
+     * constructs a notification email based on these values.
+     * The approach ensures that the calculation logic is kept separate from the mailing logic,
+     * enhancing maintainability and testing.
+     *
+     * @param int $quotadisk The total disk quota assigned, in bytes.
+     * @param int $disk_usage The current disk usage, in bytes.
+     * @param float $disk_percent The percentage of disk quota used.
+     *
+     * @return bool Returns true if the email is successfully sent, otherwise returns false.
+     */
+    function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent)
     {
         global $CFG;
         $site = get_site();
+
+        // Prepare the data object with information for the email.
         $a = new stdClass();
-        $a->sitename  = format_string($site->fullname);
+        $a->sitename = format_string($site->fullname);
         $a->quotadisk = display_size($quotadisk);
         $a->diskusage = display_size($disk_usage);
+        $a->percentage = round($disk_percent, 2); // Use the passed disk percentage directly.
+        $a->databasesize = display_size(get_config('report_usage_monitor', 'totalusagereadabledb'));
+        $a->moodledata = display_size(get_config('report_usage_monitor', 'totalusagedataroot'));
+        $a->backupcount = get_config('backup', 'backup_auto_max_kept');
+        $a->numberofusers = get_daily_user_count();
+        $a->threshold = get_config('report_usage_monitor', 'max_daily_users_threshold');
         $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php?view=diskusage';
         $a->siteurl = $CFG->wwwroot;
+
+        // Generate email addresses for sender and recipient.
         $toemail = generate_email_user(get_config('report_usage_monitor', 'email'), '');
         $fromemail = generate_email_user($CFG->noreplyaddress, format_string($CFG->supportname));
+
+        // Prepare email content.
         $subject = get_string('subjectemail2', 'report_usage_monitor');
         $messagehtml = get_string('messagehtml2', 'report_usage_monitor', $a);
         $messagetext = html_to_text($messagehtml);
+
+        // Handle no-email-ever configuration setting.
         $previous_noemailever = false;
         if (isset($CFG->noemailever)) $previous_noemailever = $CFG->noemailever;
         $CFG->noemailever = false;
+
+        // Send the email.
         email_to_user($toemail, $fromemail, $subject, $messagetext, $messagehtml, '', '', true, $fromemail->email);
+
+        // Restore the no-email-ever setting.
         if ($previous_noemailever) $CFG->noemailever = $previous_noemailever;
+
         return true;
     }
