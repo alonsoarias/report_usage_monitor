@@ -257,7 +257,7 @@ function notification_table()
         $sizeInGb = $sizeInBytes / (1024 * 1024 * 1024);
         return round($sizeInGb, $precision);
     }
-    
+
 
     /**
      * Calcula el porcentaje de uso del espacio en disco y devuelve un color según el rango de uso.
@@ -331,7 +331,7 @@ function notification_table()
      *
      * @return bool Returns true if the email was successfully queued for sending, false otherwise.
      */
-    function email_notify_user_limit($numberofusers, $fecha)
+    function email_notify_user_limit($numberofusers, $fecha, $percentage)
     {
         global $CFG;
         $site = get_site();
@@ -342,11 +342,11 @@ function notification_table()
         $a->lastday = $fecha;
         $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php?view=userstopnum';
         $a->siteurl = $CFG->wwwroot;
-        $a->percentage = ((($numberofusers - get_config('report_usage_monitor', 'max_daily_users_threshold')) / get_config('report_usage_monitor', 'max_daily_users_threshold')) * 100);
+        $a->percentage = $percentage; // Pasamos el porcentaje como argumento
         $a->table = notification_table();
         $toemail = generate_email_user(get_config('report_usage_monitor', 'email'), '');
         $fromemail = generate_email_user($CFG->noreplyaddress, format_string($CFG->supportname));
-        $subject = get_string('subjectemail1', 'report_usage_monitor')." {$a->sitename}";
+        $subject = get_string('subjectemail1', 'report_usage_monitor') . " {$a->sitename}";
         $messagehtml = get_string('messagehtml1', 'report_usage_monitor', $a);
         $messagetext = html_to_text($messagehtml);
         $previous_noemailever = false;
@@ -356,6 +356,7 @@ function notification_table()
         if ($previous_noemailever) $CFG->noemailever = $previous_noemailever;
         return true;
     }
+
     /**
      * Sends an email notification based on disk usage limits.
      *
@@ -370,49 +371,44 @@ function notification_table()
      *
      * @return bool Returns true if the email is successfully sent, otherwise returns false.
      */
-    function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAccessCount )
-{
-    global $CFG;
-    $site = get_site();
+    function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAccessCount)
+    {
+        global $CFG;
+        $site = get_site();
 
-    // Prepare the data object with information for the email.
-    $a = new stdClass();
-    $a->sitename = format_string($site->fullname);
-    $a->quotadisk = display_size($quotadisk);
-    $a->diskusage = display_size($disk_usage);
-    $a->percentage = round($disk_percent, 2); // Use the passed disk percentage directly.
-    $a->databasesize = display_size(get_config('report_usage_monitor', 'totalusagereadabledb'));
-    $a->backupcount = get_config('backup', 'backup_auto_max_kept');
-    $a->threshold = get_config('report_usage_monitor', 'max_daily_users_threshold');
-    $a->numberofusers = $userAccessCount; // Assuming this function exists and fetches the current number of daily users.
-    $a->userpercentage = calculate_user_threshold_percentage($a->numberofusers, $a->threshold); // Assuming this function calculates the percentage.
-    $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php?view=diskusage';
-    $a->siteurl = $CFG->wwwroot;
+        // Prepare the data object with information for the email.
+        $a = new stdClass();
+        $a->sitename = format_string($site->fullname);
+        $a->quotadisk = display_size($quotadisk);
+        $a->diskusage = display_size($disk_usage);
+        $a->percentage = round($disk_percent, 2); // Use the passed disk percentage directly.
+        $a->databasesize = display_size(get_config('report_usage_monitor', 'totalusagereadabledb'));
+        $a->backupcount = get_config('backup', 'backup_auto_max_kept');
+        $a->threshold = get_config('report_usage_monitor', 'max_daily_users_threshold');
+        $a->numberofusers = $userAccessCount; // Assuming this function exists and fetches the current number of daily users.
+        $a->userpercentage = calculate_user_threshold_percentage($a->numberofusers, $a->threshold); // Assuming this function calculates the percentage.
+        $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php?view=diskusage';
+        $a->siteurl = $CFG->wwwroot;
 
-    // Generate email addresses for sender and recipient.
-    $toemail = generate_email_user(get_config('report_usage_monitor', 'email'), '');
-    $fromemail = generate_email_user($CFG->noreplyaddress, format_string($CFG->supportname));
+        // Generate email addresses for sender and recipient.
+        $toemail = generate_email_user(get_config('report_usage_monitor', 'email'), '');
+        $fromemail = generate_email_user($CFG->noreplyaddress, format_string($CFG->supportname));
 
-    // Prepare email content.
-    $subject = get_string('subjectemail2', 'report_usage_monitor')." {$a->sitename}";
-    $messagehtml = get_string('messagehtml2', 'report_usage_monitor', $a);
-    $messagetext = html_to_text($messagehtml);
+        // Prepare email content.
+        $subject = get_string('subjectemail2', 'report_usage_monitor') . " {$a->sitename}";
+        $messagehtml = get_string('messagehtml2', 'report_usage_monitor', $a);
+        $messagetext = html_to_text($messagehtml);
 
-    // Handle no-email-ever configuration setting.
-    $previous_noemailever = false;
-    if (isset($CFG->noemailever)) $previous_noemailever = $CFG->noemailever;
-    $CFG->noemailever = false;
+        // Handle no-email-ever configuration setting.
+        $previous_noemailever = false;
+        if (isset($CFG->noemailever)) $previous_noemailever = $CFG->noemailever;
+        $CFG->noemailever = false;
 
-    // Send the email.
-    email_to_user($toemail, $fromemail, $subject, $messagetext, $messagehtml, '', '', true, $fromemail->email);
+        // Send the email.
+        email_to_user($toemail, $fromemail, $subject, $messagetext, $messagehtml, '', '', true, $fromemail->email);
 
-    // Restore the no-email-ever setting.
-    if ($previous_noemailever) $CFG->noemailever = $previous_noemailever;
+        // Restore the no-email-ever setting.
+        if ($previous_noemailever) $CFG->noemailever = $previous_noemailever;
 
-    return true;
-}
-
-// Helper function to calculate user threshold percentage
-function calculate_user_threshold_percentage($numberofusers, $threshold) {
-    return ($threshold > 0) ? round(($numberofusers / $threshold) * 100, 2) : 0;
-}
+        return true;
+    }
