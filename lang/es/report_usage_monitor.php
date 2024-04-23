@@ -78,7 +78,7 @@ $string['messagehtml1'] = '<p>La plataforma <a href="{$a->siteurl}" target="_bla
 *Se contabilizan usuarios distintos que se autenticaron en la fecha indicada. Usuarios que se autentican más de una vez solo cuenta una vez.<i>';
 $string['messagehtml2'] = '
 <p>La plataforma <a href="{$a->siteurl}" target="_blank"><strong>{$a->sitename}</strong></a> ha alcanzado el 90% de su capacidad de almacenamiento asignada. A continuación se presentan las estadísticas actuales del sistema para su revisión:</p>
-<table border="1" style="border-collapse: collapse; width: 100%;">
+<table border="1" style="border-collapse: collapse; width: 50%;">
     <tr>
         <th style="padding: 8px; background-color: #f2f2f2;">Descripción</th>
         <th style="padding: 8px; background-color: #f2f2f2;">Detalle</th>
