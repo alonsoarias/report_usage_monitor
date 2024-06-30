@@ -29,7 +29,8 @@
  * @param string $format Formato de fecha para la consulta SQL.
  * @return string Consulta SQL para obtener la lista de usuarios.
  */
-function report_user_daily_sql($format) {
+function report_user_daily_sql($format)
+{
     global $DB;
 
     // Obtener la fecha actual y calcular las fechas límite para los últimos 10 días.
@@ -51,7 +52,8 @@ function report_user_daily_sql($format) {
  * @param string $format Formato de fecha para la consulta SQL.
  * @return string Consulta SQL para obtener los datos del top de usuarios.
  */
-function report_user_daily_top_sql($format) {
+function report_user_daily_top_sql($format)
+{
     return "SELECT FROM_UNIXTIME(`fecha`, '$format') as fecha, cantidad_usuarios from {report_usage_monitor}  ORDER BY cantidad_usuarios DESC";
 }
 
@@ -60,7 +62,8 @@ function report_user_daily_top_sql($format) {
  *
  * @return string Consulta SQL para obtener los datos del top de usuarios.
  */
-function report_user_daily_top_task() {
+function report_user_daily_top_task()
+{
     return "SELECT fecha, cantidad_usuarios from {report_usage_monitor}  ORDER BY cantidad_usuarios DESC";
 }
 
@@ -72,7 +75,8 @@ function report_user_daily_top_task() {
  * @param int $min Valor mínimo a comparar en el top.
  * @return void
  */
-function update_min_top_sql($fecha, $usuarios, $min) {
+function update_min_top_sql($fecha, $usuarios, $min)
+{
     global $DB;
     $SQL = "UPDATE {report_usage_monitor} set fecha=?,cantidad_usuarios=? where fecha=?";
     $params = array($fecha, $usuarios, $min);
@@ -86,7 +90,8 @@ function update_min_top_sql($fecha, $usuarios, $min) {
  * @param int $cantidad_usuarios Cantidad de usuarios a insertar en el top.
  * @return void
  */
-function insert_top_sql($fecha, $cantidad_usuarios) {
+function insert_top_sql($fecha, $cantidad_usuarios)
+{
     global $DB;
     $SQL = "INSERT INTO {report_usage_monitor} (fecha,cantidad_usuarios) VALUES (?,?)";
     $params = array($fecha, $cantidad_usuarios);
@@ -99,7 +104,8 @@ function insert_top_sql($fecha, $cantidad_usuarios) {
  * @param string $format Formato de fecha para la consulta SQL.
  * @return string Consulta SQL para obtener la cantidad de usuarios conectados.
  */
-function user_limit_daily_sql($format) {
+function user_limit_daily_sql($format)
+{
     return "SELECT count(DISTINCT`userid`) as conteo_accesos_unicos ,FROM_UNIXTIME(`timecreated`, '$format') as fecha
     FROM {logstore_standard_log}
     WHERE `action`='loggedin' 
@@ -113,7 +119,8 @@ function user_limit_daily_sql($format) {
  *
  * @return string Consulta SQL para obtener el límite diario de usuarios.
  */
-function user_limit_daily_task() {
+function user_limit_daily_task()
+{
     return "SELECT UNIX_TIMESTAMP(STR_TO_DATE(x.fecha, '%Y/%m/%d')) as fecha,x.conteo_accesos_unicos FROM (
         SELECT FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') as fecha, count(DISTINCT`userid`) as conteo_accesos_unicos 
         FROM {logstore_standard_log}
@@ -127,7 +134,8 @@ function user_limit_daily_task() {
  *
  * @return string Consulta SQL para obtener los usuarios conectados hoy.
  */
-function users_today() {
+function users_today()
+{
     return "SELECT FROM_UNIXTIME(`lastaccess`, '%d/%m/%Y') as fecha, count(DISTINCT`id`) as conteo_accesos_unicos from {user}
      WHERE FROM_UNIXTIME(`lastaccess`, '%Y/%m/%d')>= DATE_SUB(NOW(), INTERVAL 1 DAY);";
 }
@@ -138,7 +146,8 @@ function users_today() {
  * @param string $format Formato de fecha para la consulta SQL.
  * @return string Consulta SQL para obtener el número máximo de accesos en los últimos 90 días.
  */
-function max_userdaily_for_90_days($format) {
+function max_userdaily_for_90_days($format)
+{
     return "SELECT UNIX_TIMESTAMP(STR_TO_DATE(x.fecha, '$format')) as fecha, x.conteo_accesos_unicos as usuarios FROM (
         SELECT FROM_UNIXTIME(`timecreated`, '$format') as fecha ,count(DISTINCT`userid`) as conteo_accesos_unicos 
         FROM {logstore_standard_log}
@@ -152,7 +161,8 @@ function max_userdaily_for_90_days($format) {
  *
  * @return string Consulta SQL para obtener el tamaño de la base de datos.
  */
-function size_database() {
+function size_database()
+{
     global $CFG;
     return "SELECT TABLE_SCHEMA AS `database_name`, 
     ROUND(SUM(DATA_LENGTH + INDEX_LENGTH)) AS size
@@ -165,26 +175,27 @@ function size_database() {
  *
  * @return string Tabla HTML con los datos de la cantidad de usuarios.
  */
-function notification_table($disk_usage = null, $disk_percent = null, $quotadisk = null) {
+function notification_table($disk_usage = null, $disk_percent = null, $quotadisk = null)
+{
     global $DB;
-    
+
     $table = '<h2>' . get_string('lastusers', 'report_usage_monitor') . '</h2>
     <table border="1" style="border-collapse: collapse; width: 50%;">
     <tr>
         <th style="padding: 8px; background-color: #f2f2f2;">' . get_string('date', 'report_usage_monitor') . '</th>
         <th style="padding: 8px; background-color: #f2f2f2;">' . get_string('usersquantity', 'report_usage_monitor') . '</th>
     </tr>';
-    
+
     $userdaily = report_user_daily_sql(get_string('dateformatsql', 'report_usage_monitor'));
     $userdaily_records = $DB->get_records_sql($userdaily);
-    
+
     foreach ($userdaily_records as $log) {
         $table .= '<tr>
         <td style="padding: 8px;">' . $log->fecha . '</td>
         <td style="padding: 8px;">' . $log->conteo_accesos_unicos . '</td>
         </tr>';
     }
-    
+
     if ($disk_usage !== null && $disk_percent !== null && $quotadisk !== null) {
         $table .= '</table><br><h2>' . get_string('diskusage', 'report_usage_monitor') . '</h2>
         <table border="1" style="border-collapse: collapse; width: 50%;">
@@ -197,7 +208,7 @@ function notification_table($disk_usage = null, $disk_percent = null, $quotadisk
             <td style="padding: 8px;">' . display_size($quotadisk) . '</td>
         </tr>';
     }
-    
+
     $table .= '</table>';
     return $table;
 }
@@ -209,7 +220,8 @@ function notification_table($disk_usage = null, $disk_percent = null, $quotadisk
  * @param string $excludefile A file to exclude when summing directory size
  * @return int The summed size of all files and subfiles within the root directory
  */
-function directory_size($rootdir, $excludefile = '') {
+function directory_size($rootdir, $excludefile = '')
+{
     global $CFG;
 
     // Verificamos si el sistema operativo es Linux y si el comando 'du' está disponible.
@@ -265,7 +277,8 @@ function directory_size($rootdir, $excludefile = '') {
  * @param int $precision El número de decimales a mostrar.
  * @return string El tamaño en gigabytes, formateado como cadena.
  */
-function display_size_in_gb($sizeInBytes, $precision = 2) {
+function display_size_in_gb($sizeInBytes, $precision = 2)
+{
     // Verifica si el valor es numérico y no es null.
     if (!is_numeric($sizeInBytes) || $sizeInBytes === null) {
         debugging("display_size_in_gb: se esperaba un valor numérico, recibido: " . var_export($sizeInBytes, true), DEBUG_DEVELOPER);
@@ -284,7 +297,8 @@ function display_size_in_gb($sizeInBytes, $precision = 2) {
  * @param float $totalDiskSpace Tamaño total del disco en GB.
  * @return array Arreglo con el porcentaje de uso y el color correspondiente.
  */
-function diskUsagePercentages($usedSpaceGB, $totalDiskSpace) {
+function diskUsagePercentages($usedSpaceGB, $totalDiskSpace)
+{
     $usedSpacePercentage = ($usedSpaceGB / $totalDiskSpace) * 100;
     $color = "";
     if ($usedSpacePercentage < 70) {
@@ -298,7 +312,8 @@ function diskUsagePercentages($usedSpaceGB, $totalDiskSpace) {
 }
 
 // Función para comparar las fechas en formato 'd/m/Y' y ordenar en orden ascendente.
-function compararFechas($fecha1, $fecha2) {
+function compararFechas($fecha1, $fecha2)
+{
     $date1 = DateTime::createFromFormat('d/m/Y', $fecha1);
     $date2 = DateTime::createFromFormat('d/m/Y', $fecha2);
     return $date1 <=> $date2;
@@ -316,7 +331,8 @@ function compararFechas($fecha1, $fecha2) {
  *
  * @return object Returns a user object with email, name, and other related properties.
  */
-function generate_email_user($email, $name = '', $id = -99) {
+function generate_email_user($email, $name = '', $id = -99)
+{
     $emailuser = new stdClass();
     $emailuser->email = trim(filter_var($email, FILTER_SANITIZE_EMAIL));
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -346,30 +362,47 @@ function generate_email_user($email, $name = '', $id = -99) {
  *
  * @return bool Returns true if the email was successfully queued for sending, false otherwise.
  */
-function email_notify_user_limit($usage, $fecha, $percentage) {
-    global $CFG;
+function email_notify_user_limit($usage, $fecha, $percentage)
+{
+    global $CFG, $DB;
     $site = get_site();
+    $reportconfig = get_config('report_usage_monitor');
+
     $a = new stdClass();
-    $a->sitename  = format_string($site->fullname);
-    $a->threshold = get_config('report_usage_monitor', 'max_daily_users_threshold');
+    $a->sitename = format_string($site->fullname);
+    $a->threshold = $reportconfig->max_daily_users_threshold;
     $a->usage = $usage;
     $a->lastday = $fecha;
     $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php?view=userstopnum';
     $a->siteurl = $CFG->wwwroot;
     $a->percentage = $percentage; // Pasamos el porcentaje como argumento
+
+    // Agregar detalles de uso de disco
+    $quotadisk = ((int) $reportconfig->disk_quota * 1024) * 1024 * 1024;
+    $disk_usage = ((int) $reportconfig->totalusagereadable + (int) $reportconfig->totalusagereadabledb) ?: 0;
+
+    $a->diskusage = display_size($disk_usage);
+    $a->quotadisk = display_size($quotadisk);
+
     $a->table = notification_table();
+
+    // Generate email addresses for sender and recipient.
     $toemail = generate_email_user(get_config('report_usage_monitor', 'email'), '');
     $fromemail = generate_email_user($CFG->noreplyaddress, format_string($CFG->supportname));
+
     $subject = get_string('subjectemail1', 'report_usage_monitor') . " {$a->sitename}";
     $messagehtml = get_string('messagehtml1', 'report_usage_monitor', $a);
     $messagetext = html_to_text($messagehtml);
+
     $previous_noemailever = false;
     if (isset($CFG->noemailever)) $previous_noemailever = $CFG->noemailever;
     $CFG->noemailever = false;
     email_to_user($toemail, $fromemail, $subject, $messagetext, $messagehtml, '', '', true, $fromemail->email);
     if ($previous_noemailever) $CFG->noemailever = $previous_noemailever;
+
     return true;
 }
+
 
 /**
  * Sends an email notification based on disk usage limits.
@@ -385,7 +418,8 @@ function email_notify_user_limit($usage, $fecha, $percentage) {
  *
  * @return bool Returns true if the email is successfully sent, otherwise returns false.
  */
-function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAccessCount) {
+function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAccessCount)
+{
     global $CFG, $DB;
 
     $site = get_site();
@@ -405,7 +439,8 @@ function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAc
     $a->siteurl = $CFG->wwwroot;
     $a->coursescount = $DB->count_records('course'); // Contar la cantidad de cursos
 
-    $toemail = generate_email_user($reportconfig->email, '');
+    // Generate email addresses for sender and recipient.
+    $toemail = generate_email_user(get_config('report_usage_monitor', 'email'), '');
     $fromemail = generate_email_user($CFG->noreplyaddress, format_string($CFG->supportname));
 
     $subject = get_string('subjectemail2', 'report_usage_monitor') . " {$a->sitename}";
@@ -422,6 +457,7 @@ function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAc
 }
 
 
-function calculate_user_threshold_percentage($usage, $threshold) {
+function calculate_user_threshold_percentage($usage, $threshold)
+{
     return ($threshold > 0) ? round(($usage / $threshold) * 100, 2) : 0;
 }
