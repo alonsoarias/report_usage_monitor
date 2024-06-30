@@ -18,18 +18,22 @@ namespace report_usage_monitor\task;
 
 defined('MOODLE_INTERNAL') || die();
 
-class notification_userlimit extends \core\task\scheduled_task {
-    public function get_name() {
+class notification_userlimit extends \core\task\scheduled_task
+{
+    public function get_name()
+    {
         return get_string('processuserlimitnotificationtask', 'report_usage_monitor');
     }
 
-    public function execute() {
+    public function execute()
+    {
         global $CFG, $DB;
         require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
         $this->notify_user_limit();
     }
 
-    private function notify_user_limit() {
+    private function notify_user_limit()
+    {
         global $DB;
         $reportconfig = get_config('report_usage_monitor');
         $lastday_users = user_limit_daily_sql(get_string('dateformatsql', 'report_usage_monitor'));
@@ -49,7 +53,8 @@ class notification_userlimit extends \core\task\scheduled_task {
         }
     }
 
-    private function calculate_notification_interval($users_percent) {
+    private function calculate_notification_interval($users_percent)
+    {
         $thresholds = [
             99.9 => 12 * 60 * 60,   // 12 horas
             98.5 => 24 * 60 * 60,   // 1 día
