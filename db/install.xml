@@ -26,6 +26,12 @@
                 <!-- Primary key for the table -->
                 <KEY NAME="primary" TYPE="primary" FIELDS="id" />
             </KEYS>
+            <INDEXES>
+                <!-- Index on fecha field -->
+                <INDEX NAME="idx_fecha" UNIQUE="false" FIELDS="fecha" />
+                <!-- Index on cantidad_usuarios field -->
+                <INDEX NAME="idx_cantidad_usuarios" UNIQUE="false" FIELDS="cantidad_usuarios" />
+            </INDEXES>
         </TABLE>
     </TABLES>
 </XMLDB>
