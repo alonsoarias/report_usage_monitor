@@ -25,7 +25,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-/*
+/**
  * Actualiza el complemento report_usage_monitor.
  *
  * @param int $oldversion La versión antigua del complemento
@@ -137,10 +137,31 @@ function xmldb_report_usage_monitor_upgrade($oldversion)
         // Actualiza la versión guardada del plugin en la base de datos.
         upgrade_plugin_savepoint(true, 2024042201, 'report', 'usage_monitor');
     }
+    
+    // A partir de aquí, realizamos las actualizaciones para la versión 2024070101.
+    if ($oldversion < 2024070101) {
+        // Añadimos los índices para los campos fecha y cantidad_usuarios.
+        $table = new xmldb_table('report_usage_monitor');
 
+        // Índice para el campo fecha.
+        $index = new xmldb_index('idx_fecha', XMLDB_INDEX_NOTUNIQUE, ['fecha']);
+        if (!$dbman->index_exists($table, $index)) {
+            $dbman->add_index($table, $index);
+        }
+
+        // Índice para el campo cantidad_usuarios.
+        $index = new xmldb_index('idx_cantidad_usuarios', XMLDB_INDEX_NOTUNIQUE, ['cantidad_usuarios']);
+        if (!$dbman->index_exists($table, $index)) {
+            $dbman->add_index($table, $index);
+        }
+
+        // Punto de guardado de la versión 2024070101.
+        upgrade_plugin_savepoint(true, 2024070101, 'report', 'usage_monitor');
+    }
 
     return true;
 }
+
 // Función para mostrar la notificación de recomendación si shell_exec está disponible.
 function upgrade_show_recommended_notification()
 {
