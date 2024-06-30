@@ -26,23 +26,20 @@ class notification_disk extends \core\task\scheduled_task {
     public function execute() {
         global $CFG;
         require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
-
         $this->notify_disk_usage();
     }
 
     private function calculate_notification_interval($disk_percent) {
         $thresholds = [
-            99.9 => 12 * 60 * 60,   // 12 hours
-            98.5 => 24 * 60 * 60,   // 1 day
-            90 => 5 * 24 * 60 * 60, // 5 days
+            99.9 => 12 * 60 * 60,   // 12 horas
+            98.5 => 24 * 60 * 60,   // 1 día
+            90 => 5 * 24 * 60 * 60, // 5 días
         ];
-
         foreach ($thresholds as $threshold => $interval) {
             if ($disk_percent >= $threshold) {
                 return $interval;
             }
         }
-
         return 0; // No notification if under 90%
     }
 
