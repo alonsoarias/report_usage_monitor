@@ -18,19 +18,23 @@ namespace report_usage_monitor\task;
 
 defined('MOODLE_INTERNAL') || die();
 
-class notification_disk extends \core\task\scheduled_task {
-    public function get_name() {
+class notification_disk extends \core\task\scheduled_task
+{
+    public function get_name()
+    {
         return get_string('processdisknotificationtask', 'report_usage_monitor');
     }
 
-    public function execute() {
+    public function execute()
+    {
         global $CFG;
         require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
 
         $this->notify_disk_usage();
     }
 
-    private function calculate_notification_interval($disk_percent) {
+    private function calculate_notification_interval($disk_percent)
+    {
         $thresholds = [
             99.9 => 12 * 60 * 60,   // 12 hours
             98.5 => 24 * 60 * 60,   // 1 day
@@ -46,7 +50,8 @@ class notification_disk extends \core\task\scheduled_task {
         return 0; // No notification if under 90%
     }
 
-    private function notify_disk_usage() {
+    private function notify_disk_usage()
+    {
         global $DB; // Ensure global DB object is available
         $reportconfig = get_config('report_usage_monitor');
         $quotadisk = ((int) $reportconfig->disk_quota * 1024) * 1024 * 1024;
@@ -65,7 +70,8 @@ class notification_disk extends \core\task\scheduled_task {
         }
     }
 
-    private function get_total_user_access_count() {
+    private function get_total_user_access_count()
+    {
         global $DB;
         $lastday_users = user_limit_daily_sql(get_string('dateformatsql', 'report_usage_monitor'));
         return (int) $DB->get_field_sql($lastday_users);
