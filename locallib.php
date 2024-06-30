@@ -386,46 +386,41 @@ function email_notify_user_limit($usage, $fecha, $percentage) {
  * @return bool Returns true if the email is successfully sent, otherwise returns false.
  */
 function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAccessCount) {
-    global $CFG;
-    $site = get_site();
+    global $CFG, $DB;
 
-    // Prepare the data object with information for the email.
+    $site = get_site();
+    $reportconfig = get_config('report_usage_monitor');
+
     $a = new stdClass();
     $a->sitename = format_string($site->fullname);
     $a->quotadisk = display_size($quotadisk);
     $a->diskusage = display_size($disk_usage);
-    $a->percentage = round($disk_percent, 2); // Use the passed disk percentage directly.
-    $a->databasesize = display_size(get_config('report_usage_monitor', 'totalusagereadabledb'));
-    $a->backupcount = get_config('backup', 'backup_auto_max_kept');
-    $a->threshold = get_config('report_usage_monitor', 'max_daily_users_threshold');
-    $a->usage = $userAccessCount; // Assuming this function exists and fetches the current number of daily users.
-    $a->userpercentage = calculate_user_threshold_percentage($a->usage, $a->threshold); // Assuming this function calculates the percentage.
+    $a->percentage = round($disk_percent, 2);
+    $a->databasesize = display_size($reportconfig->totalusagereadabledb);
+    $a->backupcount = $reportconfig->backup_auto_max_kept;
+    $a->threshold = $reportconfig->max_daily_users_threshold;
+    $a->numberofusers = $userAccessCount;
+    $a->userpercentage = calculate_user_threshold_percentage($a->numberofusers, $a->threshold);
     $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php?view=diskusage';
     $a->siteurl = $CFG->wwwroot;
-    $a->table = notification_table($disk_usage, $disk_percent, $quotadisk); // Include the table with disk usage details
+    $a->coursescount = $DB->count_records('course'); // Contar la cantidad de cursos
 
-    // Generate email addresses for sender and recipient.
-    $toemail = generate_email_user(get_config('report_usage_monitor', 'email'), '');
+    $toemail = generate_email_user($reportconfig->email, '');
     $fromemail = generate_email_user($CFG->noreplyaddress, format_string($CFG->supportname));
 
-    // Prepare email content.
     $subject = get_string('subjectemail2', 'report_usage_monitor') . " {$a->sitename}";
     $messagehtml = get_string('messagehtml2', 'report_usage_monitor', $a);
     $messagetext = html_to_text($messagehtml);
 
-    // Handle no-email-ever configuration setting.
     $previous_noemailever = false;
     if (isset($CFG->noemailever)) $previous_noemailever = $CFG->noemailever;
     $CFG->noemailever = false;
-
-    // Send the email.
     email_to_user($toemail, $fromemail, $subject, $messagetext, $messagehtml, '', '', true, $fromemail->email);
-
-    // Restore the no-email-ever setting.
     if ($previous_noemailever) $CFG->noemailever = $previous_noemailever;
 
     return true;
 }
+
 
 function calculate_user_threshold_percentage($usage, $threshold) {
     return ($threshold > 0) ? round(($usage / $threshold) * 100, 2) : 0;
