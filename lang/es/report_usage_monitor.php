@@ -79,9 +79,9 @@ $string['messagehtml1'] = '<p>La plataforma <a href="{$a->siteurl}" target="_bla
 $string['messagehtml2'] = '
 <p>La plataforma <a href="{$a->siteurl}" target="_blank" ><strong>\'{$a->sitename}\'</strong></a> ha superado el 90% del umbral del espacio en disco asignado</p>
 <p>Fecha (DD/MM/AAAA): {$a->lastday}</p>
-<p>Espacio en disco asignado*: <strong>{$a->diskusage}</strong></p>
+<p>Espacio en disco usado*: <strong>{$a->diskusage}</strong></p>
 <p>Umbral establecido de espacio en disco: <strong>{$a->diskquota}</strong></p>
-<p>Umbral establecido de usuarios máximos diarios: <strong>300 usuarios</strong></p>
+<p>Umbral establecido de usuarios máximos diarios: <strong>{$a->threshold} usuarios</p>
 <p>Usuarios*: <strong>{$a->numberofusers}</strong></p>
 <strong>Url monitor: </strong> {$a->referer}
 <table border="1" style="border-collapse: collapse; width: 50%;">
@@ -90,20 +90,16 @@ $string['messagehtml2'] = '
         <th style="padding: 8px; background-color: #f2f2f2;">Detalle</th>
     </tr>
     <tr>
-        <td style="padding: 8px;">Espacio en disco asignado</td>
-        <td style="padding: 8px;"><strong>{$a->quotadisk}</strong></td>
-    </tr>
-    <tr>
-        <td style="padding: 8px;">Espacio en disco usado</td>
-        <td style="padding: 8px;"><strong>{$a->diskusage}</strong></td>
-    </tr>
-    <tr>
         <td style="padding: 8px;">Porcentaje de uso del disco</td>
         <td style="padding: 8px;"><strong>{$a->percentage}%</strong></td>
     </tr>
     <tr>
         <td style="padding: 8px;">Tamaño de la base de datos</td>
         <td style="padding: 8px;"><strong>{$a->databasesize}</strong></td>
+    </tr>
+    <tr>
+        <td style="padding: 8px;">Cantidad de cursos</td>
+        <td style="padding: 8px;"><strong>{$a->coursescount}</strong></td>
     </tr>
     <tr>
         <td style="padding: 8px;">Cantidad de copias de seguridad por curso</td>
