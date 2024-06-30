@@ -77,7 +77,13 @@ $string['messagehtml1'] = '<p>La plataforma <a href="{$a->siteurl}" target="_bla
 <i><p>Este mensaje ha sido generado automáticamente por "Usage Report" de <a href="https://ingeweb.co/" target="_blank" ><strong>ingeweb.co</strong></a></p>
 *Se contabilizan usuarios distintos que se autenticaron en la fecha indicada. Usuarios que se autentican más de una vez solo cuenta una vez.<i>';
 $string['messagehtml2'] = '
-<p>La plataforma <a href="{$a->siteurl}" target="_blank"><strong>{$a->sitename}</strong></a> ha alcanzado el 90% de su capacidad de almacenamiento asignada. A continuación se presentan las estadísticas actuales del sistema para su revisión:</p>
+<p>La plataforma <a href="{$a->siteurl}" target="_blank" ><strong>\'{$a->sitename}\'</strong></a> ha superado el 90% del umbral del espacio en disco asignado</p>
+<p>Fecha (DD/MM/AAAA): {$a->lastday}</p>
+<p>Espacio en disco asignado*: <strong>{$a->diskusage}</strong></p>
+<p>Umbral establecido de espacio en disco: <strong>{$a->diskquota}</strong></p>
+<p>Umbral establecido de usuarios máximos diarios: <strong>300 usuarios</strong></p>
+<p>Usuarios*: <strong>{$a->numberofusers}</strong></p>
+<strong>Url monitor: </strong> {$a->referer}
 <table border="1" style="border-collapse: collapse; width: 50%;">
     <tr>
         <th style="padding: 8px; background-color: #f2f2f2;">Descripción</th>
@@ -103,21 +109,7 @@ $string['messagehtml2'] = '
         <td style="padding: 8px;">Cantidad de copias de seguridad por curso</td>
         <td style="padding: 8px;"><strong>{$a->backupcount}</strong></td>
     </tr>
-    <tr>
-        <td style="padding: 8px;">Umbral establecido de usuarios máximos diarios</td>
-        <td style="padding: 8px;"><strong>{$a->threshold} usuarios</strong></td>
-    </tr>
-    <tr>
-        <td style="padding: 8px;">Número actual de usuarios</td>
-        <td style="padding: 8px;"><strong>{$a->numberofusers} usuarios</strong></td>
-    </tr>
-    <tr>
-        <td style="padding: 8px;">Porcentaje del umbral de usuarios</td>
-        <td style="padding: 8px;"><strong>{$a->userpercentage}%</strong></td>
-    </tr>
 </table>
-<p>Es crucial gestionar adecuadamente el almacenamiento para evitar problemas de rendimiento. Por favor, acceda al <a href="{$a->referer}" target="_blank">panel de control del sistema</a> para más detalles.</p>
 <hr>
-<p>Este mensaje ha sido generado automáticamente por "Usage Report" de <a href="https://ingeweb.co/" target="_blank"><strong>ingeweb.co</strong></a>. Por favor, no responda a este mensaje.</p>
-';
+<p>Este mensaje ha sido generado automáticamente por "Usage Report" de <a href="https://ingeweb.co/" target="_blank"><strong>ingeweb.co</strong></a>. Por favor, no responda a este mensaje.</p>';
 $string['reportinfotext'] = 'Este plugin ha sido creado para otro caso de éxito de <strong>IngeWeb</strong>. Visítenos en <a target="_blank" href="http://ingeweb.co/">IngeWeb - Soluciones para triunfar en Internet</a>.';
