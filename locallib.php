@@ -211,45 +211,52 @@ function notification_table($disk_usage = null, $disk_percent = null, $quotadisk
  */
 function directory_size($rootdir, $excludefile = '') {
     global $CFG;
-    // Do it this way if we can, it's much faster.
+
+    // Verificamos si el sistema operativo es Linux y si el comando 'du' está disponible.
     if (!empty($CFG->pathtodu) && is_executable(trim($CFG->pathtodu))) {
+        $escapedRootdir = escapeshellarg($rootdir);
+        $command = trim($CFG->pathtodu) . ' -Lsk ' . $escapedRootdir;
+
         if (PHP_OS === 'Linux') {
-            // Verificamos si el sistema operativo es Linux para usar 'nice' y 'ionice'.
-            $command = 'nice -n 19 ionice -c3 ' . trim($CFG->pathtodu) . ' -Lsk ' . escapeshellarg($rootdir);
-        } else {
-            $command = trim($CFG->pathtodu) . ' -Lsk ' . escapeshellarg($rootdir);
+            // Usamos 'nice' y 'ionice' en sistemas Linux para reducir la prioridad del comando.
+            $command = 'nice -n 19 ionice -c3 ' . $command;
         }
+
+        if (!empty($excludefile)) {
+            // Añadimos la opción de excluir un archivo específico.
+            $escapedExcludefile = escapeshellarg($excludefile);
+            $command .= ' --exclude=' . $escapedExcludefile;
+        }
+
+        // Ejecutamos el comando y procesamos la salida.
         $output = null;
         $return = null;
         exec($command, $output, $return);
-        if (is_array($output)) {
-            // El comando 'du' devuelve el tamaño en kilobytes, así que lo convertimos a bytes.
-            return get_real_size(intval($output[0]) . 'k');
+        if (is_array($output) && isset($output[0])) {
+            // Convertimos el tamaño devuelto por 'du' de kilobytes a bytes.
+            return intval($output[0]) * 1024;
         }
     }
-    // Si no se puede usar 'du', hacemos el cálculo recursivamente.
+
+    // Si no podemos usar 'du', calculamos el tamaño recursivamente.
     if (!is_dir($rootdir)) {
-        // Debe ser un directorio.
+        // Si no es un directorio, retornamos 0.
         return 0;
     }
-    if (!$dir = @opendir($rootdir)) {
-        // No se puede abrir por alguna razón.
-        return 0;
-    }
+
     $size = 0;
-    $files = glob($rootdir . '/*');
-    foreach ($files as $path) {
-        // Sumamos el tamaño de los archivos.
-        is_file($path) && $size += filesize($path);
-        // Si es un directorio, llamamos recursivamente para obtener el tamaño de sus contenidos.
-        if (is_dir($path)) {
-            $size += directory_size($path);
+    $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($rootdir, RecursiveDirectoryIterator::SKIP_DOTS));
+
+    foreach ($files as $file) {
+        if ($file->isFile() && $file->getFilename() !== $excludefile) {
+            // Sumamos el tamaño del archivo si no está excluido.
+            $size += $file->getSize();
         }
     }
-    // Cerramos el directorio abierto.
-    closedir($dir);
+
     return $size;
 }
+
 
 /**
  * Convierte el tamaño de bytes a gigabytes.
