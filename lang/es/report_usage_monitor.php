@@ -68,6 +68,8 @@ $string['messagehtml1'] = '<p>La plataforma <a href="{$a->siteurl}" target="_bla
 <p>Fecha (DD/MM/AAAA): {$a->lastday} </p>
 <p>Usuarios*: <strong>{$a->numberofusers}</strong></p>
 <p>Umbral establecido de usuarios máximos diarios: {$a->threshold} usuarios</p>
+<p>Umbral establecido de espacio en disco: <strong>{$a->quotadisk}</strong></p>
+<p>Espacio en disco usado*: <strong>{$a->diskusage}</strong></p>
 <strong>Url monitor: </strong> {$a->referer}
 <br>
 <br>
