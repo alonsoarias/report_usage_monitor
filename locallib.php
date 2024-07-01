@@ -31,17 +31,11 @@
  */
 function report_user_daily_sql($format)
 {
-    global $DB;
-
-    // Obtener la fecha actual y calcular las fechas límite para los últimos 10 días.
-    $end_date = strtotime(date('Y-m-d', strtotime('-1 day')));
-    $start_date = strtotime(date('Y-m-d', strtotime('-10 days')));
-
-    return "SELECT FROM_UNIXTIME(`timecreated`, '$format') as fecha, count(DISTINCT `userid`) as conteo_accesos_unicos
+    return "SELECT FROM_UNIXTIME(`timecreated`, '$format') as fecha, count(DISTINCT`userid`) as conteo_accesos_unicos
     FROM {logstore_standard_log}
-    WHERE `action` = 'loggedin'
-    AND `timecreated` BETWEEN $start_date AND $end_date
-    GROUP BY fecha
+    WHERE `action`='loggedin' 
+    AND FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') BETWEEN DATE_SUB(CURDATE(), INTERVAL 10 DAY) AND DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+    GROUP by fecha 
     ORDER BY fecha DESC";
 }
 
