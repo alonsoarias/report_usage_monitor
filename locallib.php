@@ -362,7 +362,7 @@ function generate_email_user($email, $name = '', $id = -99)
  *
  * @return bool Returns true if the email was successfully queued for sending, false otherwise.
  */
-function email_notify_user_limit($usage, $fecha, $percentage)
+function email_notify_user_limit($numberofusers, $fecha, $percentage)
 {
     global $CFG, $DB;
     $site = get_site();
@@ -371,7 +371,7 @@ function email_notify_user_limit($usage, $fecha, $percentage)
     $a = new stdClass();
     $a->sitename = format_string($site->fullname);
     $a->threshold = $reportconfig->max_daily_users_threshold;
-    $a->usage = $usage;
+    $a->usage = $numberofusers;
     $a->lastday = $fecha;
     $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php?view=userstopnum';
     $a->siteurl = $CFG->wwwroot;
@@ -386,7 +386,7 @@ function email_notify_user_limit($usage, $fecha, $percentage)
 
     $a->table = notification_table();
 
-    // Generate email addresses for sender and recipient.
+    // Generar direcciones de correo para el remitente y destinatario
     $toemail = generate_email_user(get_config('report_usage_monitor', 'email'), '');
     $fromemail = generate_email_user($CFG->noreplyaddress, format_string($CFG->supportname));
 
@@ -395,14 +395,17 @@ function email_notify_user_limit($usage, $fecha, $percentage)
     $messagetext = html_to_text($messagehtml);
 
     $previous_noemailever = false;
-    if (isset($CFG->noemailever)) $previous_noemailever = $CFG->noemailever;
+    if (isset($CFG->noemailever)) {
+        $previous_noemailever = $CFG->noemailever;
+    }
     $CFG->noemailever = false;
     email_to_user($toemail, $fromemail, $subject, $messagetext, $messagehtml, '', '', true, $fromemail->email);
-    if ($previous_noemailever) $CFG->noemailever = $previous_noemailever;
+    if ($previous_noemailever) {
+        $CFG->noemailever = $previous_noemailever;
+    }
 
     return true;
 }
-
 
 /**
  * Sends an email notification based on disk usage limits.
@@ -438,8 +441,9 @@ function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAc
     $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php?view=diskusage';
     $a->siteurl = $CFG->wwwroot;
     $a->coursescount = $DB->count_records('course'); // Contar la cantidad de cursos
+    $a->lastday = date('d/m/Y'); // Agregar la fecha actual
 
-    // Generate email addresses for sender and recipient.
+    // Generar direcciones de correo para el remitente y destinatario
     $toemail = generate_email_user(get_config('report_usage_monitor', 'email'), '');
     $fromemail = generate_email_user($CFG->noreplyaddress, format_string($CFG->supportname));
 
@@ -448,14 +452,17 @@ function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAc
     $messagetext = html_to_text($messagehtml);
 
     $previous_noemailever = false;
-    if (isset($CFG->noemailever)) $previous_noemailever = $CFG->noemailever;
+    if (isset($CFG->noemailever)) {
+        $previous_noemailever = $CFG->noemailever;
+    }
     $CFG->noemailever = false;
     email_to_user($toemail, $fromemail, $subject, $messagetext, $messagehtml, '', '', true, $fromemail->email);
-    if ($previous_noemailever) $CFG->noemailever = $previous_noemailever;
+    if ($previous_noemailever) {
+        $CFG->noemailever = $previous_noemailever;
+    }
 
     return true;
 }
-
 
 function calculate_user_threshold_percentage($usage, $threshold)
 {
