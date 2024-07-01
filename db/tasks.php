@@ -23,13 +23,9 @@
  * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 o posterior
  */
 
-// Definición de las tareas programadas para el informe diario de usuarios.
-
-// Incluir el archivo config.php para obtener la configuración de Moodle.
-//require_once(__DIR__ . '/../../config.php');
-
 defined('MOODLE_INTERNAL') || die();
 global $CFG;
+
 // Lista de tareas programadas para el complemento report_usage_monitor.
 // Estas tareas se ejecutarán automáticamente en los intervalos de tiempo especificados.
 $du_command_available = !empty($CFG->pathtodu) && is_executable(trim($CFG->pathtodu));
@@ -39,7 +35,7 @@ $tasks = array(
         'classname' => 'report_usage_monitor\task\disk_usage',
         'blocking' => 0,
         'minute' => '0',
-        'hour' => $du_command_available ? '*/12' : '0', // Cada 12 horas si du está activo, de lo contrario, cada 24 horas.
+        'hour' => $du_command_available ? '*/6' : '12', // Cada 6 horas si du está activo, de lo contrario, cada 12 horas.
         'day' => '*',
         'month' => '*',
         'dayofweek' => '*'
@@ -69,7 +65,7 @@ $tasks = array(
         'classname' => 'report_usage_monitor\task\notification_userlimit',
         'blocking' => 0,
         'minute' => '0',
-        'hour' => '8',  // Una vez al día a las 2 AM
+        'hour' => '8',  // Una vez al día a las 8 AM
         'day' => '*',
         'month' => '*',
         'dayofweek' => '*'
