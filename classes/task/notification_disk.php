@@ -36,9 +36,9 @@ class notification_disk extends \core\task\scheduled_task
     private function calculate_notification_interval($disk_percent)
     {
         $thresholds = [
-            99.9 => 12 * 60 * 60,   // 12 hours
-            98.5 => 24 * 60 * 60,   // 1 day
-            90 => 5 * 24 * 60 * 60, // 5 days
+            99.9 => 12 * 60 * 60,   // 12 horas
+            98.5 => 24 * 60 * 60,   // 1 día
+            90 => 5 * 24 * 60 * 60, // 5 días
         ];
 
         foreach ($thresholds as $threshold => $interval) {
@@ -52,7 +52,7 @@ class notification_disk extends \core\task\scheduled_task
 
     private function notify_disk_usage()
     {
-        global $DB; // Ensure global DB object is available
+        global $DB, $CFG;
         $reportconfig = get_config('report_usage_monitor');
         $quotadisk = ((int) $reportconfig->disk_quota * 1024) * 1024 * 1024;
         $disk_usage = ((int) $reportconfig->totalusagereadable + (int) $reportconfig->totalusagereadabledb) ?: 0;
@@ -64,8 +64,19 @@ class notification_disk extends \core\task\scheduled_task
 
         if ($current_time - $last_notificationdisk_time >= $notification_interval) {
             $userAccessCount = $this->get_total_user_access_count();
-            $diskthreshold = $reportconfig->disk_quota; // Added disk threshold for notification
-            email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAccessCount, $diskthreshold);
+
+            $previous_noemailever = false;
+            if (isset($CFG->noemailever)) {
+                $previous_noemailever = $CFG->noemailever;
+            }
+            $CFG->noemailever = false;
+
+            email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAccessCount);
+
+            if ($previous_noemailever) {
+                $CFG->noemailever = $previous_noemailever;
+            }
+
             set_config('last_notificationdisk_time', $current_time, 'report_usage_monitor');
         }
     }
