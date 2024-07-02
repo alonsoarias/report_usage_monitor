@@ -63,8 +63,7 @@ class notification_disk extends \core\task\scheduled_task
         $current_time = time();
 
         if ($current_time - $last_notificationdisk_time >= $notification_interval) {
-            $userAccessCount = $this->get_total_user_access_count();
-            email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAccessCount);
+            email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent);
             set_config('last_notificationdisk_time', $current_time, 'report_usage_monitor');
         }
     }
