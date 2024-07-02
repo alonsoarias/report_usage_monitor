@@ -359,6 +359,7 @@ function generate_email_user($email, $name = '', $id = -99)
 function email_notify_user_limit($numberofusers, $fecha, $percentage)
 {
     global $CFG, $DB;
+
     $site = get_site();
     $reportconfig = get_config('report_usage_monitor');
 
@@ -388,18 +389,15 @@ function email_notify_user_limit($numberofusers, $fecha, $percentage)
     $messagehtml = get_string('messagehtml1', 'report_usage_monitor', $a);
     $messagetext = html_to_text($messagehtml);
 
-    $previous_noemailever = false;
-    if (isset($CFG->noemailever)) {
-        $previous_noemailever = $CFG->noemailever;
-    }
+    $previous_noemailever = $CFG->noemailever ?? false;
     $CFG->noemailever = false;
     email_to_user($toemail, $fromemail, $subject, $messagetext, $messagehtml, '', '', true, $fromemail->email);
-    if ($previous_noemailever) {
-        $CFG->noemailever = $previous_noemailever;
-    }
+    $CFG->noemailever = $previous_noemailever;
 
     return true;
 }
+
+
 
 /**
  * Sends an email notification based on disk usage limits.
@@ -434,10 +432,9 @@ function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAc
     $a->userpercentage = calculate_user_threshold_percentage($a->numberofusers, $a->threshold);
     $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php?view=diskusage';
     $a->siteurl = $CFG->wwwroot;
-    $a->coursescount = $DB->count_records('course'); // Contar la cantidad de cursos
-    $a->lastday = date('d/m/Y'); // Agregar la fecha actual
+    $a->lastday = date('d/m/Y');
 
-    // Generar direcciones de correo para el remitente y destinatario
+    // Generar direcciones de correo para el remitente y destinatario.
     $toemail = generate_email_user(get_config('report_usage_monitor', 'email'), '');
     $fromemail = generate_email_user($CFG->noreplyaddress, format_string($CFG->supportname));
 
@@ -445,15 +442,10 @@ function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAc
     $messagehtml = get_string('messagehtml2', 'report_usage_monitor', $a);
     $messagetext = html_to_text($messagehtml);
 
-    $previous_noemailever = false;
-    if (isset($CFG->noemailever)) {
-        $previous_noemailever = $CFG->noemailever;
-    }
+    $previous_noemailever = $CFG->noemailever ?? false;
     $CFG->noemailever = false;
     email_to_user($toemail, $fromemail, $subject, $messagetext, $messagehtml, '', '', true, $fromemail->email);
-    if ($previous_noemailever) {
-        $CFG->noemailever = $previous_noemailever;
-    }
+    $CFG->noemailever = $previous_noemailever;
 
     return true;
 }
