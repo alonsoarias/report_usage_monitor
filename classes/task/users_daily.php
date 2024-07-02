@@ -23,7 +23,6 @@
  * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 o posterior
  */
 
-
 namespace report_usage_monitor\task;
 defined('MOODLE_INTERNAL') || die();
 
@@ -47,7 +46,9 @@ class users_daily extends \core\task\scheduled_task {
         if ($debugging) {
             mtrace("Ejecutando consulta: $userdailytop");
         }
-        $userdaily_records = $DB->get_records_sql($userdailytop);
+        // Ajustar la consulta para incluir un identificador único
+        $userdaily_records = $DB->get_records_sql("SELECT id, fecha, cantidad_usuarios FROM ($userdailytop) AS userdailytop ORDER BY cantidad_usuarios DESC");
+        
         foreach ($userdaily_records as $record) {
             $array_daily_top[] = [
                 "usuarios" => $record->cantidad_usuarios,
