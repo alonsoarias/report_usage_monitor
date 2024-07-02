@@ -52,7 +52,7 @@ class notification_disk extends \core\task\scheduled_task
 
     private function notify_disk_usage()
     {
-        global $DB, $CFG;
+        global $DB;
         $reportconfig = get_config('report_usage_monitor');
         $quotadisk = ((int) $reportconfig->disk_quota * 1024) * 1024 * 1024;
         $disk_usage = ((int) $reportconfig->totalusagereadable + (int) $reportconfig->totalusagereadabledb) ?: 0;
@@ -64,19 +64,7 @@ class notification_disk extends \core\task\scheduled_task
 
         if ($current_time - $last_notificationdisk_time >= $notification_interval) {
             $userAccessCount = $this->get_total_user_access_count();
-
-            $previous_noemailever = false;
-            if (isset($CFG->noemailever)) {
-                $previous_noemailever = $CFG->noemailever;
-            }
-            $CFG->noemailever = false;
-
             email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAccessCount);
-
-            if ($previous_noemailever) {
-                $CFG->noemailever = $previous_noemailever;
-            }
-
             set_config('last_notificationdisk_time', $current_time, 'report_usage_monitor');
         }
     }
