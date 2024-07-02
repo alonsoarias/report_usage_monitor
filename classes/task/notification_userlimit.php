@@ -58,9 +58,9 @@ class notification_userlimit extends \core\task\scheduled_task
     private function calculate_notification_interval($users_percent)
     {
         $thresholds = [
-            99.9 => 12 * 60 * 60,   // 12 horas
-            98.5 => 24 * 60 * 60,   // 1 día
-            90 => 5 * 24 * 60 * 60, // 5 días
+            100 => 24 * 60 * 60,     // 1 día
+            90 => 3 * 24 * 60 * 60,  // 3 días
+            80 => 7 * 24 * 60 * 60   // 1 semana
         ];
         foreach ($thresholds as $threshold => $interval) {
             if ($users_percent >= $threshold) {
