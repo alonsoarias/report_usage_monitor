@@ -62,11 +62,13 @@ class notification_userlimit extends \core\task\scheduled_task
             90 => 3 * 24 * 60 * 60,  // 3 días
             80 => 7 * 24 * 60 * 60   // 1 semana
         ];
+
         foreach ($thresholds as $threshold => $interval) {
             if ($users_percent >= $threshold) {
                 return $interval;
             }
         }
-        return 0; // No notification if under 90%
+
+        return 0; // Notificación inmediata si supera el umbral mínimo
     }
 }
