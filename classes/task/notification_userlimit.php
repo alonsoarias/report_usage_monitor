@@ -30,25 +30,45 @@ class notification_userlimit extends \core\task\scheduled_task
         global $CFG;
         require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
 
+        if (debugging('', DEBUG_DEVELOPER)) {
+            mtrace("Iniciando tarea de notificación de límite de usuarios...");
+        }
+
         $this->notify_user_limit();
+
+        if (debugging('', DEBUG_DEVELOPER)) {
+            mtrace("Tarea de notificación de límite de usuarios completada.");
+        }
     }
 
     private function notify_user_limit()
     {
         global $DB;
         $reportconfig = get_config('report_usage_monitor');
+        $user_threshold = $reportconfig->max_daily_users_threshold;
+
+        if (debugging('', DEBUG_DEVELOPER)) {
+            mtrace("Umbral de usuarios: $user_threshold");
+        }
+
         $lastday_users = user_limit_daily_sql(get_string('dateformatsql', 'report_usage_monitor'));
         $lastday_users_records = $DB->get_records_sql($lastday_users);
 
         foreach ($lastday_users_records as $item) {
-            $user_threshold = $reportconfig->max_daily_users_threshold;
             $users_percent = calculate_user_threshold_percentage($item->conteo_accesos_unicos, $user_threshold);
             $notification_interval = $this->calculate_notification_interval($users_percent);
 
             $last_notificationusers_time = get_config('report_usage_monitor', 'last_notificationusers_time');
             $current_time = time();
 
+            if (debugging('', DEBUG_DEVELOPER)) {
+                mtrace("Usuarios únicos: {$item->conteo_accesos_unicos}, Porcentaje de usuarios: $users_percent%, Intervalo de notificación: $notification_interval segundos");
+            }
+
             if ($current_time - $last_notificationusers_time >= $notification_interval) {
+                if (debugging('', DEBUG_DEVELOPER)) {
+                    mtrace("Enviando notificación de límite de usuarios...");
+                }
                 email_notify_user_limit($item->conteo_accesos_unicos, $item->fecha, $users_percent);
                 set_config('last_notificationusers_time', $current_time, 'report_usage_monitor');
             }
