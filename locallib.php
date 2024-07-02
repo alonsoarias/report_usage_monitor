@@ -251,10 +251,13 @@ function directory_size($rootdir, $excludefile = '')
     }
 
     $size = 0;
-    $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($rootdir, RecursiveDirectoryIterator::SKIP_DOTS));
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($rootdir, RecursiveDirectoryIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::SELF_FIRST
+    );
 
-    foreach ($files as $file) {
-        if ($file->isFile() && $file->getFilename() !== $excludefile) {
+    foreach ($iterator as $file) {
+        if ($file->isFile() && ($excludefile === '' || $file->getFilename() !== $excludefile)) {
             // Sumamos el tamaño del archivo si no está excluido.
             $size += $file->getSize();
         }
@@ -262,7 +265,6 @@ function directory_size($rootdir, $excludefile = '')
 
     return $size;
 }
-
 
 /**
  * Convierte el tamaño de bytes a gigabytes.
@@ -281,7 +283,7 @@ function display_size_in_gb($sizeInBytes, $precision = 2)
 
     // Conversión de bytes a GB.
     $sizeInGb = $sizeInBytes / (1024 * 1024 * 1024);
-    return round($sizeInGb, $precision);
+    return round($sizeInGb, $precision) . ' GB';
 }
 
 /**
@@ -366,11 +368,11 @@ function email_notify_user_limit($numberofusers, $fecha, $percentage)
     $a = new stdClass();
     $a->sitename = format_string($site->fullname);
     $a->threshold = $reportconfig->max_daily_users_threshold;
-    $a->usage = $numberofusers;
+    $a->numberofusers = $numberofusers;
     $a->lastday = $fecha;
     $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php?view=userstopnum';
     $a->siteurl = $CFG->wwwroot;
-    $a->percentage = $percentage; // Pasamos el porcentaje como argumento
+    $a->percentage = round($percentage, 2); // Redondear el porcentaje
 
     // Agregar detalles de uso de disco
     $quotadisk = ((int) $reportconfig->disk_quota * 1024) * 1024 * 1024;
@@ -378,6 +380,9 @@ function email_notify_user_limit($numberofusers, $fecha, $percentage)
 
     $a->diskusage = display_size($disk_usage);
     $a->quotadisk = display_size($quotadisk);
+
+    // Obtener el valor de backup_auto_max_kept
+    $a->backupcount = get_config('backup', 'backup_auto_max_kept');
 
     $a->table = notification_table();
 
@@ -397,8 +402,6 @@ function email_notify_user_limit($numberofusers, $fecha, $percentage)
     return true;
 }
 
-
-
 /**
  * Sends an email notification based on disk usage limits.
  *
@@ -413,7 +416,7 @@ function email_notify_user_limit($numberofusers, $fecha, $percentage)
  *
  * @return bool Returns true if the email is successfully sent, otherwise returns false.
  */
-function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAccessCount)
+function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent)
 {
     global $CFG, $DB;
 
@@ -424,15 +427,15 @@ function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAc
     $a->sitename = format_string($site->fullname);
     $a->quotadisk = display_size($quotadisk);
     $a->diskusage = display_size($disk_usage);
-    $a->percentage = round($disk_percent, 2);
+    $a->percentage = round($disk_percent, 2); // Redondear el porcentaje
     $a->databasesize = display_size($reportconfig->totalusagereadabledb);
-    $a->backupcount = $reportconfig->backup_auto_max_kept;
+    $a->backupcount = get_config('backup', 'backup_auto_max_kept'); // Obtener el valor de backup_auto_max_kept
     $a->threshold = $reportconfig->max_daily_users_threshold;
-    $a->numberofusers = $userAccessCount;
-    $a->userpercentage = calculate_user_threshold_percentage($a->numberofusers, $a->threshold);
+    $a->numberofusers = $this->get_total_user_access_count(); // Obtener el número de usuarios
     $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php?view=diskusage';
     $a->siteurl = $CFG->wwwroot;
     $a->lastday = date('d/m/Y');
+    $a->coursescount = $DB->count_records('course'); // Contar la cantidad de cursos
 
     // Generar direcciones de correo para el remitente y destinatario.
     $toemail = generate_email_user(get_config('report_usage_monitor', 'email'), '');
