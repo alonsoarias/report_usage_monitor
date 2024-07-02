@@ -460,7 +460,11 @@ function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAc
  * @param int $threshold El umbral máximo permitido.
  * @return float El porcentaje de uso.
  */
-function calculate_user_threshold_percentage($current_value, $threshold)
+function calculate_threshold_percentage($current_value, $threshold)
 {
-    return (($current_value / $threshold) * 100);
+    if ($threshold == 0) {
+        return 0;
+    }
+    return ($current_value / $threshold) * 100;
 }
+
