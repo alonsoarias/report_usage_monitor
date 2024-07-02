@@ -48,18 +48,7 @@ class notification_userlimit extends \core\task\scheduled_task
             $current_time = time();
 
             if ($current_time - $last_notificationusers_time >= $notification_interval) {
-                $previous_noemailever = false;
-                if (isset($CFG->noemailever)) {
-                    $previous_noemailever = $CFG->noemailever;
-                }
-                $CFG->noemailever = false;
-
                 email_notify_user_limit($item->conteo_accesos_unicos, $item->fecha, $users_percent);
-
-                if ($previous_noemailever) {
-                    $CFG->noemailever = $previous_noemailever;
-                }
-
                 set_config('last_notificationusers_time', $current_time, 'report_usage_monitor');
             }
         }
