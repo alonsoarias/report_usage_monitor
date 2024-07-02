@@ -41,7 +41,8 @@ class notification_userlimit extends \core\task\scheduled_task
         $lastday_users_records = $DB->get_records_sql($lastday_users);
 
         foreach ($lastday_users_records as $item) {
-            $users_percent = calculate_user_threshold_percentage($item->conteo_accesos_unicos, get_config('report_usage_monitor', 'max_daily_users_threshold'));
+            $user_threshold = $reportconfig->max_daily_users_threshold;
+            $users_percent = calculate_user_threshold_percentage($item->conteo_accesos_unicos, $user_threshold);
             $notification_interval = $this->calculate_notification_interval($users_percent);
 
             $last_notificationusers_time = get_config('report_usage_monitor', 'last_notificationusers_time');
