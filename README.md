@@ -29,7 +29,7 @@ to complete the installation from the command line.
 
 ## License ##
 
-2023 Soporte IngeWeb <soporte@ingeweb.co>
+2024 Soporte IngeWeb <soporte@ingeweb.co>
 
 This program is free software: you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
