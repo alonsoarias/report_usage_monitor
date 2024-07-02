@@ -278,12 +278,12 @@ function display_size_in_gb($sizeInBytes, $precision = 2)
     // Verifica si el valor es numérico y no es null.
     if (!is_numeric($sizeInBytes) || $sizeInBytes === null) {
         debugging("display_size_in_gb: se esperaba un valor numérico, recibido: " . var_export($sizeInBytes, true), DEBUG_DEVELOPER);
-        return '0 GB'; // Retorna '0 GB' como un valor seguro por defecto.
+        return '0'; // Retorna '0 GB' como un valor seguro por defecto.
     }
 
     // Conversión de bytes a GB.
     $sizeInGb = $sizeInBytes / (1024 * 1024 * 1024);
-    return round($sizeInGb, $precision) . ' GB';
+    return round($sizeInGb, $precision);
 }
 
 /**
@@ -372,7 +372,7 @@ function email_notify_user_limit($numberofusers, $fecha, $percentage)
     $a->lastday = $fecha;
     $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php?view=userstopnum';
     $a->siteurl = $CFG->wwwroot;
-    $a->percentage = round($percentage, 2); // Redondear el porcentaje
+    $a->percentaje = round($percentage, 2); // Redondear el porcentaje
 
     // Agregar detalles de uso de disco
     $quotadisk = ((int) $reportconfig->disk_quota * 1024) * 1024 * 1024;
@@ -453,7 +453,14 @@ function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAc
     return true;
 }
 
-function calculate_user_threshold_percentage($usage, $threshold)
+/**
+ * Calcula el porcentaje de uso en relación con un umbral.
+ *
+ * @param int $current_value El valor actual (número de usuarios, uso del disco, etc.).
+ * @param int $threshold El umbral máximo permitido.
+ * @return float El porcentaje de uso.
+ */
+function calculate_user_threshold_percentage($current_value, $threshold)
 {
-    return ($threshold > 0) ? round(($usage / $threshold) * 100, 2) : 0;
+    return (($current_value / $threshold) * 100);
 }
