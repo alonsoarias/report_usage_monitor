@@ -30,10 +30,10 @@ class notification_disk extends \core\task\scheduled_task
         global $CFG;
         require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
 
-        $this->notify_disk_usage();
+        self::notify_disk_usage();
     }
 
-    private function calculate_notification_interval($disk_percent)
+    private static function calculate_notification_interval($disk_percent)
     {
         $thresholds = [
             99.9 => 12 * 60 * 60,   // 12 horas
@@ -50,7 +50,7 @@ class notification_disk extends \core\task\scheduled_task
         return 0; // No notification if under 90%
     }
 
-    private function notify_disk_usage()
+    private static function notify_disk_usage()
     {
         global $DB;
         $reportconfig = get_config('report_usage_monitor');
@@ -58,17 +58,18 @@ class notification_disk extends \core\task\scheduled_task
         $disk_usage = ((int) $reportconfig->totalusagereadable + (int) $reportconfig->totalusagereadabledb) ?: 0;
         $disk_percent = ($quotadisk > 0) ? ($disk_usage / $quotadisk) * 100 : 0;
 
-        $notification_interval = $this->calculate_notification_interval($disk_percent);
+        $notification_interval = self::calculate_notification_interval($disk_percent);
         $last_notificationdisk_time = get_config('report_usage_monitor', 'last_notificationdisk_time');
         $current_time = time();
 
         if ($current_time - $last_notificationdisk_time >= $notification_interval) {
-            email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent);
+            $userAccessCount = self::get_total_user_access_count();
+            email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAccessCount);
             set_config('last_notificationdisk_time', $current_time, 'report_usage_monitor');
         }
     }
 
-    private function get_total_user_access_count()
+    private static function get_total_user_access_count()
     {
         global $DB;
         $lastday_users = user_limit_daily_sql(get_string('dateformatsql', 'report_usage_monitor'));
