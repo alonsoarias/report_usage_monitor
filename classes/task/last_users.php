@@ -23,50 +23,43 @@
  * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 o posterior
  */
 
-namespace report_usage_monitor\task;
 
-// Prevenir el acceso directo a este archivo.
-defined('MOODLE_INTERNAL') || die();
-
-
-
-/**
- * Tarea para calcular los usuarios conectados recientemente.
- *
- * @package     report_usage_monitor
- * @category    admin
- * @copyright   2023 Soporte IngeWeb <soporte@ingeweb.co>
- * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 o posterior
- */
-class last_users extends \core\task\scheduled_task
-{
-
-    /**
-     * Obtener el nombre de la tarea tal como se muestra en las pantallas de administración.
-     *
-     * @return string
-     * @throws \coding_exception
-     */
-    public function get_name()
-    {
-        return get_string('getlastusersconnected', 'report_usage_monitor');
-    }
-
-    /**
-     * Ejecutar la tarea para calcular los usuarios conectados recientemente.
-     */
-    public function execute()
-    {
-        global $DB, $CFG;
-        require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
-
-        // Recuperar los usuarios conectados recientemente para hoy.
-        $users = $DB->get_records_sql(users_today());
-        foreach ($users as $log) {
-            $users_today = $log->conteo_accesos_unicos;
-            set_config('totalusersdaily', $users_today, 'report_usage_monitor');
-        }
-
-        return true;
-    }
-}
+ namespace report_usage_monitor\task;
+ 
+ defined('MOODLE_INTERNAL') || die();
+ 
+ /**
+  * Tarea para calcular los usuarios conectados recientemente.
+  */
+ class last_users extends \core\task\scheduled_task
+ {
+     public function get_name()
+     {
+         return get_string('getlastusersconnected', 'report_usage_monitor');
+     }
+ 
+     public function execute()
+     {
+         global $DB, $CFG;
+         require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
+ 
+         if (debugging('', DEBUG_DEVELOPER)) {
+             mtrace("Iniciando tarea de cálculo de usuarios conectados recientemente...");
+         }
+ 
+         // Recuperar los usuarios conectados recientemente para hoy.
+         $users = $DB->get_records_sql(users_today());
+         foreach ($users as $log) {
+             $users_today = $log->conteo_accesos_unicos;
+             set_config('totalusersdaily', $users_today, 'report_usage_monitor');
+         }
+ 
+         if (debugging('', DEBUG_DEVELOPER)) {
+             mtrace("Usuarios conectados recientemente: $users_today.");
+             mtrace("Tarea de cálculo de usuarios conectados recientemente completada.");
+         }
+ 
+         return true;
+     }
+ }
+ 
