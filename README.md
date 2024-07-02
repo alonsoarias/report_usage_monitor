@@ -1,4 +1,3 @@
-Based on the content of the repository, here is an updated `README.md` for the `report_usage_monitor` plugin:
 # Usage Monitor Report
 
 The `report_usage_monitor` plugin for Moodle provides administrators with the capability to monitor and report on various aspects of usage within their Moodle installation, including user login activity and disk usage. It includes several scheduled tasks that generate reports and send notifications when thresholds are exceeded.
