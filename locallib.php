@@ -372,7 +372,7 @@ function email_notify_user_limit($numberofusers, $fecha, $percentage)
     $a->lastday = $fecha;
     $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php?view=userstopnum';
     $a->siteurl = $CFG->wwwroot;
-    $a->percentage = $percentage; // Redondear el porcentaje
+    $a->percentage = round($percentage, 2); // Redondear el porcentaje
 
     // Agregar detalles de uso de disco
     $quotadisk = ((int) $reportconfig->disk_quota * 1024) * 1024 * 1024;
