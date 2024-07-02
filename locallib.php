@@ -372,7 +372,7 @@ function email_notify_user_limit($numberofusers, $fecha, $percentage)
     $a->lastday = $fecha;
     $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php?view=userstopnum';
     $a->siteurl = $CFG->wwwroot;
-    $a->percentage = round($percentage, 2); // Redondear el porcentaje
+    $a->percentage = $percentage; // Redondear el porcentaje
 
     // Agregar detalles de uso de disco
     $quotadisk = ((int) $reportconfig->disk_quota * 1024) * 1024 * 1024;
@@ -416,7 +416,7 @@ function email_notify_user_limit($numberofusers, $fecha, $percentage)
  *
  * @return bool Returns true if the email is successfully sent, otherwise returns false.
  */
-function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent)
+function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAccessCount)
 {
     global $CFG, $DB;
 
@@ -431,7 +431,7 @@ function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent)
     $a->databasesize = display_size($reportconfig->totalusagereadabledb);
     $a->backupcount = get_config('backup', 'backup_auto_max_kept'); // Obtener el valor de backup_auto_max_kept
     $a->threshold = $reportconfig->max_daily_users_threshold;
-    $a->numberofusers = $this->get_total_user_access_count(); // Obtener el número de usuarios
+    $a->numberofusers = $userAccessCount; // Obtener el número de usuarios
     $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php?view=diskusage';
     $a->siteurl = $CFG->wwwroot;
     $a->lastday = date('d/m/Y');
