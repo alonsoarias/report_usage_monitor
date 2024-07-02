@@ -54,12 +54,12 @@ class notification_userlimit extends \core\task\scheduled_task
         $lastday_users = user_limit_daily_sql(get_string('dateformatsql', 'report_usage_monitor'));
         $lastday_users_records = $DB->get_records_sql($lastday_users);
 
-        foreach ($lastday_users_records as $item) {
-            $users_percent = calculate_user_threshold_percentage($item->conteo_accesos_unicos, $user_threshold);
-            $notification_interval = $this->calculate_notification_interval($users_percent);
+        $last_notificationusers_time = get_config('report_usage_monitor', 'last_notificationusers_time');
+        $current_time = time();
 
-            $last_notificationusers_time = get_config('report_usage_monitor', 'last_notificationusers_time');
-            $current_time = time();
+        foreach ($lastday_users_records as $item) {
+            $users_percent = calculate_threshold_percentage($item->conteo_accesos_unicos, $user_threshold);
+            $notification_interval = $this->calculate_notification_interval($users_percent);
 
             if (debugging('', DEBUG_DEVELOPER)) {
                 mtrace("Usuarios únicos: {$item->conteo_accesos_unicos}, Porcentaje de usuarios: $users_percent%, Intervalo de notificación: $notification_interval segundos");
@@ -71,6 +71,10 @@ class notification_userlimit extends \core\task\scheduled_task
                 }
                 email_notify_user_limit($item->conteo_accesos_unicos, $item->fecha, $users_percent);
                 set_config('last_notificationusers_time', $current_time, 'report_usage_monitor');
+            } else {
+                if (debugging('', DEBUG_DEVELOPER)) {
+                    mtrace("No ha pasado el intervalo de notificación.");
+                }
             }
         }
     }
@@ -89,6 +93,6 @@ class notification_userlimit extends \core\task\scheduled_task
             }
         }
 
-        return 0; // Notificación inmediata si supera el umbral mínimo
+        return PHP_INT_MAX; // No notification if under 80%
     }
 }
