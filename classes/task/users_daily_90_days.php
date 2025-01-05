@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - https://moodle.org/
+// This file is part of Moodle - http://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -12,55 +12,95 @@
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Tarea programada para el uso del disco, para ejecutar los informes programados.
+ * Scheduled task for calculating users in the last 90 days.
  *
- * @package     report_usage_monitor
- * @category    admin
- * @copyright   2023 Soporte IngeWeb <soporte@ingeweb.co>
- * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 o posterior
+ * @package    report_usage_monitor
+ * @copyright  2024 Soporte IngeWeb <soporte@ingeweb.co>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+namespace report_usage_monitor\task;
 
- namespace report_usage_monitor\task;
- 
- defined('MOODLE_INTERNAL') || die();
- 
- /**
-  * Tarea para calcular los usuarios principales en los últimos 90 días.
-  */
- class users_daily_90_days extends \core\task\scheduled_task
- {
-     public function get_name()
-     {
-         return get_string('getlastusers90days', 'report_usage_monitor');
-     }
- 
-     public function execute() {
-         global $DB, $CFG;
-         require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
- 
-         if (debugging('', DEBUG_DEVELOPER)) {
-             mtrace("Iniciando tarea de cálculo de usuarios diarios en los últimos 90 días...");
-         }
- 
-         // Asumiendo que la función max_userdaily_for_90_days devuelve una consulta SQL correcta.
-         $sql = max_userdaily_for_90_days(get_string('dateformatsql', 'report_usage_monitor'));
-         $users_90_days_records = $DB->get_records_sql($sql);
-         foreach ($users_90_days_records as $record) {
-             // Asegúrate de que el nombre de la columna en tu consulta SQL sea 'usuarios'.
-             if (isset($record->usuarios)) {
-                 set_config('max_userdaily_for_90_days_date', $record->fecha, 'report_usage_monitor');
-                 set_config('max_userdaily_for_90_days_users', $record->usuarios, 'report_usage_monitor');
-             }
-         }
- 
-         if (debugging('', DEBUG_DEVELOPER)) {
-             mtrace("Usuarios principales en los últimos 90 días calculados.");
-             mtrace("Tarea de cálculo de usuarios principales en los últimos 90 días completada.");
-         }
-     }
- }
- 
+defined('MOODLE_INTERNAL') || die();
+
+/**
+ * Task class for calculating users in last 90 days.
+ */
+class users_daily_90_days extends \core\task\scheduled_task {
+
+    /**
+     * Returns the name of task for display.
+     *
+     * @return string Task name
+     */
+    public function get_name() {
+        return get_string('getlastusers90days', 'report_usage_monitor');
+    }
+
+    /**
+     * Executes the task.
+     *
+     * @return bool True if task completes successfully
+     */
+    public function execute() {
+        global $DB, $CFG;
+        require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
+
+        if (debugging('', DEBUG_DEVELOPER)) {
+            mtrace("Starting 90-day users calculation task...");
+        }
+
+        try {
+            // Get maximum daily users in last 90 days
+            $sql = max_userdaily_for_90_days(
+                get_string('dateformatsql', 'report_usage_monitor')
+            );
+            $records = $DB->get_records_sql($sql);
+
+            foreach ($records as $record) {
+                if (isset($record->usuarios)) {
+                    set_config(
+                        'max_userdaily_for_90_days_date',
+                        $record->fecha,
+                        'report_usage_monitor'
+                    );
+                    set_config(
+                        'max_userdaily_for_90_days_users',
+                        $record->usuarios,
+                        'report_usage_monitor'
+                    );
+
+                    if (debugging('', DEBUG_DEVELOPER)) {
+                        mtrace("Maximum users found: {$record->usuarios} on " . 
+                              userdate($record->fecha));
+                    }
+                }
+            }
+
+            if (debugging('', DEBUG_DEVELOPER)) {
+                mtrace("90-day users calculation task completed.");
+            }
+
+            return true;
+
+        } catch (\Exception $e) {
+            mtrace("Error calculating 90-day users: " . $e->getMessage());
+            if (debugging('', DEBUG_DEVELOPER)) {
+                mtrace($e->getTraceAsString());
+            }
+            return false;
+        }
+    }
+
+    /**
+     * Indicates whether this task can be run from CLI.
+     *
+     * @return bool
+     */
+    public static function can_run_from_cli() {
+        return true;
+    }
+}
