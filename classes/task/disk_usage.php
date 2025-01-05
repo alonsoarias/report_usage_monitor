@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - https://moodle.org/
+// This file is part of Moodle - http://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -12,61 +12,93 @@
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Tarea programada para el uso del disco, para ejecutar los informes programados.
+ * Scheduled task for calculating disk usage.
  *
- * @package     report_usage_monitor
- * @category    admin
- * @copyright   2023 Soporte IngeWeb <soporte@ingeweb.co>
- * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 o posterior
+ * @package    report_usage_monitor
+ * @copyright  2024 Soporte IngeWeb <soporte@ingeweb.co>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 namespace report_usage_monitor\task;
 
 defined('MOODLE_INTERNAL') || die();
 
-class disk_usage extends \core\task\scheduled_task
-{
-    public function get_name()
-    {
+/**
+ * Task class for calculating disk usage.
+ */
+class disk_usage extends \core\task\scheduled_task {
+
+    /**
+     * Returns the name of task for display.
+     *
+     * @return string Task name
+     */
+    public function get_name() {
         return get_string('calculatediskusagetask', 'report_usage_monitor');
     }
 
-    public function execute()
-    {
+    /**
+     * Executes the task.
+     *
+     * @return bool True if task completes successfully
+     */
+    public function execute() {
         global $DB, $CFG;
         require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
 
         if (debugging('', DEBUG_DEVELOPER)) {
-            mtrace("Iniciando tarea de cálculo de uso del disco...");
+            mtrace("Starting disk usage calculation task...");
         }
 
-        // Calcular el tamaño de la base de datos.
-        $size = size_database();
-        $size_database = $DB->get_records_sql($size);
-        foreach ($size_database as $item) {
-            $totalusagereadabledb = $item->size;
-            set_config('totalusagereadabledb', $totalusagereadabledb, 'report_usage_monitor');
+        try {
+            // Calculate database size
+            $sql = size_database();
+            $dbsize = $DB->get_records_sql($sql);
+            foreach ($dbsize as $item) {
+                $totalusagereadabledb = $item->size;
+                set_config('totalusagereadabledb', $totalusagereadabledb, 'report_usage_monitor');
+            }
+
+            // Calculate dataroot directory size
+            $totalusagedataroot = directory_size($CFG->dataroot);
+
+            // Calculate dirroot directory size
+            $totalusagedirroot = directory_size($CFG->dirroot);
+
+            // Calculate total readable disk usage
+            $totalusagereadable = $totalusagedataroot + $totalusagedirroot;
+            set_config('totalusagereadable', $totalusagereadable, 'report_usage_monitor');
+            set_config('lastexecutioncalculate', time(), 'report_usage_monitor');
+
+            if (debugging('', DEBUG_DEVELOPER)) {
+                mtrace("Disk usage calculated:");
+                mtrace("- Database size: " . display_size($totalusagereadabledb));
+                mtrace("- Dataroot size: " . display_size($totalusagedataroot));
+                mtrace("- Dirroot size: " . display_size($totalusagedirroot));
+                mtrace("- Total usage: " . display_size($totalusagereadable));
+                mtrace("Disk usage calculation task completed.");
+            }
+
+            return true;
+
+        } catch (\Exception $e) {
+            mtrace("Error in disk usage calculation: " . $e->getMessage());
+            if (debugging('', DEBUG_DEVELOPER)) {
+                mtrace($e->getTraceAsString());
+            }
+            return false;
         }
+    }
 
-        // Calcular el tamaño del directorio dataroot.
-        $totalusagedataroot = directory_size($CFG->dataroot);
-
-        // Calcular el tamaño del directorio dirroot.
-        $totalusagedirroot = directory_size($CFG->dirroot);
-
-        // Calcular el total del uso del disco legible.
-        $totalusagereadable = $totalusagedataroot + $totalusagedirroot;
-        set_config('totalusagereadable', $totalusagereadable, 'report_usage_monitor');
-        set_config('lastexecutioncalculate', time(), 'report_usage_monitor');
-
-        if (debugging('', DEBUG_DEVELOPER)) {
-            mtrace("Uso del disco calculado. Total base de datos: $totalusagereadabledb bytes, Total dataroot: $totalusagedataroot bytes, Total dirroot: $totalusagedirroot bytes, Total uso legible: $totalusagereadable bytes.");
-            mtrace("Tarea de cálculo de uso del disco completada.");
-        }
-
+    /**
+     * Indicates whether this task can be run from CLI.
+     *
+     * @return bool
+     */
+    public static function can_run_from_cli() {
         return true;
     }
 }
