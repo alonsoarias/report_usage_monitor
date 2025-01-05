@@ -348,110 +348,81 @@ function generate_email_user($email, $name = '', $id = -99)
 }
 
 /**
- * Sends an email notification when the daily user limit is exceeded.
+ * Envía un correo unificado que incluye toda la información
+ * de límite de usuarios diarios y uso de disco, más cualquier
+ * dato adicional que antes se manejaba por separado.
  *
- * This function constructs and sends an email when the number of unique users for the previous day
- * exceeds the configured threshold. It uses Moodle's internal email system to handle the sending process.
+ * @param bool   $exceededUsers   Indica si el umbral de usuarios se superó.
+ * @param bool   $exceededDisk    Indica si el umbral de disco se superó.
+ * @param object $info            Objeto con los datos (usuarios, disco, extras).
  *
- * @param int $usage The number of unique users that accessed the system.
- * @param string $fecha The date for which the threshold was exceeded.
- *
- * @return bool Returns true if the email was successfully queued for sending, false otherwise.
+ * @return bool  true si se envía el correo exitosamente.
  */
-function email_notify_user_limit($numberofusers, $fecha, $percentage)
-{
+function email_notify_usage_monitor($exceededUsers, $exceededDisk, $info) {
     global $CFG, $DB;
 
-    $site = get_site();
-    $reportconfig = get_config('report_usage_monitor');
-
+    // Objeto $a para pasar a la plantilla de notificación.
     $a = new stdClass();
-    $a->sitename = format_string($site->fullname);
-    $a->threshold = $reportconfig->max_daily_users_threshold;
-    $a->numberofusers = $numberofusers;
-    $a->lastday = $fecha;
-    $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php?view=userstopnum';
-    $a->siteurl = $CFG->wwwroot;
-    $a->percentaje = round($percentage, 2); // Redondear el porcentaje
 
-    // Agregar detalles de uso de disco
-    $quotadisk = ((int) $reportconfig->disk_quota * 1024) * 1024 * 1024;
-    $disk_usage = ((int) $reportconfig->totalusagereadable + (int) $reportconfig->totalusagereadabledb) ?: 0;
+    // 1) Información general
+    $a->sitename  = $info->sitename  ?? format_string(get_site()->fullname);
+    $a->siteurl   = $info->siteurl   ?? $CFG->wwwroot;
 
-    $a->diskusage = display_size($disk_usage);
-    $a->quotadisk = display_size($quotadisk);
+    // 2) Datos sobre usuarios (día anterior)
+    $a->userthreshold  = $info->userthreshold ?? 100;
+    $a->users          = $info->users         ?? 0;
+    $a->userpercent    = round($info->userpercent ?? 0, 2);
+    $a->exceededUsersLabel = $exceededUsers
+        ? get_string('yes', 'moodle')
+        : get_string('no', 'moodle');
 
-    // Obtener el valor de backup_auto_max_kept
-    $a->backupcount = get_config('backup', 'backup_auto_max_kept');
+    // 3) Datos sobre disco
+    $a->diskusage   = $info->diskusage   ?? '0 B';
+    $a->diskquota   = $info->diskquota   ?? '0 B';
+    $a->diskpercent = round($info->diskpercent ?? 0, 2);
+    $a->exceededDiskLabel = $exceededDisk
+        ? get_string('yes', 'moodle')
+        : get_string('no', 'moodle');
 
-    $a->table = notification_table();
+    // 4) Extras (tamaño base de datos, número de cursos, backups, etc.)
+    $a->databasesize  = $info->databasesize   ?? '';
+    $a->coursescount  = $info->coursescount   ?? 0;
+    $a->backupcount   = $info->backupcount    ?? '-';
 
-    // Generar direcciones de correo para el remitente y destinatario
-    $toemail = generate_email_user(get_config('report_usage_monitor', 'email'), '');
-    $fromemail = generate_email_user($CFG->noreplyaddress, format_string($CFG->supportname));
+    // 5) Si quieres incluir la tabla de últimos 10 días, p. ej.:
+    $a->table = $info->table ?? '';
 
-    $subject = get_string('subjectemail1', 'report_usage_monitor') . " {$a->sitename}";
-    $messagehtml = get_string('messagehtml1', 'report_usage_monitor', $a);
+    // Prepara y envía el correo
+    $reportconfig  = get_config('report_usage_monitor');
+    $toemail       = generate_email_user($reportconfig->email ?? '', '');
+    $fromemail     = generate_email_user($CFG->noreplyaddress, format_string($CFG->supportname));
+
+    // Sujeto y mensaje
+    // Usamos un string existente o uno nuevo, p. ej. subjectemail_unified
+    $subject = get_string('subjectemail_unified', 'report_usage_monitor', $a);
+    $messagehtml = get_string('messagehtml_unified', 'report_usage_monitor', $a);
+
     $messagetext = html_to_text($messagehtml);
 
-    $previous_noemailever = $CFG->noemailever ?? false;
+    // Enviar
+    $prev_noemailever = $CFG->noemailever ?? false;
     $CFG->noemailever = false;
-    email_to_user($toemail, $fromemail, $subject, $messagetext, $messagehtml, '', '', true, $fromemail->email);
-    $CFG->noemailever = $previous_noemailever;
+    $success = email_to_user(
+        $toemail,
+        $fromemail,
+        $subject,
+        $messagetext,
+        $messagehtml,
+        '',
+        '',
+        true,
+        $fromemail->email
+    );
+    $CFG->noemailever = $prev_noemailever;
 
-    return true;
+    return $success;
 }
 
-/**
- * Sends an email notification based on disk usage limits.
- *
- * This function receives disk usage data and the calculated disk usage percentage as parameters,
- * constructs a notification email based on these values.
- * The approach ensures that the calculation logic is kept separate from the mailing logic,
- * enhancing maintainability and testing.
- *
- * @param int $quotadisk The total disk quota assigned, in bytes.
- * @param int $disk_usage The current disk usage, in bytes.
- * @param float $disk_percent The percentage of disk quota used.
- *
- * @return bool Returns true if the email is successfully sent, otherwise returns false.
- */
-function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAccessCount)
-{
-    global $CFG, $DB;
-
-    $site = get_site();
-    $reportconfig = get_config('report_usage_monitor');
-
-    $a = new stdClass();
-    $a->sitename = format_string($site->fullname);
-    $a->quotadisk = display_size($quotadisk);
-    $a->diskusage = display_size($disk_usage);
-    $a->percentage = round($disk_percent, 2); // Redondear el porcentaje
-    $a->databasesize = display_size($reportconfig->totalusagereadabledb);
-    $a->backupcount = get_config('backup', 'backup_auto_max_kept'); // Obtener el valor de backup_auto_max_kept
-    $a->threshold = $reportconfig->max_daily_users_threshold;
-    $a->numberofusers = $userAccessCount; // Obtener el número de usuarios
-    $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php?view=diskusage';
-    $a->siteurl = $CFG->wwwroot;
-    $a->lastday = date('d/m/Y');
-    $a->coursescount = $DB->count_records('course'); // Contar la cantidad de cursos
-
-    // Generar direcciones de correo para el remitente y destinatario.
-    $toemail = generate_email_user(get_config('report_usage_monitor', 'email'), '');
-    $fromemail = generate_email_user($CFG->noreplyaddress, format_string($CFG->supportname));
-
-    $subject = get_string('subjectemail2', 'report_usage_monitor') . " {$a->sitename}";
-    $messagehtml = get_string('messagehtml2', 'report_usage_monitor', $a);
-    $messagetext = html_to_text($messagehtml);
-
-    $previous_noemailever = $CFG->noemailever ?? false;
-    $CFG->noemailever = false;
-    email_to_user($toemail, $fromemail, $subject, $messagetext, $messagehtml, '', '', true, $fromemail->email);
-    $CFG->noemailever = $previous_noemailever;
-
-    return true;
-}
 
 /**
  * Calcula el porcentaje de uso en relación con un umbral.
