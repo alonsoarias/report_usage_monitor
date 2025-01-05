@@ -15,238 +15,213 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Local functions.
+ * Library of functions for report_usage_monitor
  *
- * @package     report_usage_monitor
- * @category    admin
- * @copyright   2023 Soporte IngeWeb <soporte@ingeweb.co>
- * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @package    report_usage_monitor
+ * @copyright  2024 Soporte IngeWeb <soporte@ingeweb.co>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
+
+defined('MOODLE_INTERNAL') || die();
 
 /**
- * Obtener la lista de usuarios de los últimos 10 días.
+ * Get list of users from the last 10 days.
  *
- * @param string $format Formato de fecha para la consulta SQL.
- * @return string Consulta SQL para obtener la lista de usuarios.
+ * @param string $format Date format for SQL query
+ * @return string SQL query
  */
-function report_user_daily_sql($format)
-{
-    return "SELECT FROM_UNIXTIME(`timecreated`, '$format') as fecha, count(DISTINCT`userid`) as conteo_accesos_unicos
-    FROM {logstore_standard_log}
-    WHERE `action`='loggedin' 
-    AND FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') BETWEEN DATE_SUB(CURDATE(), INTERVAL 10 DAY) AND DATE_SUB(CURDATE(), INTERVAL 1 DAY)
-    GROUP by fecha 
-    ORDER BY fecha DESC";
-}
-
-
-/**
- * Obtener datos del top de usuarios máximos diarios.
- *
- * @param string $format Formato de fecha para la consulta SQL.
- * @return string Consulta SQL para obtener los datos del top de usuarios.
- */
-function report_user_daily_top_sql($format)
-{
-    return "SELECT FROM_UNIXTIME(`fecha`, '$format') as fecha, cantidad_usuarios from {report_usage_monitor}  ORDER BY cantidad_usuarios DESC";
+function report_user_daily_sql($format) {
+    return "SELECT FROM_UNIXTIME(`timecreated`, '$format') as fecha, 
+                   count(DISTINCT`userid`) as conteo_accesos_unicos
+            FROM {logstore_standard_log}
+            WHERE `action`='loggedin' 
+            AND FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') 
+                BETWEEN DATE_SUB(CURDATE(), INTERVAL 10 DAY) 
+                AND DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+            GROUP by fecha 
+            ORDER BY fecha DESC";
 }
 
 /**
- * Obtener datos del top de usuarios máximos diarios para una tarea específica.
+ * Get data for top daily users maximum.
  *
- * @return string Consulta SQL para obtener los datos del top de usuarios.
+ * @param string $format Date format for SQL query
+ * @return string SQL query
  */
-function report_user_daily_top_task()
-{
-    return "SELECT fecha, cantidad_usuarios from {report_usage_monitor}  ORDER BY cantidad_usuarios DESC";
+function report_user_daily_top_sql($format) {
+    return "SELECT FROM_UNIXTIME(`fecha`, '$format') as fecha, 
+                   cantidad_usuarios 
+            FROM {report_usage_monitor}  
+            ORDER BY cantidad_usuarios DESC";
 }
 
 /**
- * Actualizar el top de usuarios diarios si el número de usuarios actuales es mayor o igual al menor registro en el top.
+ * Get data for top daily users maximum for a specific task.
  *
- * @param string $fecha Fecha a actualizar en el top.
- * @param int $usuarios Cantidad de usuarios a actualizar en el top.
- * @param int $min Valor mínimo a comparar en el top.
+ * @return string SQL query
+ */
+function report_user_daily_top_task() {
+    return "SELECT fecha, cantidad_usuarios 
+            FROM {report_usage_monitor}  
+            ORDER BY cantidad_usuarios DESC";
+}
+
+/**
+ * Update top daily users if current users is greater than or equal to lowest in top.
+ *
+ * @param string $fecha Date to update in top
+ * @param int $usuarios Number of users to update
+ * @param int $min Minimum value to compare in top
  * @return void
  */
-function update_min_top_sql($fecha, $usuarios, $min)
-{
+function update_min_top_sql($fecha, $usuarios, $min) {
     global $DB;
-    $SQL = "UPDATE {report_usage_monitor} set fecha=?,cantidad_usuarios=? where fecha=?";
     $params = array($fecha, $usuarios, $min);
-    $DB->execute($SQL, $params);
+    $DB->execute(
+        "UPDATE {report_usage_monitor} 
+         SET fecha=?, cantidad_usuarios=? 
+         WHERE fecha=?", 
+        $params
+    );
 }
 
 /**
- * Insertar un registro si el top de usuarios diarios no tiene 10 registros.
+ * Insert a record if top daily users doesn't have 10 records.
  *
- * @param string $fecha Fecha a insertar en el top.
- * @param int $cantidad_usuarios Cantidad de usuarios a insertar en el top.
+ * @param string $fecha Date to insert
+ * @param int $cantidad_usuarios Number of users to insert
  * @return void
  */
-function insert_top_sql($fecha, $cantidad_usuarios)
-{
+function insert_top_sql($fecha, $cantidad_usuarios) {
     global $DB;
-    $SQL = "INSERT INTO {report_usage_monitor} (fecha,cantidad_usuarios) VALUES (?,?)";
     $params = array($fecha, $cantidad_usuarios);
-    $DB->execute($SQL, $params);
+    $DB->execute(
+        "INSERT INTO {report_usage_monitor} (fecha,cantidad_usuarios) 
+         VALUES (?,?)", 
+        $params
+    );
 }
 
 /**
- * Obtener la cantidad de usuarios conectados el día de ayer.
+ * Get number of users connected yesterday.
  *
- * @param string $format Formato de fecha para la consulta SQL.
- * @return string Consulta SQL para obtener la cantidad de usuarios conectados.
+ * @param string $format Date format for SQL query
+ * @return string SQL query
  */
-function user_limit_daily_sql($format)
-{
-    return "SELECT count(DISTINCT`userid`) as conteo_accesos_unicos ,FROM_UNIXTIME(`timecreated`, '$format') as fecha
-    FROM {logstore_standard_log}
-    WHERE `action`='loggedin' 
-    AND FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') = DATE_SUB(CURDATE(), INTERVAL 1 DAY)
-    GROUP by fecha";
-}
-
-/*Obtener el límite diario de usuarios.*/
-/**
- * Obtener el límite diario de usuarios para una tarea específica.
- *
- * @return string Consulta SQL para obtener el límite diario de usuarios.
- */
-function user_limit_daily_task()
-{
-    return "SELECT UNIX_TIMESTAMP(STR_TO_DATE(x.fecha, '%Y/%m/%d')) as fecha,x.conteo_accesos_unicos FROM (
-        SELECT FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') as fecha, count(DISTINCT`userid`) as conteo_accesos_unicos 
-        FROM {logstore_standard_log}
-        WHERE `action`='loggedin' 
-        AND FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') = DATE_SUB(CURDATE(), INTERVAL 1 DAY) 
-        GROUP by fecha) as x;";
+function user_limit_daily_sql($format) {
+    return "SELECT count(DISTINCT`userid`) as conteo_accesos_unicos,
+                   FROM_UNIXTIME(`timecreated`, '$format') as fecha
+            FROM {logstore_standard_log}
+            WHERE `action`='loggedin' 
+            AND FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') = 
+                DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+            GROUP by fecha";
 }
 
 /**
- * Recuperar los usuarios conectados recientemente para hoy.
+ * Get daily user limit for a specific task.
  *
- * @return string Consulta SQL para obtener los usuarios conectados hoy.
+ * @return string SQL query
  */
-function users_today()
-{
-    return "SELECT FROM_UNIXTIME(`lastaccess`, '%d/%m/%Y') as fecha, count(DISTINCT`id`) as conteo_accesos_unicos from {user}
-     WHERE FROM_UNIXTIME(`lastaccess`, '%Y/%m/%d')>= DATE_SUB(NOW(), INTERVAL 1 DAY);";
+function user_limit_daily_task() {
+    return "SELECT UNIX_TIMESTAMP(STR_TO_DATE(x.fecha, '%Y/%m/%d')) as fecha,
+                   x.conteo_accesos_unicos 
+            FROM (
+                SELECT FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') as fecha, 
+                       count(DISTINCT`userid`) as conteo_accesos_unicos 
+                FROM {logstore_standard_log}
+                WHERE `action`='loggedin' 
+                AND FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') = 
+                    DATE_SUB(CURDATE(), INTERVAL 1 DAY) 
+                GROUP by fecha
+            ) as x";
 }
 
 /**
- * Obtener el número máximo de accesos en los últimos 90 días.
+ * Get recently connected users for today.
  *
- * @param string $format Formato de fecha para la consulta SQL.
- * @return string Consulta SQL para obtener el número máximo de accesos en los últimos 90 días.
+ * @return string SQL query
  */
-function max_userdaily_for_90_days($format)
-{
-    return "SELECT UNIX_TIMESTAMP(STR_TO_DATE(x.fecha, '$format')) as fecha, x.conteo_accesos_unicos as usuarios FROM (
-        SELECT FROM_UNIXTIME(`timecreated`, '$format') as fecha ,count(DISTINCT`userid`) as conteo_accesos_unicos 
-        FROM {logstore_standard_log}
-        WHERE `action`='loggedin' 
-        AND FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') >= DATE_SUB(NOW(), INTERVAL 90 DAY) GROUP by fecha) as x
-        ORDER BY usuarios DESC LIMIT 1";
+function users_today() {
+    return "SELECT FROM_UNIXTIME(`lastaccess`, '%d/%m/%Y') as fecha, 
+                   count(DISTINCT`id`) as conteo_accesos_unicos 
+            FROM {user}
+            WHERE FROM_UNIXTIME(`lastaccess`, '%Y/%m/%d') >= 
+                DATE_SUB(NOW(), INTERVAL 1 DAY)";
 }
 
 /**
- * Calcular el tamaño de la base de datos.
+ * Get maximum number of accesses in last 90 days.
  *
- * @return string Consulta SQL para obtener el tamaño de la base de datos.
+ * @param string $format Date format for SQL query
+ * @return string SQL query
  */
-function size_database()
-{
+function max_userdaily_for_90_days($format) {
+    return "SELECT UNIX_TIMESTAMP(STR_TO_DATE(x.fecha, '$format')) as fecha, 
+                   x.conteo_accesos_unicos as usuarios 
+            FROM (
+                SELECT FROM_UNIXTIME(`timecreated`, '$format') as fecha,
+                       count(DISTINCT`userid`) as conteo_accesos_unicos 
+                FROM {logstore_standard_log}
+                WHERE `action`='loggedin' 
+                AND FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') >= 
+                    DATE_SUB(NOW(), INTERVAL 90 DAY) 
+                GROUP by fecha
+            ) as x
+            ORDER BY usuarios DESC 
+            LIMIT 1";
+}
+
+/**
+ * Calculate database size.
+ *
+ * @return string SQL query
+ */
+function size_database() {
     global $CFG;
     return "SELECT TABLE_SCHEMA AS `database_name`, 
-    ROUND(SUM(DATA_LENGTH + INDEX_LENGTH)) AS size
-    FROM information_schema.TABLES
-    WHERE TABLE_SCHEMA='$CFG->dbname'";
+                   ROUND(SUM(DATA_LENGTH + INDEX_LENGTH)) AS size
+            FROM information_schema.TABLES
+            WHERE TABLE_SCHEMA='$CFG->dbname'";
 }
 
 /**
- * Retorna la tabla que se envía al correo con los datos de la cantidad de usuarios.
+ * Calculate size of a directory recursively.
  *
- * @return string Tabla HTML con los datos de la cantidad de usuarios.
+ * @param string $rootdir The directory to analyze
+ * @param string $excludefile Optional file to exclude
+ * @return int Total size in bytes
  */
-function notification_table($disk_usage = null, $disk_percent = null, $quotadisk = null)
-{
-    global $DB;
-
-    $table = '<h2>' . get_string('lastusers', 'report_usage_monitor') . '</h2>
-    <table border="1" style="border-collapse: collapse; width: 50%;">
-    <tr>
-        <th style="padding: 8px; background-color: #f2f2f2;">' . get_string('date', 'report_usage_monitor') . '</th>
-        <th style="padding: 8px; background-color: #f2f2f2;">' . get_string('usersquantity', 'report_usage_monitor') . '</th>
-    </tr>';
-
-    $userdaily = report_user_daily_sql(get_string('dateformatsql', 'report_usage_monitor'));
-    $userdaily_records = $DB->get_records_sql($userdaily);
-
-    foreach ($userdaily_records as $log) {
-        $table .= '<tr>
-        <td style="padding: 8px;">' . $log->fecha . '</td>
-        <td style="padding: 8px;">' . $log->conteo_accesos_unicos . '</td>
-        </tr>';
-    }
-
-    if ($disk_usage !== null && $disk_percent !== null && $quotadisk !== null) {
-        $table .= '</table><br><h2>' . get_string('diskusage', 'report_usage_monitor') . '</h2>
-        <table border="1" style="border-collapse: collapse; width: 50%;">
-        <tr>
-            <th style="padding: 8px; background-color: #f2f2f2;">' . get_string('totaldiskusage', 'report_usage_monitor') . '</th>
-            <td style="padding: 8px;">' . display_size($disk_usage) . ' (' . round($disk_percent, 2) . '%)</td>
-        </tr>
-        <tr>
-            <th style="padding: 8px; background-color: #f2f2f2;">' . get_string('diskquota', 'report_usage_monitor') . '</th>
-            <td style="padding: 8px;">' . display_size($quotadisk) . '</td>
-        </tr>';
-    }
-
-    $table .= '</table>';
-    return $table;
-}
-
-/**
- * Adds up all the files in a directory and works out the size.
- *
- * @param string $rootdir  The directory to start from
- * @param string $excludefile A file to exclude when summing directory size
- * @return int The summed size of all files and subfiles within the root directory
- */
-function directory_size($rootdir, $excludefile = '')
-{
+function directory_size($rootdir, $excludefile = '') {
     global $CFG;
 
-    // Verificamos si el sistema operativo es Linux y si el comando 'du' está disponible.
+    // Check if du command is available
     if (!empty($CFG->pathtodu) && is_executable(trim($CFG->pathtodu))) {
         $escapedRootdir = escapeshellarg($rootdir);
         $command = trim($CFG->pathtodu) . ' -Lsk ' . $escapedRootdir;
 
+        // Use nice/ionice on Linux
         if (PHP_OS === 'Linux') {
-            // Usamos 'nice' y 'ionice' en sistemas Linux para reducir la prioridad del comando.
             $command = 'nice -n 19 ionice -c3 ' . $command;
         }
 
+        // Add exclusion if specified
         if (!empty($excludefile)) {
-            // Añadimos la opción de excluir un archivo específico.
             $escapedExcludefile = escapeshellarg($excludefile);
             $command .= ' --exclude=' . $escapedExcludefile;
         }
 
-        // Ejecutamos el comando y procesamos la salida.
+        // Execute command
         $output = null;
         $return = null;
         exec($command, $output, $return);
         if (is_array($output) && isset($output[0])) {
-            // Convertimos el tamaño devuelto por 'du' de kilobytes a bytes.
             return intval($output[0]) * 1024;
         }
     }
 
-    // Si no podemos usar 'du', calculamos el tamaño recursivamente.
+    // Fallback to PHP recursive calculation
     if (!is_dir($rootdir)) {
-        // Si no es un directorio, retornamos 0.
         return 0;
     }
 
@@ -258,7 +233,6 @@ function directory_size($rootdir, $excludefile = '')
 
     foreach ($iterator as $file) {
         if ($file->isFile() && ($excludefile === '' || $file->getFilename() !== $excludefile)) {
-            // Sumamos el tamaño del archivo si no está excluido.
             $size += $file->getSize();
         }
     }
@@ -267,175 +241,362 @@ function directory_size($rootdir, $excludefile = '')
 }
 
 /**
- * Convierte el tamaño de bytes a gigabytes.
+ * Convert size from bytes to GB.
  *
- * @param mixed $sizeInBytes El tamaño en bytes que se quiere convertir.
- * @param int $precision El número de decimales a mostrar.
- * @return string El tamaño en gigabytes, formateado como cadena.
+ * @param mixed $sizeInBytes Size in bytes
+ * @param int $precision Number of decimal places
+ * @return string Size in GB
  */
-function display_size_in_gb($sizeInBytes, $precision = 2)
-{
-    // Verifica si el valor es numérico y no es null.
+function display_size_in_gb($sizeInBytes, $precision = 2) {
     if (!is_numeric($sizeInBytes) || $sizeInBytes === null) {
-        debugging("display_size_in_gb: se esperaba un valor numérico, recibido: " . var_export($sizeInBytes, true), DEBUG_DEVELOPER);
-        return '0'; // Retorna '0 GB' como un valor seguro por defecto.
+        debugging("display_size_in_gb: expected numeric value, received: " . 
+                 var_export($sizeInBytes, true), DEBUG_DEVELOPER);
+        return '0';
     }
-
-    // Conversión de bytes a GB.
-    $sizeInGb = $sizeInBytes / (1024 * 1024 * 1024);
-    return round($sizeInGb, $precision);
+    return round($sizeInBytes / (1024 * 1024 * 1024), $precision);
 }
 
 /**
- * Calcula el porcentaje de uso del espacio en disco y devuelve un color según el rango de uso.
+ * Calculate disk usage percentages and get corresponding color.
  *
- * @param float $usedSpaceGB Espacio en disco utilizado en GB.
- * @param float $totalDiskSpace Tamaño total del disco en GB.
- * @return array Arreglo con el porcentaje de uso y el color correspondiente.
+ * @param float $usedSpaceGB Used space in GB
+ * @param float $totalDiskSpace Total space in GB
+ * @return array Percentage and color
  */
-function diskUsagePercentages($usedSpaceGB, $totalDiskSpace)
-{
+function diskUsagePercentages($usedSpaceGB, $totalDiskSpace) {
     $usedSpacePercentage = ($usedSpaceGB / $totalDiskSpace) * 100;
-    $color = "";
+    
     if ($usedSpacePercentage < 70) {
-        $color = '#088A08'; // Verde
+        $color = '#088A08'; // Green
     } else if ($usedSpacePercentage <= 85) {
-        $color = '#FFFF00'; // Amarillo
+        $color = '#FFFF00'; // Yellow
     } else {
-        $color = '#DF0101'; // Rojo
+        $color = '#DF0101'; // Red
     }
-    return ['percentage' => $usedSpacePercentage, 'color' => $color];
+    
+    return [
+        'percentage' => $usedSpacePercentage, 
+        'color' => $color
+    ];
 }
 
-// Función para comparar las fechas en formato 'd/m/Y' y ordenar en orden ascendente.
-function compararFechas($fecha1, $fecha2)
-{
+/**
+ * Compare dates in d/m/Y format.
+ *
+ * @param string $fecha1 First date
+ * @param string $fecha2 Second date
+ * @return int Comparison result
+ */
+function compararFechas($fecha1, $fecha2) {
     $date1 = DateTime::createFromFormat('d/m/Y', $fecha1);
     $date2 = DateTime::createFromFormat('d/m/Y', $fecha2);
     return $date1 <=> $date2;
 }
 
 /**
- * Generate a user info object based on provided parameters.
+ * Generate standardized email user object.
  *
- * This function creates a standardized user object that can be used for email operations within Moodle.
- * It sanitizes and sets default values for user details.
- *
- * @param string $email Plain text email address.
- * @param string $name Optional plain text real name.
- * @param int $id Optional user ID, default is -99 which typically signifies a non-persistent user.
- *
- * @return object Returns a user object with email, name, and other related properties.
+ * @param string $email Email address
+ * @param string $name Optional name
+ * @param int $id Optional user ID
+ * @return object Email user object
  */
-function generate_email_user($email, $name = '', $id = -99)
-{
+function generate_email_user($email, $name = '', $id = -99) {
     $emailuser = new stdClass();
+    
+    // Validate and sanitize email
     $emailuser->email = trim(filter_var($email, FILTER_SANITIZE_EMAIL));
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $emailuser->email = '';
     }
-    $name = format_text($name, FORMAT_HTML, array('trusted' => false, 'noclean' => false));
+    
+    // Sanitize name
+    $name = format_text($name, FORMAT_HTML, ['trusted' => false, 'noclean' => false]);
     $emailuser->firstname = trim(filter_var($name, FILTER_SANITIZE_STRING));
+    
+    // Set default values
     $emailuser->lastname = '';
     $emailuser->maildisplay = true;
-    $emailuser->mailformat = 1; // 0 (zero) text-only emails, 1 (one) for HTML emails.
+    $emailuser->mailformat = 1;
     $emailuser->id = $id;
     $emailuser->firstnamephonetic = '';
     $emailuser->lastnamephonetic = '';
     $emailuser->middlename = '';
     $emailuser->alternatename = '';
+    
     return $emailuser;
 }
 
 /**
- * Envía un correo unificado que incluye toda la información
- * de límite de usuarios diarios y uso de disco, más cualquier
- * dato adicional que antes se manejaba por separado.
+ * Gather all system usage information.
  *
- * @param bool   $exceededUsers   Indica si el umbral de usuarios se superó.
- * @param bool   $exceededDisk    Indica si el umbral de disco se superó.
- * @param object $info            Objeto con los datos (usuarios, disco, extras).
- *
- * @return bool  true si se envía el correo exitosamente.
+ * @return object System usage information
  */
-function email_notify_usage_monitor($exceededUsers, $exceededDisk, $info) {
+function usage_monitor_gather_info() {
     global $CFG, $DB;
+    
+    $reportconfig = get_config('report_usage_monitor');
+    $info = new stdClass();
 
-    // Objeto $a para pasar a la plantilla de notificación.
-    $a = new stdClass();
+    // Site info
+    $info->sitename = format_string(get_site()->fullname);
+    $info->siteurl = $CFG->wwwroot;
+    
+    // User info
+    $info->userthreshold = (int)$reportconfig->max_daily_users_threshold;
+    $info->users = usage_monitor_get_yesterday_users();
+    $info->userpercent = calculate_threshold_percentage(
+        $info->users, 
+        $info->userthreshold
+    );
+    
+    // Disk info
+    $quotadisk = ((int)$reportconfig->disk_quota * 1024) * 1024 * 1024;
+    $totalFS = (int)($reportconfig->totalusagereadable ?? 0);
+    $totalDB = (int)($reportconfig->totalusagereadabledb ?? 0);
+    
+    $info->diskusage = $totalFS + $totalDB;
+    $info->diskquota = $quotadisk;
+    $info->diskpercent = calculate_threshold_percentage(
+        $info->diskusage, 
+        $info->diskquota
+    );
+    
+    // Additional info
+    $info->databasesize = $totalDB;
+    $info->coursescount = $DB->count_records('course');
+    $info->backupcount = get_config('backup', 'backup_auto_max_kept');
+    
+    // Generate last 10 days table
+    $info->table = notification_table();
+    
+    return $info;
+}
 
-    // 1) Información general
-    $a->sitename  = $info->sitename  ?? format_string(get_site()->fullname);
-    $a->siteurl   = $info->siteurl   ?? $CFG->wwwroot;
+/**
+ * Get number of users from yesterday.
+ *
+ * @return int Number of users
+ */
+function usage_monitor_get_yesterday_users() {
+    global $DB;
+    $sql = user_limit_daily_sql(get_string('dateformatsql', 'report_usage_monitor'));
+    return (int)$DB->get_field_sql($sql);
+}
 
-    // 2) Datos sobre usuarios (día anterior)
-    $a->userthreshold  = $info->userthreshold ?? 100;
-    $a->users          = $info->users         ?? 0;
-    $a->userpercent    = round($info->userpercent ?? 0, 2);
-    $a->exceededUsersLabel = $exceededUsers
-        ? get_string('yes', 'moodle')
-        : get_string('no', 'moodle');
+/**
+ * Check if notification should be sent.
+ *
+ * @param object $info Usage information
+ * @return bool True if notification should be sent
+ */
+function usage_monitor_should_notify($info) {
+    $lastNotificationTime = (int)get_config('report_usage_monitor', 'last_notification_time');
+    $currentTime = time();
 
-    // 3) Datos sobre disco
-    $a->diskusage   = $info->diskusage   ?? '0 B';
-    $a->diskquota   = $info->diskquota   ?? '0 B';
-    $a->diskpercent = round($info->diskpercent ?? 0, 2);
-    $a->exceededDiskLabel = $exceededDisk
-        ? get_string('yes', 'moodle')
-        : get_string('no', 'moodle');
+    // Check thresholds
+    $userExceeded = $info->users > $info->userthreshold;
+    $diskExceeded = $info->diskpercent >= 90;
 
-    // 4) Extras (tamaño base de datos, número de cursos, backups, etc.)
-    $a->databasesize  = $info->databasesize   ?? '';
-    $a->coursescount  = $info->coursescount   ?? 0;
-    $a->backupcount   = $info->backupcount    ?? '-';
+    // Calculate interval
+    $notifyInterval = usage_monitor_calculate_interval(
+        $info->userpercent,
+        $info->diskpercent
+    );
 
-    // 5) Si quieres incluir la tabla de últimos 10 días, p. ej.:
-    $a->table = $info->table ?? '';
+    return ($userExceeded || $diskExceeded) &&
+           ($currentTime - $lastNotificationTime >= $notifyInterval);
+}
 
-    // Prepara y envía el correo
-    $reportconfig  = get_config('report_usage_monitor');
-    $toemail       = generate_email_user($reportconfig->email ?? '', '');
-    $fromemail     = generate_email_user($CFG->noreplyaddress, format_string($CFG->supportname));
+/**
+ * Calculate notification interval based on usage percentages.
+ *
+ * @param float $userPercent User usage percentage
+ * @param float $diskPercent Disk usage percentage
+ * @return int Interval in seconds
+ */
+function usage_monitor_calculate_interval($userPercent, $diskPercent) {
+    $maxPercent = max($userPercent, $diskPercent);
+    
+    if ($maxPercent >= 95) {
+        return 12 * HOURSECS; // 12 hours
+    } else if ($maxPercent >= 90) {
+        return DAYSECS; // 24 hours
+    }
+    return 7 * DAYSECS; // 1 week
+}
 
-    // Sujeto y mensaje
-    // Usamos un string existente o uno nuevo, p. ej. subjectemail_unified
-    $subject = get_string('subjectemail_unified', 'report_usage_monitor', $a);
-    $messagehtml = get_string('messagehtml_unified', 'report_usage_monitor', $a);
+/**
+ * Send unified notification email.
+ *
+ * @param object $info Usage information object
+ * @return bool True if notification was sent successfully
+ */
+function usage_monitor_send_notification($info) {
+    global $CFG;
+    
+    // Prepare email addresses
+    $reportconfig = get_config('report_usage_monitor');
+    $toemail = generate_email_user($reportconfig->email);
+    $fromemail = generate_email_user(
+        $CFG->noreplyaddress,
+        format_string($CFG->supportname)
+    );
 
+    // Generate email content
+    $subject = get_string('subjectemail_unified', 'report_usage_monitor', $info);
+    $messagehtml = get_string('messagehtml_unified', 'report_usage_monitor', $info);
     $messagetext = html_to_text($messagehtml);
 
-    // Enviar
+    // Temporarily disable noemailever if set
     $prev_noemailever = $CFG->noemailever ?? false;
     $CFG->noemailever = false;
+
+    // Send email
     $success = email_to_user(
         $toemail,
         $fromemail,
         $subject,
         $messagetext,
         $messagehtml,
-        '',
-        '',
-        true,
-        $fromemail->email
+        '', // attachment
+        '', // attachname
+        true, // usetrueaddress
+        $fromemail->email // replyto
     );
+
+    // Restore noemailever setting
     $CFG->noemailever = $prev_noemailever;
+
+    // Update last notification time if successful
+    if ($success) {
+        set_config('last_notification_time', time(), 'report_usage_monitor');
+    }
 
     return $success;
 }
 
+/**
+ * Generate HTML table for notification email.
+ *
+ * @param int|null $disk_usage Optional disk usage in bytes
+ * @param float|null $disk_percent Optional disk usage percentage
+ * @param int|null $quotadisk Optional disk quota in bytes
+ * @return string HTML table
+ */
+function notification_table($disk_usage = null, $disk_percent = null, $quotadisk = null) {
+    global $DB;
+
+    $table = '<h2>' . get_string('lastusers', 'report_usage_monitor') . '</h2>
+    <table border="1" style="border-collapse: collapse; width: 50%;">
+        <tr>
+            <th style="padding: 8px; background-color: #f2f2f2;">' . 
+                get_string('date', 'report_usage_monitor') . 
+            '</th>
+            <th style="padding: 8px; background-color: #f2f2f2;">' . 
+                get_string('usersquantity', 'report_usage_monitor') . 
+            '</th>
+        </tr>';
+
+    // Get last 10 days data
+    $userdaily = report_user_daily_sql(get_string('dateformatsql', 'report_usage_monitor'));
+    $records = $DB->get_records_sql($userdaily);
+
+    foreach ($records as $log) {
+        $table .= '<tr>
+            <td style="padding: 8px;">' . $log->fecha . '</td>
+            <td style="padding: 8px;">' . $log->conteo_accesos_unicos . '</td>
+        </tr>';
+    }
+
+    // Add disk usage information if provided
+    if ($disk_usage !== null && $disk_percent !== null && $quotadisk !== null) {
+        $table .= '</table><br>
+        <h2>' . get_string('diskusage', 'report_usage_monitor') . '</h2>
+        <table border="1" style="border-collapse: collapse; width: 50%;">
+            <tr>
+                <th style="padding: 8px; background-color: #f2f2f2;">' . 
+                    get_string('totaldiskusage', 'report_usage_monitor') . 
+                '</th>
+                <td style="padding: 8px;">' . 
+                    display_size($disk_usage) . ' (' . 
+                    round($disk_percent, 2) . '%)' . 
+                '</td>
+            </tr>
+            <tr>
+                <th style="padding: 8px; background-color: #f2f2f2;">' . 
+                    get_string('diskquota', 'report_usage_monitor') . 
+                '</th>
+                <td style="padding: 8px;">' . display_size($quotadisk) . '</td>
+            </tr>';
+    }
+
+    $table .= '</table>';
+    return $table;
+}
 
 /**
- * Calcula el porcentaje de uso en relación con un umbral.
+ * Calculate percentage of usage against threshold.
  *
- * @param int $current_value El valor actual (número de usuarios, uso del disco, etc.).
- * @param int $threshold El umbral máximo permitido.
- * @return float El porcentaje de uso.
+ * @param int $current_value Current value (users, disk usage, etc.)
+ * @param int $threshold Maximum threshold value
+ * @return float Usage percentage
  */
-function calculate_threshold_percentage($current_value, $threshold)
-{
+function calculate_threshold_percentage($current_value, $threshold) {
     if ($threshold == 0) {
         return 0;
     }
     return ($current_value / $threshold) * 100;
 }
 
+/**
+ * Check environment status and adjust task frequencies.
+ *
+ * @return object Environment status information
+ */
+function usage_monitor_check_environment() {
+    global $CFG;
+    
+    $status = new stdClass();
+    
+    // Check shell_exec availability
+    $disabledfunctions = explode(',', (string)ini_get('disable_functions'));
+    $disabledfunctions = array_map('trim', $disabledfunctions);
+    $status->shell_exec_available = function_exists('shell_exec') && 
+                                  !in_array('shell_exec', $disabledfunctions, true);
+
+    // Check du command
+    $status->du_command_available = false;
+    if ($status->shell_exec_available && PHP_OS === 'Linux') {
+        $pathToDu = shell_exec('which du');
+        $pathToDu = trim($pathToDu ?? '');
+        
+        if (!empty($pathToDu) && is_executable($pathToDu)) {
+            $status->du_command_available = true;
+            $status->du_path = $pathToDu;
+        }
+    }
+    
+    return $status;
+}
+
+/**
+ * Update disk_usage task frequency based on environment.
+ *
+ * @param object $env Environment status from usage_monitor_check_environment()
+ * @return bool True if task was updated
+ */
+function usage_monitor_update_task_frequency($env) {
+    global $DB;
+    
+    $classname = 'report_usage_monitor\task\disk_usage';
+    $record = $DB->get_record('task_scheduled', ['classname' => $classname]);
+    
+    if ($record) {
+        // Set frequency based on du availability
+        $record->hour = $env->du_command_available ? '*/6' : '12';
+        return $DB->update_record('task_scheduled', $record);
+    }
+    
+    return false;
+}
