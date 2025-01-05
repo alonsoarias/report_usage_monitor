@@ -1,41 +1,18 @@
 <?php
 // This file is part of Moodle - https://moodle.org/
-//
-// Moodle is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Moodle is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
-
-/**
- * Tarea programada para el uso del disco, para ejecutar los informes programados.
- *
- * @package     report_usage_monitor
- * @category    admin
- * @copyright   2023 Soporte IngeWeb <soporte@ingeweb.co>
- * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 o posterior
- */
+// Moodle is free software...
 
 namespace report_usage_monitor\task;
 
 defined('MOODLE_INTERNAL') || die();
 
-class users_daily extends \core\task\scheduled_task
-{
-    public function get_name()
-    {
+class users_daily extends \core\task\scheduled_task {
+
+    public function get_name() {
         return get_string('getlastusers', 'report_usage_monitor');
     }
 
-    public function execute()
-    {
+    public function execute() {
         global $DB, $CFG;
         require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
 
@@ -43,64 +20,64 @@ class users_daily extends \core\task\scheduled_task
             mtrace("Iniciando tarea para calcular el top de accesos únicos diarios...");
         }
 
+        // 1) Obtener top actual
         $array_daily_top = [];
-
-        // Obtener el top de usuarios diarios.
-        $userdailytop = report_user_daily_top_task();
-        if (debugging('', DEBUG_DEVELOPER)) {
-            mtrace("Ejecutando consulta: $userdailytop");
+        $userdailytop_sql = report_user_daily_top_task();
+        $toprecords = $DB->get_records_sql("SELECT fecha, cantidad_usuarios FROM ($userdailytop_sql) AS t ORDER BY cantidad_usuarios DESC");
+        foreach ($toprecords as $r) {
+            $array_daily_top[] = ["usuarios" => (int)$r->cantidad_usuarios, "fecha" => $r->fecha];
         }
-        
-        // Ajustar la consulta para no incluir la columna `id`.
-        $userdaily_records = $DB->get_records_sql("SELECT fecha, cantidad_usuarios FROM ($userdailytop) AS userdailytop ORDER BY cantidad_usuarios DESC");
-        
-        foreach ($userdaily_records as $record) {
-            $array_daily_top[] = [
-                "usuarios" => $record->cantidad_usuarios,
-                "fecha" => $record->fecha,
-            ];
-        }
-
-        // Corrige el uso de min() verificando si $array_daily_top está vacío.
+        $menor = null;
         if (!empty($array_daily_top)) {
             $menor = min(array_column($array_daily_top, 'usuarios'));
-        } else {
-            $menor = null;
         }
 
-        // Verificar si hay que insertar un nuevo registro de usuarios.
-        $users_daily = user_limit_daily_task();
-        $users_daily_record = $DB->get_records_sql($users_daily);
-        $users = [];
-        foreach ($users_daily_record as $log) {
-            $users = [
-                "usuarios" => $log->conteo_accesos_unicos,
-                "fecha" => $log->fecha,
-            ];
-            // Solo se espera un registro, así que se puede salir del bucle.
-            break;
+        // 2) Consulta para el día anterior
+        $users_daily_sql = user_limit_daily_task();
+        $users_daily_record = $DB->get_records_sql($users_daily_sql);
+
+        // Por defecto: 0 usuarios para ayer
+        $users = [
+            "usuarios" => 0,
+            "fecha" => date('Y-m-d', strtotime('-1 day'))
+        ];
+
+        // Si la consulta arrojó algo, actualizar
+        if (!empty($users_daily_record)) {
+            foreach ($users_daily_record as $log) {
+                if (!empty($log->conteo_accesos_unicos) && !empty($log->fecha)) {
+                    $users["usuarios"] = (int)$log->conteo_accesos_unicos;
+                    $users["fecha"]    = $log->fecha;
+                }
+                break; // Se espera 1 registro
+            }
         }
 
+        if (debugging('', DEBUG_DEVELOPER)) {
+            mtrace("Datos a procesar: fecha={$users['fecha']}, usuarios={$users['usuarios']}");
+        }
+
+        // 3) Insertar/actualizar en la tabla local
         if (empty($array_daily_top) || count($array_daily_top) < 10) {
-            // Se inserta si la tabla está vacía o tiene menos de 10 registros.
             insert_top_sql($users['fecha'], $users['usuarios']);
             if (debugging('', DEBUG_DEVELOPER)) {
-                mtrace("Insertando nuevo registro.");
+                mtrace("Insertando nuevo registro en top.");
             }
         } else {
-            // Se actualiza si hay 10 o más registros y el nuevo registro tiene más usuarios.
             if (!is_null($menor) && $users['usuarios'] >= $menor) {
-                // La función update_min_top_sql debe identificar correctamente cuál registro actualizar.
                 update_min_top_sql($users['fecha'], $users['usuarios'], $menor);
                 if (debugging('', DEBUG_DEVELOPER)) {
-                    mtrace("Actualizando registro existente.");
+                    mtrace("Actualizando registro existente (reemplazando el menor={$menor}).");
                 }
             }
         }
 
+        // 4) Guardar fecha/hora de última ejecución
         set_config('lastexecution', time(), 'report_usage_monitor');
+
         if (debugging('', DEBUG_DEVELOPER)) {
-            mtrace("Tarea completada.");
+            mtrace("Tarea completada: users_daily.");
         }
+        return true;
     }
 }
