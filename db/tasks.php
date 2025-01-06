@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
+// This file is part of Moodle - https://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -12,129 +12,72 @@
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Scheduled tasks definition for the Usage Monitor Report.
+ * Definition of scheduled tasks for the daily user report.
  *
- * This file defines all the scheduled tasks used by the plugin.
- * Each task has its own schedule and can be configured in the
- * Moodle task scheduling interface.
- *
- * @package    report_usage_monitor
- * @category   task
- * @copyright  2024 Soporte IngeWeb <soporte@ingeweb.co>
- * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @package     report_usage_monitor
+ * @category    admin
+ * @copyright   2024 Soporte IngeWeb <soporte@ingeweb.co>
+ * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
+global $CFG;
 
-// List of scheduled tasks for the plugin
-$tasks = [
-    // 1. Disk usage calculation task
-    [
+// List of scheduled tasks for the report_usage_monitor plugin.
+// These tasks will run automatically at the specified time intervals.
+$du_command_available = !empty($CFG->pathtodu) && is_executable(trim($CFG->pathtodu));
+$tasks = array(
+    // Disk usage calculation task
+    array(
         'classname' => 'report_usage_monitor\task\disk_usage',
         'blocking' => 0,
         'minute' => '0',
-        'hour' => '12',  // Default value, may be updated by check_php_functions
+        'hour' => $du_command_available ? '*/6' : '12', // Every 6 hours if du is active, otherwise every 12 hours
         'day' => '*',
         'month' => '*',
-        'dayofweek' => '*',
-        'disabled' => 0
-    ],
-
-    // 2. Recent users calculation task
-    [
+        'dayofweek' => '*'
+    ),
+    // Recent users calculation task
+    array(
         'classname' => 'report_usage_monitor\task\last_users',
         'blocking' => 0,
         'minute' => '0',
-        'hour' => '*/2',  // Every 2 hours
+        'hour' => '*/2',
         'day' => '*',
         'month' => '*',
-        'dayofweek' => '*',
-        'disabled' => 0
-    ],
-
-    // 3. Users in last 90 days calculation task
-    [
+        'dayofweek' => '*'
+    ),
+    // Unified notifications task (replaces separate disk and user limit notifications)
+    array(
+        'classname' => 'report_usage_monitor\task\unified_notifications',
+        'blocking' => 0,
+        'minute' => '0',
+        'hour' => '*/4',  // Run every 4 hours
+        'day' => '*',
+        'month' => '*',
+        'dayofweek' => '*'
+    ),
+    // Calculate top users in last 90 days
+    array(
         'classname' => 'report_usage_monitor\task\users_daily_90_days',
         'blocking' => 0,
         'minute' => '0',
-        'hour' => '0',  // At midnight
+        'hour' => '0',
         'day' => '*',
         'month' => '*',
-        'dayofweek' => '*',
-        'disabled' => 0
-    ],
-
-    // 4. Daily users calculation task
-    [
+        'dayofweek' => '*'
+    ),
+    // Calculate daily users
+    array(
         'classname' => 'report_usage_monitor\task\users_daily',
         'blocking' => 0,
         'minute' => '0',
-        'hour' => '0',  // At midnight
+        'hour' => '0',
         'day' => '*',
         'month' => '*',
-        'dayofweek' => '*',
-        'disabled' => 0
-    ],
-
-    // 5. Unified usage notification task
-    [
-        'classname' => 'report_usage_monitor\task\notification_usage',
-        'blocking' => 0,
-        'minute' => '0',
-        'hour' => '8',  // At 8 AM
-        'day' => '*',
-        'month' => '*',
-        'dayofweek' => '*',
-        'disabled' => 0
-    ],
-
-    // 6. Environment check scheduler task
-    [
-        'classname' => 'report_usage_monitor\task\check_env_scheduler',
-        'blocking' => 0,
-        'minute' => '0',
-        'hour' => '*/3',  // Every 3 hours
-        'day' => '*',
-        'month' => '*',
-        'dayofweek' => '*',
-        'disabled' => 0
-    ]
-];
-
-/*
-Task Schedule Information:
-
-1. disk_usage:
-   - Default: Daily at 12:00
-   - May run every 6 hours if shell_exec and du are available
-   - Calculates disk space usage
-
-2. last_users:
-   - Every 2 hours
-   - Calculates recent user activity
-
-3. users_daily_90_days:
-   - Daily at midnight
-   - Calculates user statistics for the past 90 days
-
-4. users_daily:
-   - Daily at midnight
-   - Calculates daily user statistics
-
-5. notification_usage:
-   - Daily at 8:00 AM
-   - Sends unified notifications for disk and user thresholds
-
-6. check_env_scheduler:
-   - Every 3 hours
-   - Schedules environment checks
-
-Notes:
-- All times are in server timezone
-- blocking = 0 means tasks won't block other tasks
-- disabled = 0 means tasks are enabled by default
-- Tasks can be manually disabled in the task scheduling interface
-*/
+        'dayofweek' => '*'
+    )
+);
