@@ -26,6 +26,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $string['pluginname'] = 'Usage Report';
+$string['exclusivedisclaimer'] = 'This plugin is part of, and is to be exclusively used with the Moodle hosting service provided by <a target="_blank" href="http://ingeweb.co/">IngeWeb</a>.';
 $string['topuser'] = 'Top 10 Daily Users';
 $string['lastusers'] = 'Daily users of the last 10 days';
 $string['email'] = 'Email for notifications';
