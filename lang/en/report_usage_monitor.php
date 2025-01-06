@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * English language strings for the Usage Monitor Report plugin.
+ * Plugin strings are defined here.
  *
  * @package     report_usage_monitor
  * @category    string
@@ -25,87 +25,76 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-// Plugin general strings
-$string['pluginname'] = 'Usage Monitor';
-$string['reportinfotext'] = 'This plugin has been created for another success story of <strong>IngeWeb</strong>. Visit us at <a target="_blank" href="http://ingeweb.co/">IngeWeb - Solutions to succeed on the Internet</a>.';
-$string['exclusivedisclaimer'] = 'This plugin is for the exclusive use of the IngeWeb Moodle support team.';
-
-// Settings
-$string['email'] = 'Email for notifications';
-$string['configemail'] = 'Email address where you want to send the notifications.';
-$string['max_daily_users_threshold'] = 'User limit';
-$string['configmax_daily_users_threshold'] = 'Set the daily user limit.';
-$string['disk_quota'] = 'Disk quota';
-$string['configdisk_quota'] = 'Configure the disk quota (in gigabytes) for notifications.';
-
-// Environment checks
-$string['activateshellexec'] = 'The shell_exec function is not active on this server. To use the auto-detection of the path to du, you need to enable shell_exec in your server configuration.';
-$string['pathtodu'] = 'Path to du command';
-$string['configpathtodu'] = 'Configure the path to the du command (disk usage). This is necessary for calculating disk usage.';
-$string['pathtodurecommendation'] = 'We recommend that you review and configure the path to "du" in the Moodle System Paths.';
-$string['pathtodunote'] = 'Note: The path to "du" will be automatically detected only if this plugin is on a Linux system and if the location of "du" can be successfully detected.';
-
-// Task names
-$string['check_php_functions_taskname'] = 'Check PHP functions availability';
-$string['check_env_scheduler_taskname'] = 'Schedule environment checks';
-$string['calculatediskusagetask'] = 'Calculate disk usage';
-$string['getlastusersconnected'] = 'Get recent connected users';
-$string['getlastusers'] = 'Calculate daily unique users';
-$string['getlastusers90days'] = 'Get users from last 90 days';
-$string['notification_usage_taskname'] = 'Usage monitoring notification';
-
-// Interface elements
-$string['userstopnum'] = 'Daily users';
+$string['pluginname'] = 'Usage Report';
 $string['topuser'] = 'Top 10 Daily Users';
-$string['diskusage'] = 'Disk usage';
 $string['lastusers'] = 'Daily users of the last 10 days';
-$string['usertable'] = 'User table';
-$string['userchart'] = 'User chart';
-$string['date'] = 'Date';
-$string['usersquantity'] = 'Number of users';
-$string['sizeusage'] = 'Total disk usage';
-$string['avalilabledisk'] = '% of available disk space';
-$string['sizedatabase'] = 'Database size';
-
-// Status and calculations
+$string['email'] = 'Email for notifications';
+$string['configemail'] = 'Email address where you want to send the attendance notifications.';
+$string['max_daily_users_threshold'] = 'Limit Users';
+$string['configmax_daily_users_threshold'] = 'Number of Limit Users.';
+$string['processunifiednotificationtask'] = 'Process unified system monitoring notifications';
+$string['diskusage'] = 'Disk usage';
 $string['notcalculatedyet'] = 'Not calculated yet';
-$string['lastexecution'] = 'Last daily users calculation: {$a}';
+$string['calculatediskusagetask'] = 'Task to calculate the disk usage';
+$string['getlastusers'] = 'Task to calculate the top of unique accesses';
+$string['getlastusers90days'] = 'Task to get the top users in the last 90 days';
+$string['getlastusersconnected'] = 'Task to calculate the number of daily users today';
+$string['date'] = 'Date';
+$string['usersquantity'] = 'Number of daily users';
+$string['lastexecution'] = 'Last daily users calculation run: {$a}';
 $string['lastexecutioncalculate'] = 'Last disk space calculation: {$a}';
-$string['max_userdaily_for_90_days'] = 'Maximum daily users in last 90 days';
+$string['max_userdaily_for_90_days'] = 'Maximum daily users in the last 90 days';
 $string['users_today'] = 'Number of daily users today: {$a}';
-
-// Date formats
+$string['sizeusage'] = 'Total disk use';
+$string['sizedatabase'] = 'Database size';
+$string['userstopnum'] = 'Daily users';
+$string['usertable'] = 'Top users table';
+$string['userchart'] = 'Graph top users';
 $string['dateformatsql'] = '%m/%d/%Y';
 $string['dateformat'] = 'm/d/Y';
+$string['disk_quota'] = 'Disk Quota';
+$string['configdisk_quota'] = 'Disk Quota in gigabytes';
+$string['avalilabledisk'] = '% of disk space available';
+$string['activateshellexec'] = 'The shell_exec function is not active on this server. To use the auto-detection of the path to du, you need to enable shell_exec in your server configuration.';
+$string['pathtodu'] = 'Path to du command';
+$string['configpathtodu'] = 'Configure the path to the du command (disk usage). This is necessary for calculating disk usage. <strong>This setting is reflected in Moodle system paths</strong>)';
+$string['pathtodurecommendation'] = 'We recommend that you review and configure the path to \'du\' in the Moodle System Paths. You can find this setting under Site administration > Server > System Paths. <a target="_blank" href="settings.php?section=systempaths#id_s__pathtodu">Click here to go to System Paths</a>.';
+$string['pathtodunote'] = 'Note: The path to \'du\' will be automatically detected only if this plugin is on a Linux system and if the location of \'du\' can be successfully detected.';
 
-// Notification email strings
-$string['subjectemail_unified'] = 'Usage Monitor Alert - {$a->sitename}';
-$string['messagehtml_unified'] = '
-<h2>System Usage Report</h2>
-<p>Platform: <a href="{$a->siteurl}" target="_blank">{$a->sitename}</a></p>
+// New strings for unified notifications
+$string['unifiednotification_subject'] = 'System Monitoring Alert - {$a}';
+$string['system_metrics'] = 'System Metrics Overview';
+$string['disk_metrics'] = 'Disk Usage Metrics';
+$string['user_metrics'] = 'User Activity Metrics';
+$string['additional_metrics'] = 'Additional System Information';
+$string['disk_usage_title'] = 'Current Disk Usage';
+$string['disk_quota_title'] = 'Total Disk Quota';
+$string['database_size_title'] = 'Database Size';
+$string['available_space'] = 'Available Space';
+$string['active_users'] = 'Active Users';
+$string['user_limit'] = 'User Limit';
+$string['monitoring_date'] = 'Monitoring Date';
+$string['total_courses'] = 'Total Courses';
+$string['backup_retention'] = 'Backup Retention (days)';
+$string['notification_footer'] = 'This is an automated monitoring notification. System metrics are collected and analyzed periodically to ensure optimal platform performance.';
+$string['historical_data'] = 'Historical User Access Data';
 
-<h3>User Activity</h3>
+$string['unifiednotification_html'] = '
+<p>Platform: <a href="{$a->siteurl}" target="_blank"><strong>{$a->sitename}</strong></a></p>
+<p><strong>Alert Summary:</strong></p>
 <ul>
-    <li><strong>User limit exceeded?</strong> {$a->exceededUsersLabel}</li>
-    <li>Active users: <strong>{$a->users}</strong> / {$a->userthreshold}</li>
-    <li>Usage percentage: <strong>{$a->userpercent}%</strong></li>
+    <li>Disk Usage: {$a->diskusage} of {$a->quotadisk} ({$a->disk_percent}%)</li>
+    <li>Active Users: {$a->numberofusers} of {$a->threshold} ({$a->user_percent}%)</li>
+    <li>Monitoring Date: {$a->lastday}</li>
 </ul>
 
-<h3>Disk Usage</h3>
-<ul>
-    <li><strong>Disk quota exceeded?</strong> {$a->exceededDiskLabel}</li>
-    <li>Current usage: <strong>{$a->diskusage}</strong> / {$a->diskquota}</li>
-    <li>Usage percentage: <strong>{$a->diskpercent}%</strong></li>
-</ul>
-
-<h3>Additional Information</h3>
-<ul>
-    <li>Database size: <strong>{$a->databasesize}</strong></li>
-    <li>Total courses: <strong>{$a->coursescount}</strong></li>
-    <li>Backups per course: <strong>{$a->backupcount}</strong></li>
-</ul>
+<p><strong>Monitor URL:</strong> <a href="{$a->referer}" target="_blank">System Monitor Dashboard</a></p>
 
 {$a->table}
 
 <hr>
-<p><small>This message was automatically generated by the Usage Monitor plugin from <a href="https://ingeweb.co/" target="_blank">IngeWeb</a>.</small></p>';
+<p style="font-size: 0.9em; color: #666;">
+This message has been automatically generated by "Usage Report" from <a href="https://ingeweb.co/" target="_blank"><strong>ingeweb.co</strong></a>
+</p>';
+
+$string['reportinfotext'] = 'This plugin has been created for another success story of <strong>IngeWeb</strong>. Visit us at <a target="_blank" href="http://ingeweb.co/">IngeWeb - Solutions to succeed on the Internet</a>.';
