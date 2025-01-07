@@ -207,9 +207,9 @@ if ($viewtab === 'userstopnum') {
     echo html_writer::end_div();
     echo html_writer::start_div('card-body');
 
-    $topsql = report_user_daily_top_sql(get_string('dateformat', 'report_usage_monitor'));
+    $topsql = report_user_daily_top_sql(get_string('dateformatsql', 'report_usage_monitor'));
     $toprecords = $DB->get_records_sql($topsql);
-
+    
     $table = new html_table();
     $table->attributes['class'] = 'table table-striped table-hover';
     $table->head = [
