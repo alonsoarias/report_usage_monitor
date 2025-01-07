@@ -428,7 +428,7 @@ function notification_table_unified($data)
             ' . get_string('backup_retention', 'report_usage_monitor') . '
         </td>
         <td style="padding: 10px; border: 1px solid #ddd;">
-            ' . $data['backupcount'] . ' ' . get_string('days', 'report_usage_monitor') . '
+            ' . $data['backupcount'] . ' ' . get_string('per_course', 'report_usage_monitor') . '
         </td>
     </tr>';
 
