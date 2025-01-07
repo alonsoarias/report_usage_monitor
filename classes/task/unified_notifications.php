@@ -74,13 +74,13 @@ class unified_notifications extends \core\task\scheduled_task {
 
         try {
             $this->process_notifications();
+            return true;
         } catch (\Exception $e) {
             mtrace('Error processing notifications: ' . $e->getMessage());
+            if (debugging('', DEBUG_DEVELOPER)) {
+                mtrace($e->getTraceAsString());
+            }
             return false;
-        }
-
-        if (debugging('', DEBUG_DEVELOPER)) {
-            mtrace("Unified notifications task completed.");
         }
     }
 
@@ -111,7 +111,7 @@ class unified_notifications extends \core\task\scheduled_task {
         $highest_percent = max($metrics['disk_percent'], $metrics['user_percent']);
         $notification_interval = $this->calculate_unified_notification_interval($highest_percent);
 
-        $last_notification_time = get_config('report_usage_monitor', 'last_unified_notification_time');
+        $last_notification_time = get_config('report_usage_monitor', 'last_unified_notification_time') ?: 0;
         $current_time = time();
 
         if (debugging('', DEBUG_DEVELOPER)) {
@@ -125,13 +125,6 @@ class unified_notifications extends \core\task\scheduled_task {
                 if (debugging('', DEBUG_DEVELOPER)) {
                     mtrace("Sending unified system notification...");
                 }
-
-                // Add thresholds to metrics for reference
-                $metrics['thresholds'] = [
-                    'critical' => self::CRITICAL_THRESHOLD,
-                    'high' => self::HIGH_THRESHOLD,
-                    'medium' => self::MEDIUM_THRESHOLD
-                ];
 
                 $success = email_notify_unified($metrics);
 
@@ -149,56 +142,83 @@ class unified_notifications extends \core\task\scheduled_task {
         }
     }
 
-    /**
-     * Collect all system metrics.
-     *
-     * @return array Array containing all system metrics
-     */
-    private function collect_system_metrics() {
-        global $DB;
-        $reportconfig = get_config('report_usage_monitor');
+/**
+ * Collect all system metrics.
+ *
+ * @return array Array containing all system metrics
+ */
+private function collect_system_metrics() {
+    global $DB;
+    $reportconfig = get_config('report_usage_monitor');
 
-        // Get disk metrics
-        $quotadisk = ((int) $reportconfig->disk_quota * 1024) * 1024 * 1024;
-        $disk_usage = ((int) $reportconfig->totalusagereadable + (int) $reportconfig->totalusagereadabledb) ?: 0;
-        $disk_percent = calculate_threshold_percentage($disk_usage, $quotadisk);
+    // Get disk metrics
+    $quotadisk = ((int) $reportconfig->disk_quota * 1024) * 1024 * 1024;
+    $disk_usage = ((int) $reportconfig->totalusagereadable + (int) $reportconfig->totalusagereadabledb) ?: 0;
+    $disk_percent = calculate_threshold_percentage($disk_usage, $quotadisk);
 
-        // Get database size
-        $size = size_database();
-        $size_database = $DB->get_records_sql($size);
-        $database_size = 0;
-        foreach ($size_database as $item) {
-            $database_size = $item->size;
-        }
-
-        // Get user metrics
-        $user_threshold = $reportconfig->max_daily_users_threshold;
-        $lastday_users = user_limit_daily_sql(get_string('dateformatsql', 'report_usage_monitor'));
-        $lastday_users_records = $DB->get_records_sql($lastday_users);
-        $user_data = reset($lastday_users_records);
-
-        $user_count = 0;
-        $fecha = date('d/m/Y');
-        if ($user_data) {
-            $user_count = $user_data->conteo_accesos_unicos;
-            $fecha = $user_data->fecha;
-        }
-
-        $user_percent = calculate_threshold_percentage($user_count, $user_threshold);
-
-        return array(
-            'disk_quota' => $quotadisk,
-            'disk_usage' => $disk_usage,
-            'disk_percent' => $disk_percent,
-            'database_size' => $database_size,
-            'user_count' => $user_count,
-            'user_threshold' => $user_threshold,
-            'user_percent' => $user_percent,
-            'fecha' => $fecha,
-            'coursescount' => $DB->count_records('course'),
-            'backupcount' => get_config('backup', 'backup_auto_max_kept')
-        );
+    // Get database size
+    $size = size_database();
+    $size_database = $DB->get_records_sql($size);
+    $database_size = 0;
+    foreach ($size_database as $item) {
+        $database_size = $item->size;
     }
+
+    // Get user metrics
+    $user_threshold = (int) $reportconfig->max_daily_users_threshold;
+    $lastday_users = user_limit_daily_sql(get_string('dateformatsql', 'report_usage_monitor'));
+    $lastday_users_records = $DB->get_records_sql($lastday_users);
+    $user_data = reset($lastday_users_records);
+
+    $user_count = 0;
+    $fecha = date('m/d/Y');
+    if ($user_data) {
+        $user_count = (int) $user_data->conteo_accesos_unicos;
+        $fecha = $user_data->fecha;
+    }
+
+    $user_percent = calculate_threshold_percentage($user_count, $user_threshold);
+
+    // Get 90-day peak data with proper validation
+    $max90DaysDate = !empty($reportconfig->max_userdaily_for_90_days_date) 
+        ? date(get_string('dateformat', 'report_usage_monitor'), $reportconfig->max_userdaily_for_90_days_date) 
+        : get_string('notcalculatedyet', 'report_usage_monitor');
+    
+    $max90DaysUsers = !empty($reportconfig->max_userdaily_for_90_days_users) 
+        ? $reportconfig->max_userdaily_for_90_days_users 
+        : get_string('notcalculatedyet', 'report_usage_monitor');
+
+    // Calculate peak percentage only if we have valid data
+    $max90DaysPercent = ($max90DaysUsers && $user_threshold) 
+        ? calculate_threshold_percentage($max90DaysUsers, $user_threshold) 
+        : 0;
+
+    // Build and return complete metrics array
+    return array(
+        // Disk metrics
+        'disk_quota' => $quotadisk,
+        'disk_usage' => $disk_usage,
+        'disk_percent' => $disk_percent,
+        'database_size' => $database_size,
+        
+        // User metrics
+        'user_count' => $user_count,
+        'user_threshold' => $user_threshold,
+        'user_percent' => $user_percent,
+        'fecha' => $fecha,
+        
+        // System metrics
+        'coursescount' => $DB->count_records('course'),
+        'backupcount' => get_config('backup', 'backup_auto_max_kept'),
+        
+        // 90-day peak metrics
+        'max_90_days' => [
+            'date' => $max90DaysDate,
+            'users' => $max90DaysUsers,
+            'percent' => $max90DaysPercent
+        ]
+    );
+}
 
     /**
      * Calculate notification interval based on percentage.
@@ -232,5 +252,14 @@ class unified_notifications extends \core\task\scheduled_task {
             return 'medium';
         }
         return 'normal';
+    }
+
+    /**
+     * Indicates whether this task can be run from CLI.
+     *
+     * @return bool
+     */
+    public static function can_run_from_cli() {
+        return true;
     }
 }
