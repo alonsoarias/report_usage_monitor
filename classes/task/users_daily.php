@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
+// This file is part of Moodle - https://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -12,151 +12,147 @@
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Scheduled task for calculating daily unique users.
+ * Tarea programada para el monitoreo diario de usuarios.
+ * Mantiene un registro histórico de los últimos 10 días con mayor cantidad de usuarios,
+ * eliminando automáticamente registros mayores a 1 año.
  *
- * @package    report_usage_monitor
- * @copyright  2024 Soporte IngeWeb <soporte@ingeweb.co>
- * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @package     report_usage_monitor
+ * @category    admin
+ * @copyright   2024 Soporte IngeWeb <soporte@ingeweb.co>
+ * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 o posterior
  */
 
 namespace report_usage_monitor\task;
 
 defined('MOODLE_INTERNAL') || die();
 
-/**
- * Task class for calculating daily unique users.
- */
-class users_daily extends \core\task\scheduled_task {
-
-    /**
-     * Returns the name of task for display.
-     *
-     * @return string Task name
-     */
-    public function get_name() {
+class users_daily extends \core\task\scheduled_task
+{
+    public function get_name()
+    {
         return get_string('getlastusers', 'report_usage_monitor');
     }
 
-    /**
-     * Executes the task.
-     *
-     * @return bool True if task completes successfully
-     */
-    public function execute() {
+    public function execute()
+    {
         global $DB, $CFG;
         require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
 
         if (debugging('', DEBUG_DEVELOPER)) {
-            mtrace("Starting daily unique users calculation task...");
+            mtrace("Iniciando tarea para calcular el top de accesos únicos diarios...");
         }
 
         try {
-            // Get current top users
-            $array_daily_top = [];
-            $topsql = report_user_daily_top_task();
-            $toprecords = $DB->get_records_sql(
-                "SELECT DISTINCT fecha, cantidad_usuarios 
-                 FROM ($topsql) AS t 
-                 ORDER BY cantidad_usuarios DESC"
-            );
-
-            foreach ($toprecords as $record) {
-                $array_daily_top[] = [
-                    "usuarios" => (int)$record->cantidad_usuarios,
-                    "fecha" => $record->fecha
-                ];
+            // Eliminar registros mayores a 1 año
+            $oneYearAgo = time() - (365 * 24 * 60 * 60);
+            $oldRecordsCount = $DB->count_records_select('report_usage_monitor', 'fecha < ?', array($oneYearAgo));
+            if ($oldRecordsCount > 0) {
+                $DB->delete_records_select('report_usage_monitor', 'fecha < ?', array($oneYearAgo));
+                if (debugging('', DEBUG_DEVELOPER)) {
+                    mtrace("Se eliminaron $oldRecordsCount registros mayores a 1 año.");
+                }
             }
 
-            // Find minimum users count if records exist
-            $menor = null;
-            if (!empty($array_daily_top)) {
-                $menor = min(array_column($array_daily_top, 'usuarios'));
+            // Obtener datos de usuarios del día anterior
+            $users_daily = user_limit_daily_task();
+            $users_daily_record = $DB->get_records_sql($users_daily);
+
+            if (empty($users_daily_record)) {
+                if (debugging('', DEBUG_DEVELOPER)) {
+                    mtrace("No se encontraron registros de usuarios para el día anterior.");
+                }
+                set_config('lastexecution', time(), 'report_usage_monitor');
+                return;
             }
 
-            // Get yesterday's data
-            $yesterday_sql = user_limit_daily_task();
-            $yesterday_records = $DB->get_records_sql($yesterday_sql);
+            // Obtener el registro del día anterior
+            $current_record = reset($users_daily_record);
+            if (!$current_record || empty($current_record->conteo_accesos_unicos)) {
+                if (debugging('', DEBUG_DEVELOPER)) {
+                    mtrace("El registro del día anterior no contiene datos válidos.");
+                }
+                set_config('lastexecution', time(), 'report_usage_monitor');
+                return;
+            }
 
-            // Default values for yesterday
-            $users = [
-                "usuarios" => 0,
-                "fecha" => date('Y-m-d', strtotime('-1 day'))
+            // Preparar datos del día anterior
+            $current_data = [
+                'usuarios' => (int)$current_record->conteo_accesos_unicos,
+                'fecha' => (int)$current_record->fecha // Ya viene como timestamp
             ];
 
-            // Update with actual data if available
-            if (!empty($yesterday_records)) {
-                foreach ($yesterday_records as $record) {
-                    if (!empty($record->conteo_accesos_unicos) && !empty($record->fecha)) {
-                        $users["usuarios"] = (int)$record->conteo_accesos_unicos;
-                        $users["fecha"] = $record->fecha;
-                    }
-                    break; // Only need first record
-                }
-            }
-
             if (debugging('', DEBUG_DEVELOPER)) {
-                mtrace("Processing data: fecha={$users['fecha']}, usuarios={$users['usuarios']}");
+                mtrace("Procesando registro: fecha=" . userdate($current_data['fecha']) .
+                    ", usuarios=" . $current_data['usuarios']);
             }
 
-            // Check if the record already exists
-            $exists = $DB->record_exists('report_usage_monitor', ['fecha' => $users['fecha']]);
+            // Verificar si el registro ya existe para esta fecha
+            $existingRecord = $DB->get_record(
+                'report_usage_monitor',
+                array('fecha' => $current_data['fecha'])
+            );
 
-            if ($exists) {
-                // Update existing record
-                $DB->execute(
-                    "UPDATE {report_usage_monitor} 
-                     SET cantidad_usuarios = ? 
-                     WHERE fecha = ?",
-                    [$users['usuarios'], $users['fecha']]
-                );
-
-                if (debugging('', DEBUG_DEVELOPER)) {
-                    mtrace("Updated existing record for fecha={$users['fecha']}.");
+            if ($existingRecord) {
+                // Actualizar solo si el nuevo valor es mayor
+                if ($current_data['usuarios'] > $existingRecord->cantidad_usuarios) {
+                    $DB->update_record('report_usage_monitor', (object)[
+                        'id' => $existingRecord->id,
+                        'fecha' => $current_data['fecha'],
+                        'cantidad_usuarios' => $current_data['usuarios']
+                    ]);
+                    if (debugging('', DEBUG_DEVELOPER)) {
+                        mtrace("Registro actualizado para fecha existente.");
+                    }
                 }
             } else {
-                // Insert or replace record based on conditions
-                if (empty($array_daily_top) || count($array_daily_top) < 10) {
-                    insert_top_sql($users['fecha'], $users['usuarios']);
+                // Obtener cantidad actual de registros y el valor mínimo
+                $current_records = $DB->get_records('report_usage_monitor', null, 'cantidad_usuarios DESC');
+                $total_records = count($current_records);
+
+                if ($total_records < 10) {
+                    // Insertar nuevo registro si hay menos de 10
+                    $DB->insert_record('report_usage_monitor', (object)[
+                        'fecha' => $current_data['fecha'],
+                        'cantidad_usuarios' => $current_data['usuarios']
+                    ]);
                     if (debugging('', DEBUG_DEVELOPER)) {
-                        mtrace("Inserted new record in top.");
+                        mtrace("Nuevo registro insertado (total registros: " . ($total_records + 1) . ")");
                     }
                 } else {
-                    if (!is_null($menor) && $users['usuarios'] >= $menor) {
-                        update_min_top_sql($users['fecha'], $users['usuarios'], $menor);
+                    // Encontrar el registro con menor cantidad de usuarios
+                    $min_record = end($current_records);
+                    if ($current_data['usuarios'] > $min_record->cantidad_usuarios) {
+                        $DB->update_record('report_usage_monitor', (object)[
+                            'id' => $min_record->id,
+                            'fecha' => $current_data['fecha'],
+                            'cantidad_usuarios' => $current_data['usuarios']
+                        ]);
                         if (debugging('', DEBUG_DEVELOPER)) {
-                            mtrace("Updated existing record (replacing min={$menor}).");
+                            mtrace("Se reemplazó el registro con menor cantidad de usuarios.");
                         }
                     }
                 }
             }
 
-            // Update last execution time
             set_config('lastexecution', time(), 'report_usage_monitor');
-
             if (debugging('', DEBUG_DEVELOPER)) {
-                mtrace("Daily unique users calculation task completed.");
+                mtrace("Tarea completada exitosamente.");
             }
-
-            return true;
-
         } catch (\Exception $e) {
-            mtrace("Error in daily users calculation: " . $e->getMessage());
-            if (debugging('', DEBUG_DEVELOPER)) {
-                mtrace($e->getTraceAsString());
-            }
+            mtrace('Error en la ejecución de la tarea: ' . $e->getMessage());
             return false;
         }
     }
-
     /**
      * Indicates whether this task can be run from CLI.
      *
      * @return bool
      */
-    public static function can_run_from_cli() {
+    public static function can_run_from_cli()
+    {
         return true;
     }
 }
