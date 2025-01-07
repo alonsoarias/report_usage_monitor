@@ -63,7 +63,7 @@ echo $OUTPUT->header();
 // Display exclusive use message.
 echo html_writer::tag(
     'div',
-    get_string('exclusivedisclaimer', 'report_usage_monitor'),
+    html_writer::tag('i', '', ['class' => 'fa fa-circle-info fa-fw']) . ' ' . get_string('exclusivedisclaimer', 'report_usage_monitor'),
     ['class' => 'alert alert-info mb-3']
 );
 echo $OUTPUT->tabtree($tabs, $viewtab);
