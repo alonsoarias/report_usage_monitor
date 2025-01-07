@@ -72,7 +72,12 @@ class unified_notifications extends \core\task\scheduled_task {
             mtrace("Starting unified notifications task...");
         }
 
-        $this->process_notifications();
+        try {
+            $this->process_notifications();
+        } catch (\Exception $e) {
+            mtrace('Error processing notifications: ' . $e->getMessage());
+            return false;
+        }
 
         if (debugging('', DEBUG_DEVELOPER)) {
             mtrace("Unified notifications task completed.");
@@ -80,7 +85,7 @@ class unified_notifications extends \core\task\scheduled_task {
     }
 
     /**
-     * Process notifications by collecting all system metrics.
+     * Process all system notifications based on current metrics.
      */
     private function process_notifications() {
         global $DB;
@@ -89,7 +94,20 @@ class unified_notifications extends \core\task\scheduled_task {
         // Collect all system metrics
         $metrics = $this->collect_system_metrics();
 
-        // Calculate the most critical state between metrics
+        // Determine alert levels
+        $disk_alert_level = $this->get_alert_level($metrics['disk_percent']);
+        $user_alert_level = $this->get_alert_level($metrics['user_percent']);
+
+        // Add alert levels to metrics
+        $metrics['disk_alert_level'] = $disk_alert_level;
+        $metrics['user_alert_level'] = $user_alert_level;
+
+        if (debugging('', DEBUG_DEVELOPER)) {
+            mtrace("Disk usage: {$metrics['disk_percent']}% - Level: $disk_alert_level");
+            mtrace("User count: {$metrics['user_percent']}% - Level: $user_alert_level");
+        }
+
+        // Get the highest percentage for interval calculation
         $highest_percent = max($metrics['disk_percent'], $metrics['user_percent']);
         $notification_interval = $this->calculate_unified_notification_interval($highest_percent);
 
@@ -97,22 +115,27 @@ class unified_notifications extends \core\task\scheduled_task {
         $current_time = time();
 
         if (debugging('', DEBUG_DEVELOPER)) {
-            mtrace("Disk usage: {$metrics['disk_percent']}%, User usage: {$metrics['user_percent']}%, Highest: $highest_percent%");
             mtrace("Time since last notification: " . ($current_time - $last_notification_time) . " seconds");
             mtrace("Required interval: $notification_interval seconds");
         }
 
-        // Check if it's time to send a notification
+        // Check if it's time to send notifications
         if ($current_time - $last_notification_time >= $notification_interval) {
             if ($highest_percent >= self::MEDIUM_THRESHOLD) {
                 if (debugging('', DEBUG_DEVELOPER)) {
                     mtrace("Sending unified system notification...");
                 }
 
-                // Send unified notification with all metrics
-                $result = email_notify_unified($metrics);
+                // Add thresholds to metrics for reference
+                $metrics['thresholds'] = [
+                    'critical' => self::CRITICAL_THRESHOLD,
+                    'high' => self::HIGH_THRESHOLD,
+                    'medium' => self::MEDIUM_THRESHOLD
+                ];
 
-                if ($result) {
+                $success = email_notify_unified($metrics);
+
+                if ($success) {
                     set_config('last_unified_notification_time', $current_time, 'report_usage_monitor');
                     if (debugging('', DEBUG_DEVELOPER)) {
                         mtrace("Notification sent successfully.");
@@ -122,10 +145,6 @@ class unified_notifications extends \core\task\scheduled_task {
                         mtrace("Failed to send notification.");
                     }
                 }
-            }
-        } else {
-            if (debugging('', DEBUG_DEVELOPER)) {
-                mtrace("Notification interval not reached yet.");
             }
         }
     }
@@ -167,12 +186,6 @@ class unified_notifications extends \core\task\scheduled_task {
 
         $user_percent = calculate_threshold_percentage($user_count, $user_threshold);
 
-        // Get course count
-        $coursescount = $DB->count_records('course');
-
-        // Get system processes
-        $processes = get_system_processes();
-
         return array(
             'disk_quota' => $quotadisk,
             'disk_usage' => $disk_usage,
@@ -182,9 +195,8 @@ class unified_notifications extends \core\task\scheduled_task {
             'user_threshold' => $user_threshold,
             'user_percent' => $user_percent,
             'fecha' => $fecha,
-            'coursescount' => $coursescount,
-            'backupcount' => get_config('backup', 'backup_auto_max_kept'),
-            'active_processes' => $processes
+            'coursescount' => $DB->count_records('course'),
+            'backupcount' => get_config('backup', 'backup_auto_max_kept')
         );
     }
 
@@ -192,7 +204,7 @@ class unified_notifications extends \core\task\scheduled_task {
      * Calculate notification interval based on percentage.
      *
      * @param float $percent The percentage to evaluate
-     * @return int Notification interval in seconds
+     * @return int The notification interval in seconds
      */
     private function calculate_unified_notification_interval($percent) {
         if ($percent >= self::CRITICAL_THRESHOLD) {
@@ -203,5 +215,22 @@ class unified_notifications extends \core\task\scheduled_task {
             return self::MEDIUM_INTERVAL;
         }
         return self::LOW_INTERVAL;
+    }
+
+    /**
+     * Get alert level based on percentage.
+     *
+     * @param float $percent Percentage to evaluate
+     * @return string Alert level (critical, high, medium, normal)
+     */
+    private function get_alert_level($percent) {
+        if ($percent >= self::CRITICAL_THRESHOLD) {
+            return 'critical';
+        } else if ($percent >= self::HIGH_THRESHOLD) {
+            return 'high';
+        } else if ($percent >= self::MEDIUM_THRESHOLD) {
+            return 'medium';
+        }
+        return 'normal';
     }
 }
