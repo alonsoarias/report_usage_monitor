@@ -29,8 +29,7 @@
  * @param string $format Date format for SQL query.
  * @return string SQL query to get user list.
  */
-function report_user_daily_sql($format)
-{
+function report_user_daily_sql($format) {
     return "SELECT id, FROM_UNIXTIME(`timecreated`, '$format') as fecha, count(DISTINCT`userid`) as conteo_accesos_unicos
     FROM {logstore_standard_log}
     WHERE `action`='loggedin' 
@@ -45,9 +44,8 @@ function report_user_daily_sql($format)
  * @param string $format Date format for SQL query.
  * @return string SQL query to get top users data.
  */
-function report_user_daily_top_sql($format)
-{
-    return "SELECT FROM_UNIXTIME(`fecha`, '$format') as fecha, cantidad_usuarios from {report_usage_monitor}  ORDER BY cantidad_usuarios DESC";
+function report_user_daily_top_sql($format) {
+    return "SELECT FROM_UNIXTIME(`fecha`, '$format') as fecha, cantidad_usuarios from {report_usage_monitor} ORDER BY cantidad_usuarios DESC";
 }
 
 /**
@@ -55,9 +53,8 @@ function report_user_daily_top_sql($format)
  *
  * @return string SQL query to get top users data.
  */
-function report_user_daily_top_task()
-{
-    return "SELECT fecha, cantidad_usuarios from {report_usage_monitor}  ORDER BY cantidad_usuarios DESC";
+function report_user_daily_top_task() {
+    return "SELECT fecha, cantidad_usuarios from {report_usage_monitor} ORDER BY cantidad_usuarios DESC";
 }
 
 /**
@@ -67,8 +64,7 @@ function report_user_daily_top_task()
  * @param int $usuarios Number of users to update in top.
  * @param int $min Minimum value to compare in top.
  */
-function update_min_top_sql($fecha, $usuarios, $min)
-{
+function update_min_top_sql($fecha, $usuarios, $min) {
     global $DB;
     $SQL = "UPDATE {report_usage_monitor} set fecha=?,cantidad_usuarios=? where fecha=?";
     $params = array($fecha, $usuarios, $min);
@@ -81,8 +77,7 @@ function update_min_top_sql($fecha, $usuarios, $min)
  * @param string $fecha Date to insert in top.
  * @param int $cantidad_usuarios Number of users to insert in top.
  */
-function insert_top_sql($fecha, $cantidad_usuarios)
-{
+function insert_top_sql($fecha, $cantidad_usuarios) {
     global $DB;
     $SQL = "INSERT INTO {report_usage_monitor} (fecha,cantidad_usuarios) VALUES (?,?)";
     $params = array($fecha, $cantidad_usuarios);
@@ -95,9 +90,8 @@ function insert_top_sql($fecha, $cantidad_usuarios)
  * @param string $format Date format for SQL query.
  * @return string SQL query to get number of connected users.
  */
-function user_limit_daily_sql($format)
-{
-    return "SELECT count(DISTINCT`userid`) as conteo_accesos_unicos ,FROM_UNIXTIME(`timecreated`, '$format') as fecha
+function user_limit_daily_sql($format) {
+    return "SELECT count(DISTINCT`userid`) as conteo_accesos_unicos, FROM_UNIXTIME(`timecreated`, '$format') as fecha
     FROM {logstore_standard_log}
     WHERE `action`='loggedin' 
     AND FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') = DATE_SUB(CURDATE(), INTERVAL 1 DAY)
@@ -109,9 +103,8 @@ function user_limit_daily_sql($format)
  *
  * @return string SQL query to get daily user limit.
  */
-function user_limit_daily_task()
-{
-    return "SELECT UNIX_TIMESTAMP(STR_TO_DATE(x.fecha, '%Y/%m/%d')) as fecha,x.conteo_accesos_unicos FROM (
+function user_limit_daily_task() {
+    return "SELECT UNIX_TIMESTAMP(STR_TO_DATE(x.fecha, '%Y/%m/%d')) as fecha, x.conteo_accesos_unicos FROM (
         SELECT FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') as fecha, count(DISTINCT`userid`) as conteo_accesos_unicos 
         FROM {logstore_standard_log}
         WHERE `action`='loggedin' 
@@ -124,8 +117,7 @@ function user_limit_daily_task()
  *
  * @return string SQL query to get users connected today.
  */
-function users_today()
-{
+function users_today() {
     return "SELECT FROM_UNIXTIME(`lastaccess`, '%d/%m/%Y') as fecha, count(DISTINCT`id`) as conteo_accesos_unicos from {user}
      WHERE FROM_UNIXTIME(`lastaccess`, '%Y/%m/%d')>= DATE_SUB(NOW(), INTERVAL 1 DAY);";
 }
@@ -136,10 +128,9 @@ function users_today()
  * @param string $format Date format for SQL query.
  * @return string SQL query to get maximum number of accesses in last 90 days.
  */
-function max_userdaily_for_90_days($format)
-{
+function max_userdaily_for_90_days($format) {
     return "SELECT UNIX_TIMESTAMP(STR_TO_DATE(x.fecha, '$format')) as fecha, x.conteo_accesos_unicos as usuarios FROM (
-        SELECT FROM_UNIXTIME(`timecreated`, '$format') as fecha ,count(DISTINCT`userid`) as conteo_accesos_unicos 
+        SELECT FROM_UNIXTIME(`timecreated`, '$format') as fecha, count(DISTINCT`userid`) as conteo_accesos_unicos 
         FROM {logstore_standard_log}
         WHERE `action`='loggedin' 
         AND FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') >= DATE_SUB(NOW(), INTERVAL 90 DAY) GROUP by fecha) as x
@@ -151,8 +142,7 @@ function max_userdaily_for_90_days($format)
  *
  * @return string SQL query to get database size.
  */
-function size_database()
-{
+function size_database() {
     global $CFG;
     return "SELECT TABLE_SCHEMA AS `database_name`, 
     ROUND(SUM(DATA_LENGTH + INDEX_LENGTH)) AS size
@@ -167,8 +157,7 @@ function size_database()
  * @param string $excludefile File to exclude from calculation
  * @return int Total size in bytes
  */
-function directory_size($rootdir, $excludefile = '')
-{
+function directory_size($rootdir, $excludefile = '') {
     global $CFG;
 
     if (!empty($CFG->pathtodu) && is_executable(trim($CFG->pathtodu))) {
@@ -218,8 +207,7 @@ function directory_size($rootdir, $excludefile = '')
  * @param int $precision Number of decimal places
  * @return string Size in gigabytes as string
  */
-function display_size_in_gb($sizeInBytes, $precision = 2)
-{
+function display_size_in_gb($sizeInBytes, $precision = 2) {
     if (!is_numeric($sizeInBytes) || $sizeInBytes === null) {
         debugging("display_size_in_gb: expected numeric value, received: " . var_export($sizeInBytes, true), DEBUG_DEVELOPER);
         return '0';
@@ -237,8 +225,7 @@ function display_size_in_gb($sizeInBytes, $precision = 2)
  * @param int $id User ID (optional)
  * @return object User object
  */
-function generate_email_user($email, $name = '', $id = -99)
-{
+function generate_email_user($email, $name = '', $id = -99) {
     $emailuser = new stdClass();
     $emailuser->email = trim(filter_var($email, FILTER_SANITIZE_EMAIL));
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -264,8 +251,7 @@ function generate_email_user($email, $name = '', $id = -99)
  * @param int $threshold Threshold value
  * @return float Percentage
  */
-function calculate_threshold_percentage($current_value, $threshold)
-{
+function calculate_threshold_percentage($current_value, $threshold) {
     if ($threshold == 0) {
         return 0;
     }
@@ -283,29 +269,18 @@ function diskUsagePercentages($usedSpaceGB, $totalDiskSpace)
 {
     $usedSpacePercentage = ($usedSpaceGB / $totalDiskSpace) * 100;
     $color = "";
-    if ($usedSpacePercentage < 70) {
-        $color = '#088A08'; // Green
-    } else if ($usedSpacePercentage <= 85) {
-        $color = '#FFFF00'; // Yellow
+    if ($usedSpacePercentage >= 95) {
+        $color = '#ff4c4c'; // CRÍTICO
+    } else if ($usedSpacePercentage >= 90) {
+        $color = '#ff8c4c'; // ALTO
+    } else if ($usedSpacePercentage >= 80) {
+        $color = '#ffd54f'; // MEDIO
     } else {
-        $color = '#DF0101'; // Red
+        $color = '#66bb6a'; // NORMAL
     }
     return ['percentage' => $usedSpacePercentage, 'color' => $color];
 }
 
-/**
- * Compare dates in d/m/Y format for sorting.
- *
- * @param string $fecha1 First date
- * @param string $fecha2 Second date
- * @return int Comparison result
- */
-function compararFechas($fecha1, $fecha2)
-{
-    $date1 = DateTime::createFromFormat('d/m/Y', $fecha1);
-    $date2 = DateTime::createFromFormat('d/m/Y', $fecha2);
-    return $date1 <=> $date2;
-}
 
 /**
  * Send unified system notification.
@@ -313,17 +288,18 @@ function compararFechas($fecha1, $fecha2)
  * @param array $data Array with all system metrics
  * @return bool Success status
  */
-function email_notify_unified($data)
-{
+function email_notify_unified($data) {
     global $CFG, $DB;
 
     $site = get_site();
     $a = new stdClass();
+    
+    // Site information
     $a->sitename = format_string($site->fullname);
     $a->siteurl = $CFG->wwwroot;
     $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php';
 
-    // Disk metrics
+    // Disk metrics with formatting
     $a->diskusage = display_size($data['disk_usage']);
     $a->quotadisk = display_size($data['disk_quota']);
     $a->disk_percent = round($data['disk_percent'], 2);
@@ -335,9 +311,16 @@ function email_notify_unified($data)
     $a->user_percent = round($data['user_percent'], 2);
     $a->lastday = $data['fecha'];
 
-    // Alert levels and status
+    // Alert levels and styling
     $a->disk_alert = get_string($data['disk_alert_level'] . '_threshold', 'report_usage_monitor');
     $a->user_alert = get_string($data['user_alert_level'] . '_threshold', 'report_usage_monitor');
+    $a->disk_alert_class = strtolower($data['disk_alert_level']);
+    $a->user_alert_class = strtolower($data['user_alert_level']);
+
+    // Process 90-day peak data
+    $a->max_90_days_date = ($data['max_90_days']['date']);
+    $a->max_90_days_users = ($data['max_90_days']['users']);
+    $a->max_90_days_percent = ($data['max_90_days']['percent']);
 
     // Additional metrics
     $a->backupcount = get_config('backup', 'backup_auto_max_kept');
@@ -354,12 +337,7 @@ function email_notify_unified($data)
     $messagehtml = get_string('unifiednotification_html', 'report_usage_monitor', $a);
     $messagetext = html_to_text($messagehtml);
 
-    $previous_noemailever = $CFG->noemailever ?? false;
-    $CFG->noemailever = false;
-    $result = email_to_user($toemail, $fromemail, $subject, $messagetext, $messagehtml, '', '', true, $fromemail->email);
-    $CFG->noemailever = $previous_noemailever;
-
-    return $result;
+    return email_to_user($toemail, $fromemail, $subject, $messagetext, $messagehtml);
 }
 
 /**
@@ -368,8 +346,7 @@ function email_notify_unified($data)
  * @param array $data System metrics data
  * @return string HTML table
  */
-function notification_table_unified($data)
-{
+function notification_table_unified($data) {
     $table = '<table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">';
 
     // System Status Section
@@ -394,6 +371,42 @@ function notification_table_unified($data)
             ' (' . round($data['user_percent'], 2) . '%)',
         $data['user_alert_level']
     );
+
+    // 90-Day Peak Users Section
+    $table .= '<tr>
+        <th colspan="2" style="padding: 12px; background-color: #f5f5f5; text-align: left; border: 1px solid #ddd;">
+            ' . get_string('peak_users_title', 'report_usage_monitor') . '
+        </th>
+    </tr>';
+
+    if (isset($data['max_90_days'])) {
+        $peak_date = ($data['max_90_days']['date']);
+        $peak_users = ($data['max_90_days']['users']);
+        $peak_percent = ($data['max_90_days']['percent']);
+
+        $table .= '<tr>
+            <td style="padding: 10px; border: 1px solid #ddd; width: 50%;">
+                ' . get_string('peak_date_label', 'report_usage_monitor') . '
+            </td>
+            <td style="padding: 10px; border: 1px solid #ddd;">
+                <strong>' . $peak_date . '</strong>
+            </td>
+        </tr>';
+        $table .= '<tr>
+            <td style="padding: 10px; border: 1px solid #ddd;">
+                ' . get_string('peak_users_label', 'report_usage_monitor') . '
+            </td>
+            <td style="padding: 10px; border: 1px solid #ddd;">
+                <strong>' . $peak_users . ' (' . round($peak_percent, 2) . '%)</strong>
+            </td>
+        </tr>';
+    } else {
+        $table .= '<tr>
+            <td colspan="2" style="padding: 10px; border: 1px solid #ddd; text-align: center;">
+                ' . get_string('notcalculatedyet', 'report_usage_monitor') . '
+            </td>
+        </tr>';
+    }
 
     // Additional Information Section
     $table .= '<tr>
@@ -473,6 +486,19 @@ function generate_alert_row($label, $value, $alert_level) {
     </tr>';
 }
 
+/**
+ * Compare dates in d/m/Y format for sorting.
+ *
+ * @param string $fecha1 First date
+ * @param string $fecha2 Second date
+ * @return int Comparison result
+ */
+function compararFechas($fecha1, $fecha2)
+{
+    $date1 = DateTime::createFromFormat('d/m/Y', $fecha1);
+    $date2 = DateTime::createFromFormat('d/m/Y', $fecha2);
+    return $date1 <=> $date2;
+}
 
 /**
  * Gets historical user access data.
@@ -480,8 +506,7 @@ function generate_alert_row($label, $value, $alert_level) {
  * @param array $data System metrics data
  * @return string HTML table with historical data
  */
-function get_historical_data_table($data)
-{
+function get_historical_data_table($data) {
     global $DB;
 
     $table = '<h3>' . get_string('historical_data', 'report_usage_monitor') . '</h3>';
