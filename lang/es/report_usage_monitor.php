@@ -121,7 +121,7 @@ $string['unifiednotification_html'] = '
 <ul>
     <li>Uso de Disco: {$a->diskusage} de {$a->quotadisk} ({$a->disk_percent}%) - Nivel: {$a->disk_alert}</li>
     <li>Usuarios*: {$a->numberofusers} de {$a->threshold} ({$a->user_percent}%) - Nivel: {$a->user_alert}</li>
-    <li>Fecha de Monitoreo: {$a->lastday}</li>
+    <li>Fecha (DD/MM/AAAA): {$a->lastday}</li>
 </ul>
 
 <p><strong>URL del Monitor:</strong> <a href="{$a->referer}" target="_blank">Panel de Monitoreo del Sistema</a></p>
@@ -129,7 +129,5 @@ $string['unifiednotification_html'] = '
 {$a->table}
 
 <hr>
-<p style="font-size: 0.9em; color: #666;">
-Este mensaje ha sido generado automáticamente por "Usage Report" de <a href="https://ingeweb.co/" target="_blank"><strong>ingeweb.co</strong></a>
-</p>
+<i><p style="font-size: 0.9em; color: #666;">Este mensaje ha sido generado automáticamente por "Usage Report" de <a href="https://ingeweb.co/" target="_blank" ><strong>ingeweb.co</strong></a></p>
 *Se contabilizan usuarios distintos que se autenticaron en la fecha indicada. Usuarios que se autentican más de una vez solo cuenta una vez.<i>';
