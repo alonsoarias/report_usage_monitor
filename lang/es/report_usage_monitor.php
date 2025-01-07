@@ -64,7 +64,7 @@ $string['topuser'] = 'Top 10 usuarios diarios';
 $string['lastusers'] = 'Usuarios diarios de los últimos 10 días';
 $string['max_userdaily_for_90_days'] = 'Máximo de usuarios diarios en los últimos 90 días';
 $string['userstopnum'] = 'Usuarios diarios';
-$string['user_count_title'] = 'Total de Usuarios';
+$string['user_count_title'] = 'Total de Usuarios diarios';
 $string['additional_info'] = 'Información Adicional';
 
 // Elementos de interfaz
@@ -105,12 +105,12 @@ $string['disk_usage_title'] = 'Uso Actual del Disco';
 $string['disk_quota_title'] = 'Cuota Total de Disco';
 $string['database_size_title'] = 'Tamaño de la Base de Datos';
 $string['available_space'] = 'Espacio Disponible';
-$string['active_users'] = 'Usuarios Activos';
+$string['active_users'] = 'Usuarios diarios';
 $string['user_limit'] = 'Límite de Usuarios';
 $string['monitoring_date'] = 'Fecha de Monitoreo';
 $string['total_courses'] = 'Total de Cursos';
 $string['backup_retention'] = 'Retención de Copias de Seguridad';
-$string['days'] = 'días';
+$string['per_course'] = 'por curso';
 $string['notification_footer'] = 'Esta es una notificación automatizada de monitoreo. Las métricas del sistema son recolectadas y analizadas periódicamente para asegurar un rendimiento óptimo de la plataforma.';
 $string['historical_data'] = 'Datos Históricos de Acceso de Usuarios';
 
@@ -120,7 +120,7 @@ $string['unifiednotification_html'] = '
 <p><strong>Resumen de Alertas:</strong></p>
 <ul>
     <li>Uso de Disco: {$a->diskusage} de {$a->quotadisk} ({$a->disk_percent}%) - Nivel: {$a->disk_alert}</li>
-    <li>Usuarios Activos: {$a->numberofusers} de {$a->threshold} ({$a->user_percent}%) - Nivel: {$a->user_alert}</li>
+    <li>Usuarios*: {$a->numberofusers} de {$a->threshold} ({$a->user_percent}%) - Nivel: {$a->user_alert}</li>
     <li>Fecha de Monitoreo: {$a->lastday}</li>
 </ul>
 
@@ -131,4 +131,5 @@ $string['unifiednotification_html'] = '
 <hr>
 <p style="font-size: 0.9em; color: #666;">
 Este mensaje ha sido generado automáticamente por "Usage Report" de <a href="https://ingeweb.co/" target="_blank"><strong>ingeweb.co</strong></a>
-</p>';
+</p>
+*Se contabilizan usuarios distintos que se autenticaron en la fecha indicada. Usuarios que se autentican más de una vez solo cuenta una vez.<i>';
