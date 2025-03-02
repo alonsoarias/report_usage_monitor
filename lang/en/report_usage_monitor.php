@@ -844,3 +844,5 @@ $string['user_count_ok'] = 'User count is at an acceptable level. No immediate a
 $string['user_limit_tips'] = 'Tips for managing user limit:';
 $string['tip_user_inactive'] = 'Consider cleaning up inactive user accounts that haven\'t logged in for a long time.';
 $string['tip_user_limit'] = 'If the number of users is consistently approaching the limit, consider increasing your quota.';
+$string['files_dir'] = 'Files (filedir)';
+$string['exclusivedisclaimer'] = 'This plugin is part of, and is to be exclusively used with the Moodle hosting service provided by <a target="_blank" href="http://ingeweb.co/">IngeWeb</a>.';
