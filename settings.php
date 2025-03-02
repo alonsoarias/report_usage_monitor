@@ -27,6 +27,13 @@ defined('MOODLE_INTERNAL') || die();
 
 // Verificar si la función shell_exec está activa en el servidor
 if ($ADMIN->fulltree) {
+    // Sección principal de configuración
+    $settings->add(new admin_setting_heading(
+        'report_usage_monitor/mainsettings',
+        get_string('mainsettings', 'report_usage_monitor'),
+        ''
+    ));
+    
     $settings->add(new admin_setting_configtext(
         'report_usage_monitor/max_daily_users_threshold',
         get_string('max_daily_users_threshold', 'report_usage_monitor'), // Umbral máximo de usuarios diarios
@@ -51,7 +58,45 @@ if ($ADMIN->fulltree) {
         PARAM_EMAIL,
         50
     ));
-
+    
+    // Sección de configuraciones de notificación
+    $settings->add(new admin_setting_heading(
+        'report_usage_monitor/notificationsettings',
+        get_string('notificationsettings', 'report_usage_monitor'),
+        get_string('notificationsettingsinfo', 'report_usage_monitor')
+    ));
+    
+    // Opciones para alertas de espacio en disco (en porcentaje)
+    $diskoptions = [
+        90 => '90%',
+        95 => '95%',
+        98 => '98%'
+    ];
+    
+    $settings->add(new admin_setting_configselect(
+        'report_usage_monitor/disk_warning_level',
+        get_string('disk_warning_level', 'report_usage_monitor'),
+        get_string('configdisk_warning_level', 'report_usage_monitor'),
+        90,
+        $diskoptions
+    ));
+    
+    // Opciones para alertas de usuarios (en porcentaje)
+    $useroptions = [
+        80 => '80%',
+        90 => '90%',
+        95 => '95%'
+    ];
+    
+    $settings->add(new admin_setting_configselect(
+        'report_usage_monitor/users_warning_level',
+        get_string('users_warning_level', 'report_usage_monitor'),
+        get_string('configusers_warning_level', 'report_usage_monitor'),
+        90,
+        $useroptions
+    ));
+    
+    // Configuración para el comando 'du'
     // Shell_exec está activo, intentar localizar la ruta de 'du'
     if (function_exists('shell_exec')) {
         // Detectar el path de 'du' automáticamente si el sistema operativo es Linux
@@ -111,7 +156,31 @@ if ($ADMIN->fulltree) {
             $alertcontent // Información del reporte
         ));
     }
-
+    
+    // Configuración de integración (nueva sección)
+    $settings->add(new admin_setting_heading(
+        'report_usage_monitor/integrationsettings',
+        get_string('integrationsettings', 'report_usage_monitor'),
+        get_string('integrationsettingsinfo', 'report_usage_monitor')
+    ));
+    
+    // Habilitar API para integración con sistemas externos
+    $settings->add(new admin_setting_configcheckbox(
+        'report_usage_monitor/enable_api',
+        get_string('enable_api', 'report_usage_monitor'),
+        get_string('configenable_api', 'report_usage_monitor'),
+        1 // Habilitado por defecto
+    ));
+    
+    // Habilitar webhooks
+    $settings->add(new admin_setting_configcheckbox(
+        'report_usage_monitor/enable_webhooks',
+        get_string('enable_webhooks', 'report_usage_monitor'),
+        get_string('configenable_webhooks', 'report_usage_monitor'),
+        0 // Deshabilitado por defecto
+    ));
+    
+    // Créditos
     $settings->add(new admin_setting_heading(
         'report_usage_monitor/reportinfotext',
         '', // No se requiere texto aquí
@@ -124,4 +193,3 @@ $ADMIN->add('reports', new admin_externalpage(
     get_string('pluginname', 'report_usage_monitor'), // Monitor de Uso del Reporte
     new moodle_url('/report/usage_monitor/index.php')
 ));
-?>
