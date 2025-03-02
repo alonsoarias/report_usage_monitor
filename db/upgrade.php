@@ -20,7 +20,7 @@
  * @package     report_usage_monitor
  * @category    upgrade
  * @copyright   2023 Soporte IngeWeb <soporte@ingeweb.co>
- * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 o posterior
+ * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
@@ -68,9 +68,26 @@ function xmldb_report_usage_monitor_upgrade($oldversion)
         upgrade_plugin_savepoint(true, 2022091600, 'report', 'usage_monitor');
     }
     if ($oldversion < 2022103100) {
-        // Se actualiza el campo fecha en el informe report_usage_monitor de tipo fecha a timestamp.
-        $sql = "UPDATE {report_usage_monitor} set fecha=(UNIX_TIMESTAMP(STR_TO_DATE(fecha, '%d/%m/%Y')))";
-        $DB->execute($sql);
+        // Verificar primero el tipo de datos en la columna fecha
+        // para evitar errores al intentar convertir timestamps existentes
+        $records = $DB->get_records('report_usage_monitor', [], '', 'id, fecha');
+        $needs_conversion = false;
+        
+        foreach ($records as $record) {
+            // Si hay algún registro con fecha en formato de texto (no numérico),
+            // necesitamos hacer la conversión
+            if (!is_numeric($record->fecha) && preg_match('/^\d{2}\/\d{2}\/\d{4}$/', $record->fecha)) {
+                $needs_conversion = true;
+                break;
+            }
+        }
+        
+        if ($needs_conversion) {
+            // Se actualiza el campo fecha en el informe report_usage_monitor de tipo fecha a timestamp.
+            $sql = "UPDATE {report_usage_monitor} set fecha=(UNIX_TIMESTAMP(STR_TO_DATE(fecha, '%d/%m/%Y')))";
+            $DB->execute($sql);
+        }
+        
         // Punto de guardado de la versión 2022103100.
         upgrade_plugin_savepoint(true, 2022103100, 'report', 'usage_monitor');
     }
@@ -157,6 +174,49 @@ function xmldb_report_usage_monitor_upgrade($oldversion)
 
         // Punto de guardado de la versión 2024070101.
         upgrade_plugin_savepoint(true, 2024070101, 'report', 'usage_monitor');
+    }
+    
+    // Actualizaciones para la versión 2025030300 (versión 4.5)
+    if ($oldversion < 2025030300) {
+        // Crear tabla para almacenar historial de notificaciones
+        $table = new xmldb_table('report_usage_monitor_history');
+
+        // Definir campos para la tabla
+        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+        $table->add_field('type', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('percentage', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('value', XMLDB_TYPE_INTEGER, '20', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('threshold', XMLDB_TYPE_INTEGER, '20', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+
+        // Clave primaria
+        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        
+        // Índices para búsquedas eficientes
+        $table->add_index('idx_type', XMLDB_INDEX_NOTUNIQUE, ['type']);
+        $table->add_index('idx_timecreated', XMLDB_INDEX_NOTUNIQUE, ['timecreated']);
+
+        // Crear la tabla si no existe
+        if (!$dbman->table_exists($table)) {
+            $dbman->create_table($table);
+            if (debugging('', DEBUG_DEVELOPER)) {
+                mtrace("Creada tabla para historial de notificaciones.");
+            }
+        }
+        
+        // Actualizar configuraciones por defecto
+        // Inicializar campo para almacenar la tasa de crecimiento histórica del disco
+        if (!isset($CFG->disk_growth_history)) {
+            set_config('disk_growth_history', '', 'report_usage_monitor');
+        }
+        
+        // Inicializar campo para almacenar la tasa de crecimiento histórica de usuarios
+        if (!isset($CFG->users_growth_history)) {
+            set_config('users_growth_history', '', 'report_usage_monitor');
+        }
+        
+        // Punto de guardado de la versión 2025030300
+        upgrade_plugin_savepoint(true, 2025030300, 'report', 'usage_monitor');
     }
 
     return true;
