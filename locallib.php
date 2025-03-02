@@ -311,48 +311,46 @@ function analyze_disk_usage_by_directory($rootdir) {
  * @return array Arreglo con información de los cursos
  */
 function get_largest_courses($limit = 5) {
-    global $DB, $CFG;
-    
-    // Esta consulta es una aproximación, ya que calcular el tamaño real de los cursos
-    // requeriría escanear el sistema de archivos para cada curso, lo cual es costoso
-    $sql = "SELECT c.id, c.fullname, c.shortname, COUNT(f.id) AS filecount, 
-                  SUM(f.filesize) AS totalsize
-           FROM {course} c
-           JOIN {context} ctx ON ctx.instanceid = c.id AND ctx.contextlevel = 50
-           JOIN {files} f ON f.contextid = ctx.id
-           WHERE c.id != :siteid 
-             AND f.filesize > 0
-             AND f.component != 'backup'
-           GROUP BY c.id, c.fullname, c.shortname
-           ORDER BY totalsize DESC
-           LIMIT :limit";
-    
-    $params = [
-        'siteid' => SITEID,
-        'limit' => $limit
-    ];
-    
-    $courses = $DB->get_records_sql($sql, $params);
-    
-    // Ahora, para cada curso, calculamos también cuántos backups tienen
+    global $DB;
+
+    // Consulta sin 'LIMIT ?' embebido:
+    $sql = "SELECT c.id, c.fullname, c.shortname,
+                   COUNT(f.id) AS filecount, 
+                   SUM(f.filesize) AS totalsize
+              FROM {course} c
+              JOIN {context} ctx ON ctx.instanceid = c.id AND ctx.contextlevel = 50
+              JOIN {files} f ON f.contextid = ctx.id
+             WHERE c.id != :siteid
+               AND f.filesize > 0
+               AND f.component != 'backup'
+          GROUP BY c.id, c.fullname, c.shortname
+          ORDER BY totalsize DESC";
+
+    // Al usar get_records_sql($sql, $params, $start, $limit),
+    // Moodle inyecta la cláusula "LIMIT" apropiada sin romper la sintaxis.
+    $params = ['siteid' => SITEID];
+    $courses = $DB->get_records_sql($sql, $params, 0, $limit);
+
+    // Ahora, para cada curso, podemos buscar backups y calcular porcentajes.
     foreach ($courses as $course) {
-        $course->backupcount = $DB->count_records_sql(
-            "SELECT COUNT(f.id) 
-             FROM {files} f
-             JOIN {context} ctx ON f.contextid = ctx.id 
-             WHERE ctx.instanceid = :courseid 
-               AND ctx.contextlevel = 50
+        // Contar backups
+        $course->backupcount = $DB->count_records_sql("
+            SELECT COUNT(f.id)
+              FROM {files} f
+              JOIN {context} ctx2 ON f.contextid = ctx2.id
+             WHERE ctx2.instanceid = :courseid
+               AND ctx2.contextlevel = 50
                AND f.component = 'backup'
-               AND f.filearea = 'automated'",
-            ['courseid' => $course->id]
-        );
-        
-        // Calculamos el porcentaje del tamaño total
-        // Primero necesitamos el tamaño total de todos los archivos
+               AND f.filearea = 'automated'
+        ", ['courseid' => $course->id]);
+
+        // Calcular porcentaje relativo al total de archivos en site
         $totalfilessize = $DB->get_field_sql("SELECT SUM(filesize) FROM {files} WHERE filesize > 0");
-        $course->percentage = $totalfilessize > 0 ? round(($course->totalsize / $totalfilessize) * 100, 2) : 0;
+        $course->percentage = $totalfilessize > 0
+            ? round(($course->totalsize / $totalfilessize) * 100, 2)
+            : 0;
     }
-    
+
     return $courses;
 }
 
