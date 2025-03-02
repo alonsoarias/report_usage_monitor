@@ -1,0 +1,184 @@
+/* Estilos generales del dashboard */
+.usage-dashboard {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    margin-bottom: 2rem;
+}
+
+.dashboard-header {
+    margin-bottom: 2rem;
+}
+
+.last-update {
+    font-size: 0.9rem;
+    color: #6c757d;
+    margin-bottom: 1rem;
+}
+
+/* Tarjetas de estadísticas */
+.stats-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.3s;
+    border-top: 4px solid #1177d1;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+}
+
+.stat-card.disk-usage {
+    border-top-color: #1177d1;
+}
+
+.stat-card.users-daily {
+    border-top-color: #17a2b8;
+}
+
+.stat-card.max-90days {
+    border-top-color: #28a745;
+}
+
+.stat-card-title {
+    font-size: 1rem;
+    color: #6c757d;
+    margin-bottom: 0.5rem;
+}
+
+.stat-card-value {
+    font-size: 2rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+    color: #343a40;
+}
+
+.stat-card-context {
+    font-size: 0.9rem;
+    color: #6c757d;
+    margin-top: auto;
+}
+
+.stat-card-progress {
+    height: 8px;
+    margin: 1rem 0;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    border-radius: 4px;
+}
+
+.progress-low {
+    background-color: #28a745;
+}
+
+.progress-medium {
+    background-color: #f1c40f;
+}
+
+.progress-high {
+    background-color: #dc3545;
+}
+
+/* Paneles de resumen */
+.summary-panels {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 2rem;
+    margin-bottom: 2rem;
+}
+
+.panel {
+    background: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    padding: 1.5rem;
+}
+
+.panel-title {
+    font-size: 1.25rem;
+    font-weight: 500;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #dee2e6;
+    color: #343a40;
+}
+
+/* Sección de información del sistema */
+.system-info {
+    background-color: #f8f9fa;
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    margin-top: 2rem;
+}
+
+.section-heading {
+    font-size: 1.25rem;
+    font-weight: 500;
+    margin-bottom: 1.5rem;
+    color: #343a40;
+}
+
+.system-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1rem;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.info-label {
+    font-size: 0.9rem;
+    color: #6c757d;
+}
+
+.info-value {
+    font-weight: 500;
+    margin-top: 0.25rem;
+}
+
+/* Tablas de datos */
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.text-warning {
+    color: #f1c40f !important;
+}
+
+.text-danger {
+    color: #dc3545 !important;
+}
+
+/* Estilos para la vista de uso de disco */
+.disk-usage-detail {
+    margin-bottom: 2rem;
+}
+
+.disk-usage-detail .progress {
+    background-color: #e9ecef;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .stats-cards,
+    .summary-panels {
+        grid-template-columns: 1fr;
+    }
+}
