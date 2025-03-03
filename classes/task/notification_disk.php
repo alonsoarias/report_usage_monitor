@@ -18,13 +18,30 @@ namespace report_usage_monitor\task;
 
 defined('MOODLE_INTERNAL') || die();
 
+/**
+ * Tarea programada para notificar sobre el uso de disco.
+ * 
+ * @package     report_usage_monitor
+ * @copyright   2023 Soporte IngeWeb <soporte@ingeweb.co>
+ * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 class notification_disk extends \core\task\scheduled_task
 {
+    /**
+     * Devuelve el nombre de la tarea.
+     *
+     * @return string
+     */
     public function get_name()
     {
         return get_string('processdisknotificationtask', 'report_usage_monitor');
     }
 
+    /**
+     * Ejecuta la tarea programada.
+     *
+     * @return bool
+     */
     public function execute()
     {
         global $CFG;
@@ -34,11 +51,14 @@ class notification_disk extends \core\task\scheduled_task
             mtrace("Iniciando tarea de notificación de uso de disco...");
         }
 
-        $this->notify_disk_usage();
+        // Procesar la notificación de disco
+        $result = $this->notify_disk_usage();
 
         if (debugging('', DEBUG_DEVELOPER)) {
             mtrace("Tarea de notificación de uso de disco completada.");
         }
+        
+        return $result;
     }
 
     /**
@@ -49,83 +69,115 @@ class notification_disk extends \core\task\scheduled_task
      */
     private function calculate_notification_interval($disk_percent)
     {
+        // Thresholds definidos para el intervalo de notificación según la severidad
         $thresholds = [
-            99.9 => 12 * 60 * 60,   // 12 horas
-            98.5 => 24 * 60 * 60,   // 1 día
-            90 => 5 * 24 * 60 * 60, // 5 días
+            99.9 => 12 * 60 * 60,   // 12 horas para uso crítico (>99.9%)
+            98.5 => 24 * 60 * 60,   // 1 día para uso muy alto (>98.5%)
+            90 => 5 * 24 * 60 * 60, // 5 días para uso alto (>90%)
         ];
 
+        // Determinar el intervalo apropiado
         foreach ($thresholds as $threshold => $interval) {
             if ($disk_percent >= $threshold) {
                 return $interval;
             }
         }
 
-        return PHP_INT_MAX; // No notification if under 90%
+        // Si está por debajo de todos los umbrales, no enviar notificación
+        return PHP_INT_MAX;
     }
 
     /**
      * Gestiona el proceso de notificación del uso de disco.
-     * Versión mejorada que incluye análisis detallado por directorios.
+     *
+     * @return bool
      */
     private function notify_disk_usage()
     {
         global $DB, $CFG;
         
-        // Obtener configuraciones y calcular uso
+        // Obtener configuraciones del plugin
         $reportconfig = get_config('report_usage_monitor');
+        
+        // Verificar si la API/Webhooks están habilitados
+        $api_enabled = !empty($reportconfig->enable_api);
+        $webhooks_enabled = !empty($reportconfig->enable_webhooks);
+        
+        // Calcular uso de disco y porcentaje
         $quotadisk = ((int) $reportconfig->disk_quota * 1024) * 1024 * 1024;
         $disk_usage = ((int) $reportconfig->totalusagereadable + (int) $reportconfig->totalusagereadabledb) ?: 0;
         $disk_percent = calculate_threshold_percentage($disk_usage, $quotadisk);
 
+        // Nivel de advertencia configurado (default: 90%)
+        $warning_level = !empty($reportconfig->disk_warning_level) ? $reportconfig->disk_warning_level : 90;
+
         if (debugging('', DEBUG_DEVELOPER)) {
-            mtrace("Cuota de disco: $quotadisk bytes, Uso de disco: $disk_usage bytes, Porcentaje de disco: $disk_percent%");
+            mtrace("Cuota de disco: $quotadisk bytes, Uso de disco: $disk_usage bytes, Porcentaje: $disk_percent%");
+            mtrace("Nivel de advertencia: $warning_level%");
         }
 
-        // Determinar si es necesario enviar notificación
+        // Verificar si el porcentaje supera el nivel de advertencia configurado
+        if ($disk_percent < $warning_level) {
+            if (debugging('', DEBUG_DEVELOPER)) {
+                mtrace("El uso del disco ($disk_percent%) está por debajo del nivel de advertencia ($warning_level%). No se enviará notificación.");
+            }
+            return true;
+        }
+
+        // Determinar si es necesario enviar notificación ahora
         $notification_interval = $this->calculate_notification_interval($disk_percent);
-        $last_notificationdisk_time = get_config('report_usage_monitor', 'last_notificationdisk_time') ?: 0;
+        $last_notification_time = get_config('report_usage_monitor', 'last_notificationdisk_time') ?: 0;
         $current_time = time();
 
         if (debugging('', DEBUG_DEVELOPER)) {
-            mtrace("Intervalo de notificación: $notification_interval segundos, Última notificación: $last_notificationdisk_time");
+            mtrace("Intervalo de notificación: $notification_interval segundos, Última notificación: $last_notification_time");
+            $time_since_last = $current_time - $last_notification_time;
+            mtrace("Tiempo transcurrido desde la última notificación: $time_since_last segundos");
         }
 
-        if ($current_time - $last_notificationdisk_time >= $notification_interval) {
-            // Recopilar información adicional para la notificación mejorada
-            $userAccessCount = $this->get_total_user_access_count();
-            
-            // Análisis por directorios
-            $dir_analysis = analyze_disk_usage_by_directory($CFG->dataroot);
-            
-            // Cursos más grandes
-            $largest_courses = get_largest_courses(5);
-            
-            // Calcular tasas de crecimiento
-            $growth_rate = calculate_growth_rate('disk');
-            
-            if (debugging('', DEBUG_DEVELOPER)) {
-                mtrace("Enviando notificación de uso de disco mejorada...");
-                mtrace("Análisis por directorios completado: " . count($dir_analysis) . " directorios analizados");
-                mtrace("Cursos más grandes identificados: " . count($largest_courses) . " cursos");
-            }
-            
-            // Enviar notificación con toda la información recopilada
-            email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAccessCount);
-            
-            // Actualizar tiempo de última notificación
-            set_config('last_notificationdisk_time', $current_time, 'report_usage_monitor');
-            
-            // Guardar historial de notificaciones (si se implementa esta funcionalidad)
-            $this->log_notification($disk_percent, $disk_usage, $quotadisk);
-            
-        } else {
+        // Verificar si ha pasado suficiente tiempo desde la última notificación
+        if ($current_time - $last_notification_time < $notification_interval) {
             if (debugging('', DEBUG_DEVELOPER)) {
                 mtrace("No ha pasado el intervalo de notificación.");
-                $time_remaining = ($last_notificationdisk_time + $notification_interval) - $current_time;
+                $time_remaining = ($last_notification_time + $notification_interval) - $current_time;
                 mtrace("Próxima notificación posible en: " . format_time($time_remaining));
             }
+            return true;
         }
+
+        // Llegados a este punto, debemos enviar la notificación
+        if (debugging('', DEBUG_DEVELOPER)) {
+            mtrace("Enviando notificación de uso de disco...");
+        }
+        
+        // Recopilar información adicional para la notificación
+        $userAccessCount = $this->get_total_user_access_count();
+        
+        // Enviar email de notificación
+        $result = email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAccessCount);
+        
+        // Actualizar tiempo de última notificación
+        if ($result) {
+            set_config('last_notificationdisk_time', $current_time, 'report_usage_monitor');
+            
+            // Registrar la notificación en el historial
+            $this->log_notification($disk_percent, $disk_usage, $quotadisk);
+            
+            // Enviar notificación a webhooks externos si están habilitados
+            if ($webhooks_enabled) {
+                $this->notify_webhooks('disk_warning', $disk_percent, $disk_usage, $quotadisk);
+            }
+            
+            if (debugging('', DEBUG_DEVELOPER)) {
+                mtrace("Notificación enviada con éxito.");
+            }
+        } else {
+            if (debugging('', DEBUG_DEVELOPER)) {
+                mtrace("Error al enviar la notificación por email.");
+            }
+        }
+        
+        return $result;
     }
 
     /**
@@ -136,23 +188,30 @@ class notification_disk extends \core\task\scheduled_task
     private function get_total_user_access_count()
     {
         global $DB;
-        $lastday_users = user_limit_daily_sql(get_string('dateformatsql', 'report_usage_monitor'));
-        return (int) $DB->get_field_sql($lastday_users);
+        
+        $sql = "SELECT COUNT(DISTINCT userid) 
+                FROM {logstore_standard_log} 
+                WHERE action = 'loggedin' 
+                  AND timecreated > :start";
+                  
+        $params = ['start' => strtotime('-1 day')];
+        
+        return (int) $DB->get_field_sql($sql, $params);
     }
     
     /**
      * Registra información sobre la notificación enviada.
-     * Esta función permite llevar un historial de las notificaciones.
      * 
      * @param float $disk_percent Porcentaje de uso del disco.
      * @param int $disk_usage Uso del disco en bytes.
      * @param int $quotadisk Cuota de disco en bytes.
+     * @return bool
      */
     private function log_notification($disk_percent, $disk_usage, $quotadisk)
     {
         global $DB;
         
-        // Verificar si existe una tabla para almacenar el historial de notificaciones
+        // Verificar si existe la tabla para almacenar el historial
         if ($DB->get_manager()->table_exists('report_usage_monitor_history')) {
             $record = new \stdClass();
             $record->type = 'disk';
@@ -166,11 +225,32 @@ class notification_disk extends \core\task\scheduled_task
                 if (debugging('', DEBUG_DEVELOPER)) {
                     mtrace("Notificación registrada en el historial.");
                 }
+                return true;
             } catch (\Exception $e) {
                 if (debugging('', DEBUG_DEVELOPER)) {
                     mtrace("Error al registrar la notificación: " . $e->getMessage());
                 }
+                return false;
             }
         }
+        
+        return false;
+    }
+    
+    /**
+     * Envía notificaciones a webhooks externos.
+     * 
+     * @param string $event_type Tipo de evento.
+     * @param float $percentage Porcentaje de uso.
+     * @param int $value Valor actual.
+     * @param int $threshold Umbral.
+     * @return bool
+     */
+    private function notify_webhooks($event_type, $percentage, $value, $threshold)
+    {
+        global $DB, $CFG;
+        
+        // No proceder si la característica de webhooks no está implementada completamente
+        return true;
     }
 }
