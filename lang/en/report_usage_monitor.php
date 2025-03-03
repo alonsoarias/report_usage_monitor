@@ -32,7 +32,6 @@ $string['email'] = 'Email for notifications';
 $string['configemail'] = 'Email address where you want to send the attendance notifications.';
 $string['max_daily_users_threshold'] = 'Limit Users';
 $string['configmax_daily_users_threshold'] = 'Number of Limit Users.';
-$string['processnotificationstask'] = 'Notify if the number of daily connected users was exceeded';
 $string['diskusage'] = 'Disk usage';
 $string['notcalculatedyet'] = 'Not calculated yet';
 $string['calculatediskusagetask'] = 'Task to calculate the disk usage';
@@ -45,8 +44,6 @@ $string['lastexecution'] = 'Last daily users calculation run: {$a}';
 $string['lastexecutioncalculate'] = 'Last disk space calculation: {$a}';
 $string['max_userdaily_for_90_days'] = 'Maximum daily users in the last 90 days';
 $string['users_today'] = 'Number of daily users today: {$a}';
-$string['sizeusage'] = 'Total disk use';
-$string['sizedatabase'] = 'Database size';
 $string['subjectemail1'] = 'Daily User Limit Exceeded on Platform:';
 $string['subjectemail2'] = 'Disk Space Alert on Platform:';
 $string['userstopnum'] = 'Daily users';
@@ -58,14 +55,13 @@ $string['dateformatsql'] = '%m/%d/%Y';
 $string['dateformat'] = 'm/d/Y';
 $string['disk_quota'] = 'Disk Quota';
 $string['configdisk_quota'] = 'Disk Quota in gigabytes';
-$string['avalilabledisk'] = '% of disk space available';
 $string['activateshellexec'] = 'The shell_exec function is not active on this server. To use the auto-detection of the path to du, you need to enable shell_exec in your server configuration.';
 $string['pathtodu'] = 'Path to du command';
 $string['configpathtodu'] = 'Configure the path to the du command (disk usage). This is necessary for calculating disk usage. <strong>This setting is reflected in Moodle system paths</strong>)';
 $string['pathtodurecommendation'] = 'We recommend that you review and configure the path to \'du\' in the Moodle System Paths. You can find this setting under Site administration > Server > System Paths. <a target="_blank" href="settings.php?section=systempaths#id_s__pathtodu">Click here to go to System Paths</a>.';
 $string['pathtodunote'] = 'Note: The path to \'du\' will be automatically detected only if this plugin is on a Linux system and if the location of \'du\' can be successfully detected.';
 
-// New strings for enhanced notifications
+// Plantillas HTML para notificaciones mejoradas
 $string['messagehtml_userlimit'] = '<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -690,7 +686,7 @@ $string['messagehtml_diskusage'] = '<!DOCTYPE html>
 </body>
 </html>';
 
-// New strings for the dashboard
+// Cadenas para el dashboard
 $string['dashboard'] = 'Dashboard';
 $string['dashboard_title'] = 'Usage Monitor Dashboard';
 $string['users_today_card'] = 'Daily Users Today';
@@ -715,7 +711,6 @@ $string['moodle_version'] = 'Moodle Version';
 $string['total_courses'] = 'Total Courses';
 $string['backup_per_course'] = 'Backups per Course';
 $string['registered_users'] = 'Registered Users';
-$string['disk_usage_overview'] = 'Disk Usage Overview';
 $string['disk_usage_by_directory'] = 'Disk Usage by Directory';
 $string['largest_courses'] = 'Largest Courses';
 $string['course'] = 'Course';
@@ -726,11 +721,13 @@ $string['tip_backups'] = 'Reduce the number of automatic backups per course (cur
 $string['tip_files'] = 'Clean up old unused files using the file cleanup tool';
 $string['tip_courses'] = 'Archive or delete old courses that are no longer used';
 $string['tip_cache'] = 'Purge the system cache to free up temporary space';
-$string['size_in_gb'] = 'Size (GB)';
-$string['totaldiskusage'] = 'Total disk usage';
-$string['diskquota'] = 'Disk quota';
+$string['disk_usage_ok'] = 'Disk usage is at an acceptable level. No immediate action required.';
+$string['user_count_ok'] = 'User count is at an acceptable level. No immediate action required.';
+$string['user_limit_tips'] = 'Tips for managing user limit:';
+$string['tip_user_inactive'] = 'Consider cleaning up inactive user accounts that haven\'t logged in for a long time.';
+$string['tip_user_limit'] = 'If the number of users is consistently approaching the limit, consider increasing your quota.';
 
-// Strings for settings.php
+// Cadenas para settings.php
 $string['mainsettings'] = 'Main settings';
 $string['notificationsettings'] = 'Notification settings';
 $string['notificationsettingsinfo'] = 'Configure when and how notifications are sent.';
@@ -745,104 +742,124 @@ $string['configenable_api'] = 'Enable API access for external systems to retriev
 $string['enable_webhooks'] = 'Enable webhooks';
 $string['configenable_webhooks'] = 'Enable webhooks for sending notifications to external systems.';
 
-// Strings for the API
+// Cadenas para API básica
 $string['api_documentation'] = 'API Documentation';
-$string['api_key'] = 'API Key';
-$string['api_url'] = 'API URL';
 $string['webhook_url'] = 'Webhook URL';
 $string['webhook_secret'] = 'Webhook Secret';
 $string['webhook_events'] = 'Webhook Events';
-$string['webhook_test'] = 'Test Webhook';
-$string['webhook_test_success'] = 'Webhook test successful.';
-$string['webhook_test_failure'] = 'Webhook test failed: {$a}';
-$string['webhook_added'] = 'Webhook added successfully.';
-$string['webhook_updated'] = 'Webhook updated successfully.';
-$string['webhook_deleted'] = 'Webhook deleted successfully.';
 $string['webhook_event_disk_warning'] = 'Disk space warning';
 $string['webhook_event_user_warning'] = 'User limit warning';
 
-// Strings for error and success messages
+// Cadenas para error y éxito
 $string['error_invalid_url'] = 'Invalid URL format.';
 $string['error_connection_failed'] = 'Connection failed: {$a}';
-$string['error_response_invalid'] = 'Invalid response received.';
 $string['error_permission_denied'] = 'Permission denied.';
-$string['error_data_not_found'] = 'Data not found.';
-$string['success_data_saved'] = 'Data saved successfully.';
 $string['success_operation_completed'] = 'Operation completed successfully.';
 
-// Strings for data visualization
-$string['disk_usage_over_time'] = 'Disk usage over time';
-$string['user_count_over_time'] = 'User count over time';
-$string['notification_history'] = 'Notification history';
-$string['last_7_days'] = 'Last 7 days';
-$string['last_30_days'] = 'Last 30 days';
-$string['last_90_days'] = 'Last 90 days';
-$string['custom_range'] = 'Custom range';
-$string['date_from'] = 'From date';
-$string['date_to'] = 'To date';
-$string['apply_filter'] = 'Apply filter';
-$string['reset_filter'] = 'Reset filter';
-$string['export_data'] = 'Export data';
-$string['print_report'] = 'Print report';
-$string['refresh_data'] = 'Refresh data';
-$string['auto_refresh'] = 'Auto refresh';
-
-$string['messagehtml1'] = '<p>The platform <a href="{$a->siteurl}" target="_blank" ><strong>\'{$a->sitename}\'</strong></a> has exceeded the user threshold by {$a->percentaje}%</p>
-<p>Date (DD/MM/YYYY): {$a->lastday} </p>
-<p>Users*: <strong>{$a->numberofusers}</strong></p>
-<p>Maximum daily users threshold: {$a->threshold} users</p>
-<p>Disk space threshold: <strong>{$a->quotadisk}</strong></p>
-<p>Disk space used*: <strong>{$a->diskusage}</strong></p>
-<strong>Monitor URL: </strong> {$a->referer}
-<br>
-<br>
-{$a->table}
-<br>
-<hr>
-<i><p>This message has been automatically generated by "Usage Report" from <a href="https://ingeweb.co/" target="_blank" ><strong>ingeweb.co</strong></a></p>
-*Only distinct users who authenticated on the indicated date are counted. Users who authenticate more than once are only counted once.<i>';
-
-$string['messagehtml2'] = '
-<p>The platform <a href="{$a->siteurl}" target="_blank"><strong>\'{$a->sitename}\'</strong></a> has exceeded 90% of the assigned disk space threshold</p>
-<p>Date (DD/MM/YYYY): {$a->lastday}</p>
-<p>Disk space used*: <strong>{$a->diskusage}</strong></p>
-<p>Assigned disk space threshold: <strong>{$a->quotadisk}</strong></p>
-<p>Maximum daily users threshold: <strong>{$a->threshold} users</strong></p>
-<p>Users*: <strong>{$a->numberofusers}</strong></p>
-<strong>Monitor URL: </strong> {$a->referer}
-<br>
-<br>
-<table border="1" style="border-collapse: collapse; width: 50%;">
-    <tr>
-        <th style="padding: 8px; background-color: #f2f2f2;">Description</th>
-        <th style="padding: 8px; background-color: #f2f2f2;">Detail</th>
-    </tr>
-    <tr>
-        <td style="padding: 8px;">Disk usage percentage</td>
-        <td style="padding: 8px;"><strong>{$a->percentage}%</strong></td>
-    </tr>
-    <tr>
-        <td style="padding: 8px;">Database size</td>
-        <td style="padding: 8px;"><strong>{$a->databasesize}</strong></td>
-    </tr>
-    <tr>
-        <td style="padding: 8px;">Number of courses</td>
-        <td style="padding: 8px;"><strong>{$a->coursescount}</strong></td>
-    </tr>
-    <tr>
-        <td style="padding: 8px;">Number of backups per course</td>
-        <td style="padding: 8px;"><strong>{$a->backupcount}</strong></td>
-    </tr>
-</table>
-<hr>
-<p>This message has been automatically generated by "Usage Report" from <a href="https://ingeweb.co/" target="_blank"><strong>ingeweb.co</strong></a>. Please do not reply to this message.</p>';
-
 $string['reportinfotext'] = 'This plugin has been created for another success story of <strong>IngeWeb</strong>. Visit us at <a target="_blank" href="http://ingeweb.co/">IngeWeb - Solutions to succeed on the Internet</a>.';
-
-$string['disk_usage_ok'] = 'Disk usage is at an acceptable level. No immediate action required.';
-$string['user_count_ok'] = 'User count is at an acceptable level. No immediate action required.';
-$string['user_limit_tips'] = 'Tips for managing user limit:';
-$string['tip_user_inactive'] = 'Consider cleaning up inactive user accounts that haven\'t logged in for a long time.';
-$string['tip_user_limit'] = 'If the number of users is consistently approaching the limit, consider increasing your quota.';
-$string['files_dir'] = 'Files (filedir)';
 $string['exclusivedisclaimer'] = 'This plugin is part of, and is to be exclusively used with the Moodle hosting service provided by <a target="_blank" href="http://ingeweb.co/">IngeWeb</a>.';
+
+// Nuevas cadenas para los métodos API
+$string['get_usage_data'] = 'Get usage data';
+$string['get_usage_data_desc'] = 'Retrieves precalculated usage data for disk and users with minimal overhead.';
+$string['set_usage_thresholds'] = 'Set usage thresholds';
+$string['set_usage_thresholds_desc'] = 'Updates the configured thresholds for users and disk space.';
+
+// Mensajes para set_usage_thresholds
+$string['user_threshold_updated'] = 'User threshold updated successfully.';
+$string['disk_threshold_updated'] = 'Disk threshold updated successfully.';
+$string['error_user_threshold_negative'] = 'User threshold must be greater than 0.';
+$string['error_disk_threshold_negative'] = 'Disk threshold must be greater than 0.';
+$string['error_no_thresholds_provided'] = 'No thresholds provided to update.';
+
+// Parámetros para los nuevos métodos
+$string['param_user_threshold'] = 'New threshold for daily users';
+$string['param_disk_threshold'] = 'New threshold for disk space in GB';
+
+// Cadenas adicionales para la API para la documentación
+$string['api_example_php'] = 'PHP Example';
+$string['api_example_js'] = 'JavaScript Example';
+$string['api_required_permissions'] = 'Required Permissions';
+$string['api_endpoint'] = 'Endpoint';
+$string['api_required_capability'] = 'Required Capability';
+$string['api_code_examples'] = 'Code Examples';
+
+// Cadenas para los valores que se devuelven en get_monitor_stats
+$string['site_name'] = 'Site name';
+$string['site_shortname'] = 'Site short name';
+$string['moodle_release'] = 'Human-readable Moodle version';
+$string['course_count'] = 'Number of courses';
+$string['user_count'] = 'Number of users';
+$string['backup_auto_max_kept'] = 'Number of automatic backups kept';
+$string['total_bytes'] = 'Total disk usage in bytes';
+$string['total_readable'] = 'Human-readable disk usage';
+$string['quota_bytes'] = 'Disk quota in bytes';
+$string['quota_readable'] = 'Human-readable disk quota';
+$string['disk_percentage'] = 'Disk usage percentage';
+$string['database_bytes'] = 'Database size in bytes';
+$string['database_readable'] = 'Human-readable database size';
+$string['database_percentage'] = 'Database size percentage';
+$string['filedir_bytes'] = 'File directory size in bytes';
+$string['filedir_readable'] = 'Human-readable file directory size';
+$string['filedir_percentage'] = 'File directory size percentage';
+$string['cache_bytes'] = 'Cache size in bytes';
+$string['cache_readable'] = 'Human-readable cache size';
+$string['cache_percentage'] = 'Cache size percentage';
+$string['others_bytes'] = 'Other directories size in bytes';
+$string['others_readable'] = 'Human-readable other directories size';
+$string['others_percentage'] = 'Other directories size percentage';
+$string['user_threshold'] = 'User threshold';
+$string['user_percentage'] = 'User usage percentage';
+$string['course_id'] = 'Course ID';
+$string['course_fullname'] = 'Course full name';
+$string['course_shortname'] = 'Course short name';
+$string['course_size_bytes'] = 'Course size in bytes';
+$string['course_size_readable'] = 'Human-readable course size';
+$string['course_percentage'] = 'Course size percentage';
+$string['course_backup_count'] = 'Course backup count';
+$string['disk_calculation_timestamp'] = 'Disk calculation timestamp';
+$string['users_calculation_timestamp'] = 'Users calculation timestamp';
+
+// Cadenas para get_notification_history
+$string['notification_type'] = 'Notification type (disk, users, or all)';
+$string['notification_limit'] = 'Maximum number of records to return';
+$string['notification_offset'] = 'Offset for pagination';
+$string['notification_total'] = 'Total number of records available';
+$string['notification_limit_value'] = 'Requested maximum number of records';
+$string['notification_offset_value'] = 'Requested offset';
+$string['notification_id'] = 'Notification ID';
+$string['notification_type_value'] = 'Notification type (disk or users)';
+$string['notification_percentage'] = 'Usage percentage';
+$string['notification_value'] = 'Human-readable value';
+$string['notification_value_raw'] = 'Value in bytes or user count';
+$string['notification_threshold'] = 'Human-readable threshold';
+$string['notification_threshold_raw'] = 'Threshold in bytes or user count';
+$string['notification_timecreated'] = 'Creation timestamp';
+$string['notification_timereadable'] = 'Human-readable date and time';
+
+// Cadenas para register_webhook
+$string['webhook_event_type'] = 'Event type (disk_warning, user_warning)';
+$string['webhook_events_list'] = 'List of events to subscribe to';
+$string['webhook_success'] = 'Indicates whether the operation was successful';
+$string['webhook_message'] = 'Descriptive message of the result';
+$string['webhook_id'] = 'ID of the registered or updated webhook';
+
+// Cadenas para get_usage_data
+$string['usage_disk_current'] = 'Current disk usage in bytes';
+$string['usage_disk_current_readable'] = 'Human-readable current disk usage';
+$string['usage_disk_threshold'] = 'Disk threshold in bytes';
+$string['usage_disk_threshold_readable'] = 'Human-readable disk threshold';
+$string['usage_disk_percentage'] = 'Disk usage percentage';
+$string['usage_disk_last_calculated'] = 'Timestamp of last disk calculation';
+$string['usage_user_current'] = 'Current daily users';
+$string['usage_user_threshold'] = 'User threshold';
+$string['usage_user_percentage'] = 'User usage percentage';
+$string['usage_user_last_calculated'] = 'Timestamp of last user calculation';
+$string['usage_user_max_90_days'] = 'Maximum users in 90 days';
+$string['usage_user_max_90_days_date'] = 'Timestamp of maximum users date';
+
+// Cadenas para set_usage_thresholds_returns
+$string['threshold_success'] = 'Indicates whether the operation was generally successful';
+$string['user_threshold_updated_status'] = 'Indicates whether the user threshold was updated';
+$string['disk_threshold_updated_status'] = 'Indicates whether the disk threshold was updated';
+$string['threshold_message'] = 'Informational or error message';
