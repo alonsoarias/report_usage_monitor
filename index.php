@@ -141,8 +141,6 @@ echo $OUTPUT->header();
 // -------------------------------------------------------------------------
 // Disclaimer debajo del header
 // -------------------------------------------------------------------------
-// Suponiendo que no lo defines en el archivo de idioma, lo definimos inline:
-$string['exclusivedisclaimer'] = 'This plugin is part of, and is to be exclusively used with the Moodle hosting service provided by <a target="_blank" href="http://ingeweb.co/">IngeWeb</a>.';
 
 // Mostramos el disclaimer en un alert info:
 echo '<div class="alert alert-info mb-2 text-center small">';
