@@ -74,20 +74,99 @@ echo $OUTPUT->heading(get_string('api_documentation', 'report_usage_monitor'));
         </div>
         <div class="card-body">
             <div class="accordion" id="apiEndpoints">
-                <!-- get_monitor_stats endpoint -->
+                <!-- get_usage_data endpoint (Simplified GET method) -->
+                <div class="card mb-3">
+                    <div class="card-header" id="headingSimpleGet">
+                        <h5 class="mb-0">
+                            <button class="btn btn-link" type="button" data-toggle="collapse" data-target="#collapseSimpleGet" aria-expanded="true" aria-controls="collapseSimpleGet">
+                                <code>report_usage_monitor_get_usage_data</code>
+                            </button>
+                        </h5>
+                    </div>
+                    <div id="collapseSimpleGet" class="collapse show" aria-labelledby="headingSimpleGet" data-parent="#apiEndpoints">
+                        <div class="card-body">
+                            <p><strong>Description:</strong> Retrieves precalculated usage data for disk and users with minimal overhead.</p>
+                            <p><strong>Parameters:</strong> None</p>
+                            <p><strong>Returns:</strong> Simplified usage statistics for disk and users.</p>
+                            
+                            <h6>Example Request:</h6>
+<pre><code>curl '<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php?wstoken=YOUR_TOKEN&wsfunction=report_usage_monitor_get_usage_data&moodlewsrestformat=json'</code></pre>
+
+                            <h6>Example Response:</h6>
+<pre><code>{
+  "disk_usage": {
+    "current": 12345678901,            // Uso actual en bytes
+    "current_readable": "11.5 GB",     // Uso actual en formato legible
+    "threshold": 21474836480,          // Umbral configurado en bytes
+    "threshold_readable": "20 GB",     // Umbral en formato legible
+    "percentage": 57.5,                // Porcentaje de uso actual
+    "last_calculated": 1698159284      // Timestamp del último cálculo
+  },
+  "user_usage": {
+    "current": 450,                    // Usuarios actuales
+    "threshold": 1000,                 // Umbral de usuarios configurado
+    "percentage": 45.0,                // Porcentaje de uso actual
+    "last_calculated": 1698159350,     // Timestamp del último cálculo
+    "max_90_days": 650,                // Máximo de usuarios en los últimos 90 días
+    "max_90_days_date": 1644934800     // Timestamp de la fecha con máximo de usuarios
+  }
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- set_usage_thresholds endpoint (SET method) -->
+                <div class="card mb-3">
+                    <div class="card-header" id="headingSet">
+                        <h5 class="mb-0">
+                            <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseSet" aria-expanded="false" aria-controls="collapseSet">
+                                <code>report_usage_monitor_set_usage_thresholds</code>
+                            </button>
+                        </h5>
+                    </div>
+                    <div id="collapseSet" class="collapse" aria-labelledby="headingSet" data-parent="#apiEndpoints">
+                        <div class="card-body">
+                            <p><strong>Description:</strong> Updates the configured thresholds for users and disk space.</p>
+                            <p><strong>Parameters:</strong></p>
+                            <ul>
+                                <li><code>user_threshold</code> (integer, optional): New threshold for daily users</li>
+                                <li><code>disk_threshold</code> (integer, optional): New threshold for disk space in GB</li>
+                            </ul>
+                            <p><strong>Note:</strong> At least one parameter must be provided.</p>
+                            <p><strong>Returns:</strong> Result of the update operation with success status and messages.</p>
+                            
+                            <h6>Example Request:</h6>
+<pre><code>curl -X POST '<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php' \
+  -d 'wstoken=YOUR_TOKEN&wsfunction=report_usage_monitor_set_usage_thresholds&user_threshold=1500&disk_threshold=30&moodlewsrestformat=json'</code></pre>
+
+                            <h6>Example Response:</h6>
+<pre><code>{
+  "success": true,
+  "user_threshold_updated": true,
+  "disk_threshold_updated": true,
+  "messages": [
+    "User threshold updated successfully.",
+    "Disk threshold updated successfully."
+  ]
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- get_monitor_stats endpoint (Complete statistics) -->
                 <div class="card mb-3">
                     <div class="card-header" id="headingOne">
                         <h5 class="mb-0">
-                            <button class="btn btn-link" type="button" data-toggle="collapse" data-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
+                            <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
                                 <code>report_usage_monitor_get_monitor_stats</code>
                             </button>
                         </h5>
                     </div>
-                    <div id="collapseOne" class="collapse show" aria-labelledby="headingOne" data-parent="#apiEndpoints">
+                    <div id="collapseOne" class="collapse" aria-labelledby="headingOne" data-parent="#apiEndpoints">
                         <div class="card-body">
-                            <p><strong>Description:</strong> Retrieves the current usage statistics for the site.</p>
+                            <p><strong>Description:</strong> Retrieves comprehensive usage statistics for the site.</p>
                             <p><strong>Parameters:</strong> None</p>
-                            <p><strong>Returns:</strong> Detailed data about disk usage, user counts, and system information.</p>
+                            <p><strong>Returns:</strong> Detailed data about disk usage, user counts, system information, and largest courses.</p>
                             
                             <h6>Example Request:</h6>
 <pre><code>curl '<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php?wstoken=YOUR_TOKEN&wsfunction=report_usage_monitor_get_monitor_stats&moodlewsrestformat=json'</code></pre>
@@ -251,6 +330,58 @@ echo $OUTPUT->heading(get_string('api_documentation', 'report_usage_monitor'));
     
     <div class="card mb-4">
         <div class="card-header">
+            <h3 class="m-0">Code Examples</h3>
+        </div>
+        <div class="card-body">
+            <h5>PHP Example</h5>
+<pre><code>// Obtener datos de uso
+$curl = new curl();
+$response = $curl->get('<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php?wstoken=YOUR_TOKEN&wsfunction=report_usage_monitor_get_usage_data&moodlewsrestformat=json');
+$usage_data = json_decode($response);
+
+// Actualizar umbral de usuarios
+$post_params = array(
+    'wstoken' => 'YOUR_TOKEN',
+    'wsfunction' => 'report_usage_monitor_set_usage_thresholds',
+    'user_threshold' => 2000,
+    'moodlewsrestformat' => 'json'
+);
+$response = $curl->post('<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php', $post_params);
+$result = json_decode($response);</code></pre>
+
+            <h5>JavaScript Example</h5>
+<pre><code>// Obtener datos de uso
+fetch('<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php?wstoken=YOUR_TOKEN&wsfunction=report_usage_monitor_get_usage_data&moodlewsrestformat=json')
+  .then(response => response.json())
+  .then(data => {
+    console.log('Uso de disco:', data.disk_usage.percentage + '%');
+    console.log('Uso de usuarios:', data.user_usage.percentage + '%');
+  });
+
+// Actualizar umbrales
+const formData = new FormData();
+formData.append('wstoken', 'YOUR_TOKEN');
+formData.append('wsfunction', 'report_usage_monitor_set_usage_thresholds');
+formData.append('disk_threshold', 50);
+formData.append('moodlewsrestformat', 'json');
+
+fetch('<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php', {
+  method: 'POST',
+  body: formData
+})
+  .then(response => response.json())
+  .then(result => {
+    if (result.success) {
+      console.log('Umbrales actualizados correctamente');
+    } else {
+      console.error('Error:', result.messages.join(', '));
+    }
+  });</code></pre>
+        </div>
+    </div>
+    
+    <div class="card mb-4">
+        <div class="card-header">
             <h3 class="m-0">Webhook Payloads</h3>
         </div>
         <div class="card-body">
@@ -307,6 +438,48 @@ echo $OUTPUT->heading(get_string('api_documentation', 'report_usage_monitor'));
             <div class="alert alert-warning">
                 <i class="fa fa-exclamation-triangle"></i> <strong>Warning:</strong> Keep your tokens secure. They provide access to your Moodle data.
             </div>
+        </div>
+    </div>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            <h3 class="m-0">Required Permissions</h3>
+        </div>
+        <div class="card-body">
+            <p>The following permissions are required for using the API endpoints:</p>
+            
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Endpoint</th>
+                        <th>Required Capability</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>report_usage_monitor_get_usage_data</code></td>
+                        <td><code>report/usage_monitor:view</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>report_usage_monitor_set_usage_thresholds</code></td>
+                        <td><code>report/usage_monitor:manage</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>report_usage_monitor_get_monitor_stats</code></td>
+                        <td><code>report/usage_monitor:view</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>report_usage_monitor_get_notification_history</code></td>
+                        <td><code>report/usage_monitor:view</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>report_usage_monitor_register_webhook</code></td>
+                        <td><code>moodle/site:config</code></td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <p>Ensure that the user associated with your token has all the required capabilities for the endpoints you intend to use.</p>
         </div>
     </div>
 </div>
