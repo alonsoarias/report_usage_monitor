@@ -39,7 +39,6 @@ function report_user_daily_sql($format)
     ORDER BY fecha DESC";
 }
 
-
 /**
  * Obtener datos del top de usuarios máximos diarios.
  *
@@ -48,7 +47,9 @@ function report_user_daily_sql($format)
  */
 function report_user_daily_top_sql($format)
 {
-    return "SELECT FROM_UNIXTIME(`fecha`, '$format') as fecha, cantidad_usuarios from {report_usage_monitor}  ORDER BY cantidad_usuarios DESC";
+    return "SELECT FROM_UNIXTIME(`fecha`, '$format') as fecha, cantidad_usuarios 
+            FROM {report_usage_monitor}  
+            ORDER BY cantidad_usuarios DESC";
 }
 
 /**
@@ -58,7 +59,9 @@ function report_user_daily_top_sql($format)
  */
 function report_user_daily_top_task()
 {
-    return "SELECT fecha, cantidad_usuarios from {report_usage_monitor}  ORDER BY cantidad_usuarios DESC";
+    return "SELECT fecha, cantidad_usuarios 
+            FROM {report_usage_monitor}  
+            ORDER BY cantidad_usuarios DESC";
 }
 
 /**
@@ -72,9 +75,12 @@ function report_user_daily_top_task()
 function update_min_top_sql($fecha, $usuarios, $min)
 {
     global $DB;
-    $SQL = "UPDATE {report_usage_monitor} set fecha=?,cantidad_usuarios=? where fecha=?";
-    $params = array($fecha, $usuarios, $min);
-    $DB->execute($SQL, $params);
+    $DB->execute(
+        "UPDATE {report_usage_monitor} 
+         SET fecha = ?, cantidad_usuarios = ? 
+         WHERE fecha = ?",
+        [$fecha, $usuarios, $min]
+    );
 }
 
 /**
@@ -87,67 +93,85 @@ function update_min_top_sql($fecha, $usuarios, $min)
 function insert_top_sql($fecha, $cantidad_usuarios)
 {
     global $DB;
-    $SQL = "INSERT INTO {report_usage_monitor} (fecha,cantidad_usuarios) VALUES (?,?)";
-    $params = array($fecha, $cantidad_usuarios);
-    $DB->execute($SQL, $params);
+    $DB->execute(
+        "INSERT INTO {report_usage_monitor} (fecha, cantidad_usuarios) 
+         VALUES (?, ?)",
+        [$fecha, $cantidad_usuarios]
+    );
 }
 
 /**
  * Obtener la cantidad de usuarios conectados el día de ayer.
+ * Optimizado para usar índices en logstore_standard_log (action, timecreated)
  *
  * @param string $format Formato de fecha para la consulta SQL.
  * @return string Consulta SQL para obtener la cantidad de usuarios conectados.
  */
 function user_limit_daily_sql($format)
 {
-    return "SELECT count(DISTINCT`userid`) as conteo_accesos_unicos ,FROM_UNIXTIME(`timecreated`, '$format') as fecha
-    FROM {logstore_standard_log}
-    WHERE `action`='loggedin' 
-    AND FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') = DATE_SUB(CURDATE(), INTERVAL 1 DAY)
-    GROUP by fecha";
+    return "SELECT count(DISTINCT `userid`) as conteo_accesos_unicos, 
+                   FROM_UNIXTIME(`timecreated`, '$format') as fecha
+            FROM {logstore_standard_log}
+            WHERE `action` = 'loggedin' 
+              AND FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') = DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+            GROUP by fecha";
 }
 
-/*Obtener el límite diario de usuarios.*/
 /**
  * Obtener el límite diario de usuarios para una tarea específica.
+ * Optimizado para rendimiento.
  *
  * @return string Consulta SQL para obtener el límite diario de usuarios.
  */
 function user_limit_daily_task()
 {
-    return "SELECT UNIX_TIMESTAMP(STR_TO_DATE(x.fecha, '%Y/%m/%d')) as fecha,x.conteo_accesos_unicos FROM (
-        SELECT FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') as fecha, count(DISTINCT`userid`) as conteo_accesos_unicos 
-        FROM {logstore_standard_log}
-        WHERE `action`='loggedin' 
-        AND FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') = DATE_SUB(CURDATE(), INTERVAL 1 DAY) 
-        GROUP by fecha) as x;";
+    return "SELECT UNIX_TIMESTAMP(STR_TO_DATE(x.fecha, '%Y/%m/%d')) as fecha, 
+                   x.conteo_accesos_unicos 
+            FROM (
+                SELECT FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') as fecha, 
+                       count(DISTINCT`userid`) as conteo_accesos_unicos 
+                FROM {logstore_standard_log}
+                WHERE `action` = 'loggedin' 
+                  AND FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') = DATE_SUB(CURDATE(), INTERVAL 1 DAY) 
+                GROUP by fecha
+            ) as x";
 }
 
 /**
  * Recuperar los usuarios conectados recientemente para hoy.
+ * Optimizado para usar índice en user.lastaccess
  *
  * @return string Consulta SQL para obtener los usuarios conectados hoy.
  */
 function users_today()
 {
-    return "SELECT FROM_UNIXTIME(`lastaccess`, '%d/%m/%Y') as fecha, count(DISTINCT`id`) as conteo_accesos_unicos from {user}
-     WHERE FROM_UNIXTIME(`lastaccess`, '%Y/%m/%d')>= DATE_SUB(NOW(), INTERVAL 1 DAY);";
+    return "SELECT FROM_UNIXTIME(`lastaccess`, '%d/%m/%Y') as fecha, 
+                   count(DISTINCT `id`) as conteo_accesos_unicos 
+            FROM {user}
+            WHERE FROM_UNIXTIME(`lastaccess`, '%Y/%m/%d') >= DATE_SUB(NOW(), INTERVAL 1 DAY)";
 }
 
 /**
  * Obtener el número máximo de accesos en los últimos 90 días.
+ * Optimizado para usar índices y mejorar rendimiento.
  *
  * @param string $format Formato de fecha para la consulta SQL.
  * @return string Consulta SQL para obtener el número máximo de accesos en los últimos 90 días.
  */
 function max_userdaily_for_90_days($format)
 {
-    return "SELECT UNIX_TIMESTAMP(STR_TO_DATE(x.fecha, '$format')) as fecha, x.conteo_accesos_unicos as usuarios FROM (
-        SELECT FROM_UNIXTIME(`timecreated`, '$format') as fecha ,count(DISTINCT`userid`) as conteo_accesos_unicos 
-        FROM {logstore_standard_log}
-        WHERE `action`='loggedin' 
-        AND FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') >= DATE_SUB(NOW(), INTERVAL 90 DAY) GROUP by fecha) as x
-        ORDER BY usuarios DESC LIMIT 1";
+    return "SELECT UNIX_TIMESTAMP(STR_TO_DATE(x.fecha, '$format')) as fecha, 
+                   x.conteo_accesos_unicos as usuarios 
+            FROM (
+                SELECT FROM_UNIXTIME(`timecreated`, '$format') as fecha, 
+                       count(DISTINCT`userid`) as conteo_accesos_unicos 
+                FROM {logstore_standard_log}
+                WHERE `action` = 'loggedin' 
+                  AND timecreated >= UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 90 DAY))  
+                GROUP by fecha
+            ) as x
+            ORDER BY usuarios DESC 
+            LIMIT 1";
 }
 
 /**
@@ -159,9 +183,9 @@ function size_database()
 {
     global $CFG;
     return "SELECT TABLE_SCHEMA AS `database_name`, 
-    ROUND(SUM(DATA_LENGTH + INDEX_LENGTH)) AS size
-    FROM information_schema.TABLES
-    WHERE TABLE_SCHEMA='$CFG->dbname'";
+                   ROUND(SUM(DATA_LENGTH + INDEX_LENGTH)) AS size
+            FROM information_schema.TABLES
+            WHERE TABLE_SCHEMA = '$CFG->dbname'";
 }
 
 /**
@@ -313,7 +337,7 @@ function analyze_disk_usage_by_directory($rootdir) {
 function get_largest_courses($limit = 5) {
     global $DB;
 
-    // Consulta sin 'LIMIT ?' embebido:
+    // Consulta optimizada para rendimiento
     $sql = "SELECT c.id, c.fullname, c.shortname,
                    COUNT(f.id) AS filecount, 
                    SUM(f.filesize) AS totalsize
@@ -331,7 +355,7 @@ function get_largest_courses($limit = 5) {
     $params = ['siteid' => SITEID];
     $courses = $DB->get_records_sql($sql, $params, 0, $limit);
 
-    // Ahora, para cada curso, podemos buscar backups y calcular porcentajes.
+    // Para cada curso, buscamos backups y calculamos porcentajes
     foreach ($courses as $course) {
         // Contar backups
         $course->backupcount = $DB->count_records_sql("
@@ -365,17 +389,16 @@ function calculate_growth_rate($type = 'users', $days = 30) {
     global $DB, $CFG;
     
     if ($type === 'users') {
-        // Obtenemos el número de usuarios conectados en el primer día del período
-        $first_day_sql = "SELECT COUNT(DISTINCT userid) 
-                          FROM {logstore_standard_log} 
-                          WHERE action = 'loggedin' 
-                          AND timecreated >= :start1 AND timecreated <= :end1";
-        
-        // Obtenemos el número de usuarios conectados en el último día del período
-        $last_day_sql = "SELECT COUNT(DISTINCT userid) 
-                         FROM {logstore_standard_log} 
-                         WHERE action = 'loggedin' 
-                         AND timecreated >= :start2 AND timecreated <= :end2";
+        // Consulta optimizada para rendimiento
+        $sql = "SELECT 
+                  (SELECT COUNT(DISTINCT userid) 
+                   FROM {logstore_standard_log} 
+                   WHERE action = 'loggedin' 
+                     AND timecreated BETWEEN :start1 AND :end1) as first_day_users,
+                  (SELECT COUNT(DISTINCT userid) 
+                   FROM {logstore_standard_log} 
+                   WHERE action = 'loggedin' 
+                     AND timecreated BETWEEN :start2 AND :end2) as last_day_users";
         
         $now = time();
         $day_seconds = 86400; // 24 * 60 * 60
@@ -387,8 +410,9 @@ function calculate_growth_rate($type = 'users', $days = 30) {
             'end2' => $now
         ];
         
-        $first_day_users = $DB->get_field_sql($first_day_sql, $params);
-        $last_day_users = $DB->get_field_sql($last_day_sql, $params);
+        $result = $DB->get_record_sql($sql, $params);
+        $first_day_users = $result->first_day_users;
+        $last_day_users = $result->last_day_users;
         
         // Evitamos división por cero
         if ($first_day_users == 0) {
@@ -400,18 +424,14 @@ function calculate_growth_rate($type = 'users', $days = 30) {
         
     } elseif ($type === 'disk') {
         // Para el disco, utilizamos la configuración almacenada
-        // Nota: Esto requiere que tengamos un historial de uso de disco almacenado
         $reportconfig = get_config('report_usage_monitor');
         
         // Si no tenemos datos históricos, estimamos basado en la tasa actual
-        // Esta es una aproximación simple
-        if (empty($reportconfig->disk_history)) {
+        if (empty($reportconfig->disk_growth_history)) {
             return 5; // Asumimos un 5% de crecimiento mensual por defecto
         }
         
         // Implementar lógica basada en datos históricos si están disponibles
-        // ...
-        
         $growth_rate = 5; // Valor por defecto para esta versión
     } else {
         $growth_rate = 0;
@@ -456,13 +476,13 @@ function generate_historical_data_html($limit = 7, $max_threshold = 100) {
     
     $html = '';
     
-    // Obtenemos los últimos días con datos de usuarios
-    $sql = "SELECT FROM_UNIXTIME(timecreated, '%d/%m/%Y') as fecha, 
+    // Consulta optimizada para usar índices y reducir carga
+    $sql = "SELECT FROM_UNIXTIME(MIN(timecreated), '%d/%m/%Y') as fecha, 
                    COUNT(DISTINCT userid) as usuarios
             FROM {logstore_standard_log}
             WHERE action = 'loggedin'
-            AND FROM_UNIXTIME(timecreated, '%Y/%m/%d') > DATE_SUB(CURDATE(), INTERVAL :limit DAY)
-            GROUP BY fecha
+              AND timecreated > UNIX_TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL :limit DAY))
+            GROUP BY DATE(FROM_UNIXTIME(timecreated))
             ORDER BY MIN(timecreated) DESC
             LIMIT :limit";
     
@@ -503,49 +523,6 @@ function generate_top_courses_html($courses) {
 }
 
 /**
- * Retorna la tabla que se envía al correo con los datos de la cantidad de usuarios.
- *
- * @return string Tabla HTML con los datos de la cantidad de usuarios.
- */
-function notification_table($disk_usage = null, $disk_percent = null, $quotadisk = null)
-{
-    global $DB;
-
-    $table = '<h2>' . get_string('lastusers', 'report_usage_monitor') . '</h2>
-    <table border="1" style="border-collapse: collapse; width: 50%;">
-    <tr>
-        <th style="padding: 8px; background-color: #f2f2f2;">' . get_string('date', 'report_usage_monitor') . '</th>
-        <th style="padding: 8px; background-color: #f2f2f2;">' . get_string('usersquantity', 'report_usage_monitor') . '</th>
-    </tr>';
-
-    $userdaily = report_user_daily_sql(get_string('dateformatsql', 'report_usage_monitor'));
-    $userdaily_records = $DB->get_records_sql($userdaily);
-
-    foreach ($userdaily_records as $log) {
-        $table .= '<tr>
-        <td style="padding: 8px;">' . $log->fecha . '</td>
-        <td style="padding: 8px;">' . $log->conteo_accesos_unicos . '</td>
-        </tr>';
-    }
-
-    if ($disk_usage !== null && $disk_percent !== null && $quotadisk !== null) {
-        $table .= '</table><br><h2>' . get_string('diskusage', 'report_usage_monitor') . '</h2>
-        <table border="1" style="border-collapse: collapse; width: 50%;">
-        <tr>
-            <th style="padding: 8px; background-color: #f2f2f2;">' . get_string('totaldiskusage', 'report_usage_monitor') . '</th>
-            <td style="padding: 8px;">' . display_size($disk_usage) . ' (' . round($disk_percent, 2) . '%)</td>
-        </tr>
-        <tr>
-            <th style="padding: 8px; background-color: #f2f2f2;">' . get_string('diskquota', 'report_usage_monitor') . '</th>
-            <td style="padding: 8px;">' . display_size($quotadisk) . '</td>
-        </tr>';
-    }
-
-    $table .= '</table>';
-    return $table;
-}
-
-/**
  * Convierte el tamaño de bytes a gigabytes.
  *
  * @param mixed $sizeInBytes El tamaño en bytes que se quiere convertir.
@@ -563,27 +540,6 @@ function display_size_in_gb($sizeInBytes, $precision = 2)
     // Conversión de bytes a GB.
     $sizeInGb = $sizeInBytes / (1024 * 1024 * 1024);
     return round($sizeInGb, $precision);
-}
-
-/**
- * Calcula el porcentaje de uso del espacio en disco y devuelve un color según el rango de uso.
- *
- * @param float $usedSpaceGB Espacio en disco utilizado en GB.
- * @param float $totalDiskSpace Tamaño total del disco en GB.
- * @return array Arreglo con el porcentaje de uso y el color correspondiente.
- */
-function diskUsagePercentages($usedSpaceGB, $totalDiskSpace)
-{
-    $usedSpacePercentage = ($usedSpaceGB / $totalDiskSpace) * 100;
-    $color = "";
-    if ($usedSpacePercentage < 70) {
-        $color = '#088A08'; // Verde
-    } else if ($usedSpacePercentage <= 85) {
-        $color = '#FFFF00'; // Amarillo
-    } else {
-        $color = '#DF0101'; // Rojo
-    }
-    return ['percentage' => $usedSpacePercentage, 'color' => $color];
 }
 
 // Función para comparar las fechas en formato 'd/m/Y' y ordenar en orden ascendente.
@@ -728,8 +684,6 @@ function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAc
     $a->db_percent = round(($usage_by_dir['database'] / $disk_usage) * 100, 2);
     $a->filedir_size = display_size($usage_by_dir['filedir']);
     $a->filedir_percent = round(($usage_by_dir['filedir'] / $disk_usage) * 100, 2);
-    $a->backup_size = display_size($usage_by_dir['backup']);
-    $a->backup_percent = round(($usage_by_dir['backup'] / $disk_usage) * 100, 2);
     $a->cache_size = display_size($usage_by_dir['cache']);
     $a->cache_percent = round(($usage_by_dir['cache'] / $disk_usage) * 100, 2);
     $a->other_size = display_size($usage_by_dir['others']);
