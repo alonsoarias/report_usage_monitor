@@ -52,6 +52,25 @@ $functions = array(
         'capabilities'  => 'moodle/site:config',
         'ajax'          => true,
     ),
+    // Nuevos métodos GET y SET simplificados
+    'report_usage_monitor_get_usage_data' => array(
+        'classname'     => 'report_usage_monitor_external',
+        'methodname'    => 'get_usage_data',
+        'classpath'     => 'report/usage_monitor/classes/external.php',
+        'description'   => 'Obtiene los datos precalculados de usuarios y uso de disco.',
+        'type'          => 'read',
+        'capabilities'  => 'report/usage_monitor:view',
+        'ajax'          => true,
+    ),
+    'report_usage_monitor_set_usage_thresholds' => array(
+        'classname'     => 'report_usage_monitor_external',
+        'methodname'    => 'set_usage_thresholds',
+        'classpath'     => 'report/usage_monitor/classes/external.php',
+        'description'   => 'Configura los umbrales de usuarios y disco.',
+        'type'          => 'write',
+        'capabilities'  => 'report/usage_monitor:manage',
+        'ajax'          => true,
+    ),
 );
 
 // Definimos los servicios
@@ -61,6 +80,8 @@ $services = array(
             'report_usage_monitor_get_monitor_stats',
             'report_usage_monitor_get_notification_history',
             'report_usage_monitor_register_webhook',
+            'report_usage_monitor_get_usage_data',
+            'report_usage_monitor_set_usage_thresholds',
         ),
         'restrictedusers' => 0, // No es restringido por usuario
         'enabled' => 1, // Habilitado por defecto
