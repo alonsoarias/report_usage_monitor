@@ -25,7 +25,6 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-// Verificar si la función shell_exec está activa en el servidor
 if ($ADMIN->fulltree) {
     // Sección principal de configuración
     $settings->add(new admin_setting_heading(
@@ -36,24 +35,24 @@ if ($ADMIN->fulltree) {
     
     $settings->add(new admin_setting_configtext(
         'report_usage_monitor/max_daily_users_threshold',
-        get_string('max_daily_users_threshold', 'report_usage_monitor'), // Umbral máximo de usuarios diarios
-        get_string('configmax_daily_users_threshold', 'report_usage_monitor'), // Configure el umbral máximo de usuarios diarios permitidos para la notificación.
+        get_string('max_daily_users_threshold', 'report_usage_monitor'),
+        get_string('configmax_daily_users_threshold', 'report_usage_monitor'),
         100,
         PARAM_INT
     ));
 
     $settings->add(new admin_setting_configtext(
         'report_usage_monitor/disk_quota',
-        get_string('disk_quota', 'report_usage_monitor'), // Cuota de disco
-        get_string('configdisk_quota', 'report_usage_monitor'), // Configure la cuota de disco (en GB) para la notificación.
+        get_string('disk_quota', 'report_usage_monitor'),
+        get_string('configdisk_quota', 'report_usage_monitor'),
         10,
         PARAM_INT
     ));
 
     $settings->add(new admin_setting_configtext(
         'report_usage_monitor/email',
-        get_string('email', 'report_usage_monitor'), // Correo electrónico
-        get_string('configemail', 'report_usage_monitor'), // Configure el correo electrónico para recibir las notificaciones.
+        get_string('email', 'report_usage_monitor'),
+        get_string('configemail', 'report_usage_monitor'),
         'hostingmoodle@ingeweb.co',
         PARAM_EMAIL,
         50
@@ -97,67 +96,70 @@ if ($ADMIN->fulltree) {
     ));
     
     // Configuración para el comando 'du'
-    // Shell_exec está activo, intentar localizar la ruta de 'du'
     if (function_exists('shell_exec')) {
-        // Detectar el path de 'du' automáticamente si el sistema operativo es Linux
+        // Intentar detectar automáticamente la ruta de 'du' en sistemas Linux
+        $defaultPathToDu = '';
+        
         if (PHP_OS_FAMILY === 'Linux') {
-            $pathToDu = shell_exec('which du');
-            $pathToDu = trim($pathToDu ?? ''); // Asegura que no se pase null a trim()
-
-            // Comprobar que $pathToDu no esté vacío y que el archivo exista.
-            if (!empty($pathToDu) && file_exists($pathToDu)) {
+            $pathToDu = trim(shell_exec('which du') ?? '');
+            
+            if (!empty($pathToDu) && file_exists($pathToDu) && is_executable($pathToDu)) {
                 $defaultPathToDu = $pathToDu;
-
-                // Obtenemos el valor de pathtodu guardado en la configuración (si existe)
-                $currentPathToDu = get_config('pathtodu');
-
-                // Si no existe un valor en la configuración o el valor encontrado es diferente, lo asignamos.
-                if (empty($currentPathToDu) || $currentPathToDu !== $defaultPathToDu) {
+                
+                // Actualizar la configuración global si no está ya configurada
+                if (empty(get_config('pathtodu'))) {
                     set_config('pathtodu', $defaultPathToDu);
                 }
             } else {
-                // 'du' no se encontró, mostrar recomendación para configurar pathtodu
-                $infocontent = html_writer::tag('div', get_string('pathtodurecommendation', 'report_usage_monitor'), array('class' => 'alert alert-info'));
+                // Mostrar recomendación si no se puede detectar automáticamente
+                $infocontent = html_writer::tag('div', 
+                    get_string('pathtodurecommendation', 'report_usage_monitor'), 
+                    ['class' => 'alert alert-info']
+                );
                 $settings->add(new admin_setting_heading(
                     'report_usage_monitor/pathtodurecommendation',
-                    '', // No se requiere texto aquí
-                    $infocontent // información del reporte
+                    '',
+                    $infocontent
                 ));
-                $defaultPathToDu = ''; // Usa una cadena vacía como valor por defecto si 'du' no se encontró.
             }
         } else {
-            // No es sistema operativo Linux, mostrar recomendación para configurar pathtodu
-                // 'du' no se encontró, mostrar recomendación para configurar pathtodu
-                $infocontent = html_writer::tag('div', get_string('pathtodurecommendation', 'report_usage_monitor'), array('class' => 'alert alert-info'));
-                $settings->add(new admin_setting_heading(
-                    'report_usage_monitor/pathtodurecommendation',
-                    '', // No se requiere texto aquí
-                    $infocontent // información del reporte
-                ));
+            // Mostrar recomendación para sistemas no Linux
+            $infocontent = html_writer::tag('div', 
+                get_string('pathtodurecommendation', 'report_usage_monitor'), 
+                ['class' => 'alert alert-info']
+            );
+            $settings->add(new admin_setting_heading(
+                'report_usage_monitor/pathtodurecommendation',
+                '',
+                $infocontent
+            ));
         }
 
-        // Se añade la configuración para pathtodu en la página de configuración del plugin.
+        // Configuración para la ruta de du
         $settings->add(new admin_setting_configexecutable(
             'pathtodu', 
             get_string('pathtodu', 'report_usage_monitor'),
             get_string('configpathtodu', 'report_usage_monitor') . 
             '<br>' . 
-            get_string('pathtodunote', 'report_usage_monitor'), // Aquí se añade la nota sobre la detección de 'du' en Linux.
-            $defaultPathToDu ?? '', // Mostrar el valor de $defaultPathToDu si está configurado, de lo contrario mostrar cadena vacía.
+            get_string('pathtodunote', 'report_usage_monitor'),
+            $defaultPathToDu,
             PARAM_PATH,
             255
         ));
     } else {
-        // Shell_exec no está activo, mostrar notificación de advertencia para activarlo.
-        $alertcontent = html_writer::tag('div', get_string('activateshellexec', 'report_usage_monitor'), array('class' => 'alert alert-danger'));
+        // Mostrar advertencia si shell_exec no está activo
+        $alertcontent = html_writer::tag('div', 
+            get_string('activateshellexec', 'report_usage_monitor'), 
+            ['class' => 'alert alert-danger']
+        );
         $settings->add(new admin_setting_heading(
             'report_usage_monitor/activateshellexec',
-            '', // No se requiere texto aquí
-            $alertcontent // Información del reporte
+            '',
+            $alertcontent
         ));
     }
     
-    // Configuración de integración (nueva sección)
+    // Configuración de integración con API
     $settings->add(new admin_setting_heading(
         'report_usage_monitor/integrationsettings',
         get_string('integrationsettings', 'report_usage_monitor'),
@@ -172,7 +174,7 @@ if ($ADMIN->fulltree) {
         1 // Habilitado por defecto
     ));
     
-    // Habilitar webhooks
+    // Habilitar webhooks - solo la configuración básica
     $settings->add(new admin_setting_configcheckbox(
         'report_usage_monitor/enable_webhooks',
         get_string('enable_webhooks', 'report_usage_monitor'),
@@ -180,16 +182,17 @@ if ($ADMIN->fulltree) {
         0 // Deshabilitado por defecto
     ));
     
-    // Créditos
+    // Créditos y descargo de responsabilidad
     $settings->add(new admin_setting_heading(
         'report_usage_monitor/reportinfotext',
-        '', // No se requiere texto aquí
-        get_string('reportinfotext', 'report_usage_monitor') // Información del reporte
+        '',
+        get_string('reportinfotext', 'report_usage_monitor')
     ));
 }
 
+// Agregar página externa para el informe de uso
 $ADMIN->add('reports', new admin_externalpage(
     'report_usage_monitor',
-    get_string('pluginname', 'report_usage_monitor'), // Monitor de Uso del Reporte
+    get_string('pluginname', 'report_usage_monitor'),
     new moodle_url('/report/usage_monitor/index.php')
 ));
