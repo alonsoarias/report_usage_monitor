@@ -161,7 +161,7 @@ echo $OUTPUT->header();
 
 // Mostramos el disclaimer en un alert info:
 echo '<div class="alert alert-info mb-2 text-center small">';
-echo $string['exclusivedisclaimer'];
+echo (get_string('exclusivedisclaimer', 'report_usage_monitor'));
 echo '</div>';
 
 // Título principal
