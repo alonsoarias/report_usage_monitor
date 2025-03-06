@@ -99,10 +99,6 @@ class notification_disk extends \core\task\scheduled_task
         // Obtener configuraciones del plugin
         $reportconfig = get_config('report_usage_monitor');
         
-        // Verificar si la API/Webhooks están habilitados
-        $api_enabled = !empty($reportconfig->enable_api);
-        $webhooks_enabled = !empty($reportconfig->enable_webhooks);
-        
         // Calcular uso de disco y porcentaje
         $quotadisk = ((int) $reportconfig->disk_quota * 1024) * 1024 * 1024;
         $disk_usage = ((int) $reportconfig->totalusagereadable + (int) $reportconfig->totalusagereadabledb) ?: 0;
@@ -162,11 +158,6 @@ class notification_disk extends \core\task\scheduled_task
             
             // Registrar la notificación en el historial
             $this->log_notification($disk_percent, $disk_usage, $quotadisk);
-            
-            // Enviar notificación a webhooks externos si están habilitados
-            if ($webhooks_enabled) {
-                $this->notify_webhooks('disk_warning', $disk_percent, $disk_usage, $quotadisk);
-            }
             
             if (debugging('', DEBUG_DEVELOPER)) {
                 mtrace("Notificación enviada con éxito.");
@@ -235,22 +226,5 @@ class notification_disk extends \core\task\scheduled_task
         }
         
         return false;
-    }
-    
-    /**
-     * Envía notificaciones a webhooks externos.
-     * 
-     * @param string $event_type Tipo de evento.
-     * @param float $percentage Porcentaje de uso.
-     * @param int $value Valor actual.
-     * @param int $threshold Umbral.
-     * @return bool
-     */
-    private function notify_webhooks($event_type, $percentage, $value, $threshold)
-    {
-        global $DB, $CFG;
-        
-        // No proceder si la característica de webhooks no está implementada completamente
-        return true;
     }
 }
