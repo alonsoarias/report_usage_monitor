@@ -33,32 +33,31 @@ admin_externalpage_setup('report_usage_monitor', '', null, '', ['pagelayout' => 
 $reportconfig = get_config('report_usage_monitor');
 
 // -------------------------------------------------------------------------
-// 1. Cálculos (uso de disco, usuarios, etc.)
+// 1. Obtener datos precomputados (en lugar de realizar cálculos en tiempo real)
 // -------------------------------------------------------------------------
 
-// Uso de disco (en bytes)
+// Uso de disco (en bytes) - usando valores precomputados
 $disk_usage_bytes = (int)($reportconfig->totalusagereadable ?? 0)
     + (int)($reportconfig->totalusagereadabledb ?? 0);
 $quotadisk_bytes  = ((int)($reportconfig->disk_quota ?? 0)) * 1024 * 1024 * 1024;
 
-// Convertir a GB para el dashboard (solo para mostrar).
-// Si tu locallib tiene la función: display_size_in_gb($bytes, $precision).
-$disk_usage_gb = display_size_in_gb($disk_usage_bytes, 2);
-$quotadisk_gb  = display_size_in_gb($quotadisk_bytes, 2);
+// Tamaño en GB para el dashboard (desde valores precomputados o calcular si no existen)
+$disk_usage_gb = !empty($reportconfig->disk_usage_gb) ? $reportconfig->disk_usage_gb : display_size_in_gb($disk_usage_bytes, 2);
+$quotadisk_gb = !empty($reportconfig->quotadisk_gb) ? $reportconfig->quotadisk_gb : display_size_in_gb($quotadisk_bytes, 2);
 
-// Para barra de progreso (porcentaje).
-$disk_percent = ($quotadisk_bytes > 0)
-    ? ($disk_usage_bytes / $quotadisk_bytes * 100)
-    : 0;
-$disk_warning_class = ($disk_percent < 70) ? 'bg-success' : (($disk_percent < 90) ? 'bg-warning' : 'bg-danger');
+// Porcentaje y clase de advertencia para disco (usar valores precomputados)
+$disk_percent = !empty($reportconfig->disk_percent) ? (float)$reportconfig->disk_percent : 
+    (($quotadisk_bytes > 0) ? ($disk_usage_bytes / $quotadisk_bytes * 100) : 0);
+$disk_warning_class = !empty($reportconfig->disk_warning_class) ? $reportconfig->disk_warning_class : 
+    (($disk_percent < 70) ? 'bg-success' : (($disk_percent < 90) ? 'bg-warning' : 'bg-danger'));
 
-// Usuarios diarios
+// Usuarios diarios (usar valores precomputados)
 $users_today = (int)($reportconfig->totalusersdaily ?? 0);
 $max_users_threshold = (int)($reportconfig->max_daily_users_threshold ?? 100);
-$users_percent = ($max_users_threshold > 0)
-    ? ($users_today / $max_users_threshold * 100)
-    : 0;
-$users_warning_class = ($users_percent < 70) ? 'bg-success' : (($users_percent < 90) ? 'bg-warning' : 'bg-danger');
+$users_percent = !empty($reportconfig->users_percent) ? (float)$reportconfig->users_percent : 
+    (($max_users_threshold > 0) ? ($users_today / $max_users_threshold * 100) : 0);
+$users_warning_class = !empty($reportconfig->users_warning_class) ? $reportconfig->users_warning_class : 
+    (($users_percent < 70) ? 'bg-success' : (($users_percent < 90) ? 'bg-warning' : 'bg-danger'));
 
 // Fechas de última ejecución
 $lastexec_disk  = !empty($reportconfig->lastexecutioncalculate)
@@ -66,6 +65,14 @@ $lastexec_disk  = !empty($reportconfig->lastexecutioncalculate)
     : get_string('notcalculatedyet', 'report_usage_monitor');
 $lastexec_users = !empty($reportconfig->lastexecution)
     ? userdate($reportconfig->lastexecution)
+    : get_string('notcalculatedyet', 'report_usage_monitor');
+    
+// Formatear los tiempos para mostrar hora y minutos
+$lastexec_time_disk = !empty($reportconfig->lastexecutioncalculate)
+    ? userdate($reportconfig->lastexecutioncalculate, get_string('datetimeformat', 'report_usage_monitor'))
+    : get_string('notcalculatedyet', 'report_usage_monitor');
+$lastexec_time_users = !empty($reportconfig->lastexecution)
+    ? userdate($reportconfig->lastexecution, get_string('datetimeformat', 'report_usage_monitor'))
     : get_string('notcalculatedyet', 'report_usage_monitor');
 
 // Máximo usuarios 90 días
@@ -114,8 +121,26 @@ $userdaily_recordstop = $DB->get_records_sql($userdailytop_sql);
 
 // Info del sistema
 $totalcourses    = $DB->count_records('course');
-$registeredusers = $DB->count_records('user', ['deleted' => 0]) - 1;
+$activeusers = $DB->count_records('user', ['deleted' => 0, 'suspended' => 0]) - 1; // -1 para guest
+$suspendedusers = $DB->count_records('user', ['deleted' => 0, 'suspended' => 1]);
+$registeredusers = $activeusers + $suspendedusers;
 $backup_max_kept = get_config('backup', 'backup_auto_max_kept') ?? 0;
+
+// Datos para gráfica de historial de uso de disco
+$month_ago = time() - (30 * 24 * 60 * 60);
+$sql = "SELECT timecreated, value, percentage 
+        FROM {report_usage_monitor_history} 
+        WHERE type = 'disk' AND timecreated > ? 
+        ORDER BY timecreated ASC";
+$disk_history = $DB->get_records_sql($sql, [$month_ago]);
+
+// Formatear datos para Chart.js
+$disk_history_labels = [];
+$disk_history_data = [];
+foreach ($disk_history as $record) {
+    $disk_history_labels[] = userdate($record->timecreated, get_string('dateformat', 'report_usage_monitor'));
+    $disk_history_data[] = round($record->percentage, 1);
+}
 
 // -------------------------------------------------------------------------
 // 2. Preparar datos Chart.js (ya en GB numérico)
@@ -143,9 +168,8 @@ if (!empty($userdaily_records)) {
     foreach ($userdaily_records as $day) {
         $tempArr[$day->fecha] = (int)$day->conteo_accesos_unicos;
     }
-    if (function_exists('compararFechas')) {
-        uksort($tempArr, 'compararFechas');
-    }
+    // Usar la función mejorada para ordenar fechas
+    uksort($tempArr, 'compararFechas');
     $last10daysLabels = array_keys($tempArr);
     $last10daysData   = array_values($tempArr);
 }
@@ -204,6 +228,9 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                         <p class="text-muted">
                             <?php echo get_string('lastexecutioncalculate', 'report_usage_monitor', $lastexec_disk); ?>
                         </p>
+                        <p class="text-muted mt-2 mb-0">
+                            <small><?php echo get_string('last_calculation', 'report_usage_monitor'); ?>: <?php echo $lastexec_time_disk; ?></small>
+                        </p>
                     </div>
                 </div>
             </div>
@@ -236,6 +263,9 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                         <p class="text-muted">
                             <?php echo get_string('lastexecution', 'report_usage_monitor', $lastexec_users); ?>
                         </p>
+                        <p class="text-muted mt-2 mb-0">
+                            <small><?php echo get_string('last_calculation', 'report_usage_monitor'); ?>: <?php echo $lastexec_time_users; ?></small>
+                        </p>
                     </div>
                 </div>
             </div>
@@ -254,13 +284,33 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                         <?php echo $max_90_days_users; ?>
                     </h2>
                     <p class="text-muted">
-                        <?php echo $max_90_days_date; ?>
+                        <?php echo $max_90_days_date; ?> / <?php echo $max_users_threshold; ?>
                     </p>
                 </div>
             </div>
         </div>
     </div><!-- fin row tarjetas -->
-
+    
+    <!-- SECCIÓN: Historial de uso de disco (últimos 30 días) -->
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0"><?php echo get_string('disk_usage_history', 'report_usage_monitor'); ?></h5>
+                </div>
+                <div class="card-body">
+                    <?php if (!empty($disk_history_labels)): ?>
+                        <canvas id="chartjs-disk-history" style="height: 300px;"></canvas>
+                    <?php else: ?>
+                        <div class="alert alert-info">
+                            <?php echo get_string('notcalculatedyet', 'report_usage_monitor'); ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div><!-- fin row historial disco -->
+    
     <!-- SECCIÓN B: Distribución disco (gráfica + tablas) -->
     <div class="row">
         <!-- Columna izquierda: Gráfico doughnut Chart.js -->
@@ -355,7 +405,11 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                             <?php if (!empty($largest_courses)): ?>
                                 <?php foreach ($largest_courses as $course): ?>
                                     <tr>
-                                        <td><?php echo format_string($course->fullname) . ' (' . $course->shortname . ')'; ?></td>
+                                        <td>
+                                            <a href="<?php echo $CFG->wwwroot . '/course/view.php?id=' . $course->id; ?>">
+                                                <?php echo format_string($course->fullname) . ' (' . $course->shortname . ')'; ?>
+                                            </a>
+                                        </td>
                                         <td><?php echo display_size($course->totalsize); ?></td>
                                         <td><?php echo $course->percentage; ?>%</td>
                                         <td><?php echo $course->backupcount; ?></td>
@@ -554,7 +608,13 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                                     <div class="small text-muted">
                                         <?php echo get_string('registered_users', 'report_usage_monitor'); ?>
                                     </div>
-                                    <div class="h5"><?php echo $registeredusers; ?></div>
+                                    <div class="h5">
+                                        <?php echo $activeusers; ?>/<?php echo $suspendedusers; ?>
+                                        <br>
+                                        <small class="text-muted">
+                                            <?php echo get_string('active_users', 'report_usage_monitor'); ?>/<?php echo get_string('suspended_users', 'report_usage_monitor'); ?>
+                                        </small>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -664,7 +724,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                     datasets: [{
                         label: "<?php echo get_string('usersquantity', 'report_usage_monitor'); ?>",
                         fill: true,
-                        backgroundColor: "transparent",
+                        backgroundColor: "rgba(0, 123, 255, 0.1)",
                         borderColor: "#007bff",
                         data: <?php echo json_encode($last10daysData); ?>
                     }]
@@ -682,6 +742,42 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                                 color: "rgba(0,0,0,0.05)"
                             }
                         }]
+                    }
+                }
+            });
+        }
+        
+        // ========== Gráfico Line (historial de uso de disco) ==========
+        var diskHistoryCtx = document.getElementById("chartjs-disk-history");
+        if (diskHistoryCtx) {
+            new Chart(diskHistoryCtx, {
+                type: "line",
+                data: {
+                    labels: <?php echo json_encode($disk_history_labels); ?>,
+                    datasets: [{
+                        label: "<?php echo get_string('percentage_used', 'report_usage_monitor'); ?>",
+                        fill: true,
+                        backgroundColor: "rgba(0, 123, 255, 0.1)",
+                        borderColor: "#007bff",
+                        data: <?php echo json_encode($disk_history_data); ?>
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    scales: {
+                        yAxes: [{
+                            ticks: {
+                                beginAtZero: true,
+                                callback: function(value) { return value + "%"; }
+                            }
+                        }]
+                    },
+                    tooltips: {
+                        callbacks: {
+                            label: function(tooltipItem, data) {
+                                return tooltipItem.yLabel + '%';
+                            }
+                        }
                     }
                 }
             });
