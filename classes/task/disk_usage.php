@@ -20,7 +20,7 @@
  * @package     report_usage_monitor
  * @category    admin
  * @copyright   2023 Soporte IngeWeb <soporte@ingeweb.co>
- * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 o posterior
+ * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 namespace report_usage_monitor\task;
@@ -61,6 +61,21 @@ class disk_usage extends \core\task\scheduled_task
         $totalusagereadable = $totalusagedataroot + $totalusagedirroot;
         set_config('totalusagereadable', $totalusagereadable, 'report_usage_monitor');
         
+        // Obtener umbrales y calcular porcentaje de uso
+        $reportconfig = get_config('report_usage_monitor');
+        $quotadisk_bytes = ((int) $reportconfig->disk_quota * 1024) * 1024 * 1024;
+        $total_disk_usage = $totalusagereadable + $totalusagereadabledb;
+        
+        // Precomputar el porcentaje y la clase de advertencia
+        $disk_percent = calculate_threshold_percentage($total_disk_usage, $quotadisk_bytes);
+        $disk_warning_class = ($disk_percent < 70) ? 'bg-success' : (($disk_percent < 90) ? 'bg-warning' : 'bg-danger');
+        
+        // Guardar valores precomputados
+        set_config('disk_percent', $disk_percent, 'report_usage_monitor');
+        set_config('disk_warning_class', $disk_warning_class, 'report_usage_monitor');
+        set_config('disk_usage_gb', display_size_in_gb($total_disk_usage, 2), 'report_usage_monitor');
+        set_config('quotadisk_gb', display_size_in_gb($quotadisk_bytes, 2), 'report_usage_monitor');
+        
         // Análisis por directorios
         $dir_analysis = analyze_disk_usage_by_directory($CFG->dataroot);
         
@@ -74,7 +89,30 @@ class disk_usage extends \core\task\scheduled_task
         $largest_courses = get_largest_courses(5);
         set_config('largest_courses', json_encode($largest_courses), 'report_usage_monitor');
         
-        set_config('lastexecutioncalculate', time(), 'report_usage_monitor');
+        // Guardar timestamp de última ejecución
+        $execution_time = time();
+        set_config('lastexecutioncalculate', $execution_time, 'report_usage_monitor');
+        
+        // Registrar en el historial para poder mostrar gráficas de tendencia
+        if ($DB->get_manager()->table_exists('report_usage_monitor_history')) {
+            $record = new \stdClass();
+            $record->type = 'disk';
+            $record->percentage = $disk_percent;
+            $record->value = $total_disk_usage;
+            $record->threshold = $quotadisk_bytes;
+            $record->timecreated = $execution_time;
+            
+            try {
+                $DB->insert_record('report_usage_monitor_history', $record);
+                if (debugging('', DEBUG_DEVELOPER)) {
+                    mtrace("Uso de disco registrado en el historial.");
+                }
+            } catch (\Exception $e) {
+                if (debugging('', DEBUG_DEVELOPER)) {
+                    mtrace("Error al registrar el uso de disco: " . $e->getMessage());
+                }
+            }
+        }
 
         if (debugging('', DEBUG_DEVELOPER)) {
             mtrace("Uso del disco calculado. Total base de datos: $totalusagereadabledb bytes, Total dataroot: $totalusagedataroot bytes, Total dirroot: $totalusagedirroot bytes, Total uso legible: $totalusagereadable bytes.");
