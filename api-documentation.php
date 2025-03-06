@@ -230,6 +230,8 @@ echo $OUTPUT->heading(get_string('api_documentation', 'report_usage_monitor'));
       "shortname": "C1",
       "size_bytes": 1073741824,
       "size_readable": "1 GB",
+      "backup_size_bytes": 536870912,
+      "backup_size_readable": "512 MB",
       "percentage": 8.7,
       "backup_count": 3
     },
@@ -286,40 +288,6 @@ echo $OUTPUT->heading(get_string('api_documentation', 'report_usage_monitor'));
     },
     ...
   ]
-}</code></pre>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- register_webhook endpoint -->
-                <div class="card mb-3">
-                    <div class="card-header" id="headingThree">
-                        <h5 class="mb-0">
-                            <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseThree" aria-expanded="false" aria-controls="collapseThree">
-                                <code>report_usage_monitor_register_webhook</code>
-                            </button>
-                        </h5>
-                    </div>
-                    <div id="collapseThree" class="collapse" aria-labelledby="headingThree" data-parent="#apiEndpoints">
-                        <div class="card-body">
-                            <p><strong>Description:</strong> Registers a webhook to receive notifications.</p>
-                            <p><strong>Parameters:</strong></p>
-                            <ul>
-                                <li><code>url</code> (string, required): URL of the webhook</li>
-                                <li><code>events</code> (array, optional): Types of events to subscribe to ('disk_warning', 'user_warning'). Default: ['disk_warning', 'user_warning']</li>
-                                <li><code>secret</code> (string, optional): Secret key for signing notifications. Default: ''</li>
-                            </ul>
-                            <p><strong>Returns:</strong> Result of the registration.</p>
-                            
-                            <h6>Example Request:</h6>
-<pre><code>curl -X POST '<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php' \
-  -d 'wstoken=YOUR_TOKEN&wsfunction=report_usage_monitor_register_webhook&url=https://example.com/webhook&events[0]=disk_warning&events[1]=user_warning&secret=your_secret_key&moodlewsrestformat=json'</code></pre>
-
-                            <h6>Example Response:</h6>
-<pre><code>{
-  "success": true,
-  "message": "Webhook registered successfully",
-  "webhook_id": 12
 }</code></pre>
                         </div>
                     </div>
@@ -382,47 +350,6 @@ fetch('<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php', {
     
     <div class="card mb-4">
         <div class="card-header">
-            <h3 class="m-0">Webhook Payloads</h3>
-        </div>
-        <div class="card-body">
-            <p>When an event occurs, the following payloads will be sent to the registered webhook URLs:</p>
-            
-            <h5>Disk Warning Event</h5>
-<pre><code>{
-  "event": "disk_warning",
-  "timestamp": 1698159284,
-  "site": "Site Name",
-  "site_url": "<?php echo $CFG->wwwroot; ?>",
-  "data": {
-    "disk_usage": "19.1 GB",
-    "disk_quota": "20 GB",
-    "percentage": 95.5,
-    "database_size": "2 GB",
-    "warning_level": "critical"
-  },
-  "signature": "HMAC_SIGNATURE_IF_SECRET_PROVIDED"
-}</code></pre>
-
-            <h5>User Warning Event</h5>
-<pre><code>{
-  "event": "user_warning",
-  "timestamp": 1698159284,
-  "site": "Site Name",
-  "site_url": "<?php echo $CFG->wwwroot; ?>",
-  "data": {
-    "users_count": 950,
-    "users_threshold": 1000,
-    "percentage": 95.0,
-    "date": "2024-03-02",
-    "warning_level": "high"
-  },
-  "signature": "HMAC_SIGNATURE_IF_SECRET_PROVIDED"
-}</code></pre>
-        </div>
-    </div>
-    
-    <div class="card mb-4">
-        <div class="card-header">
             <h3 class="m-0">Authentication</h3>
         </div>
         <div class="card-body">
@@ -471,10 +398,6 @@ fetch('<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php', {
                     <tr>
                         <td><code>report_usage_monitor_get_notification_history</code></td>
                         <td><code>report/usage_monitor:view</code></td>
-                    </tr>
-                    <tr>
-                        <td><code>report_usage_monitor_register_webhook</code></td>
-                        <td><code>moodle/site:config</code></td>
                     </tr>
                 </tbody>
             </table>
