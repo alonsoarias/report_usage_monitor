@@ -735,20 +735,17 @@ $string['disk_warning_level'] = 'Disk warning level';
 $string['configdisk_warning_level'] = 'Percentage of disk usage that triggers warnings.';
 $string['users_warning_level'] = 'Users warning level';
 $string['configusers_warning_level'] = 'Percentage of user limit that triggers warnings.';
-$string['integrationsettings'] = 'Integration settings';
-$string['integrationsettingsinfo'] = 'Configure integration with external systems through API and webhooks.';
 $string['enable_api'] = 'Enable API';
 $string['configenable_api'] = 'Enable API access for external systems to retrieve usage information.';
-$string['enable_webhooks'] = 'Enable webhooks';
-$string['configenable_webhooks'] = 'Enable webhooks for sending notifications to external systems.';
 
 // Cadenas para API básica
 $string['api_documentation'] = 'API Documentation';
-$string['webhook_url'] = 'Webhook URL';
-$string['webhook_secret'] = 'Webhook Secret';
-$string['webhook_events'] = 'Webhook Events';
-$string['webhook_event_disk_warning'] = 'Disk space warning';
-$string['webhook_event_user_warning'] = 'User limit warning';
+$string['api_example_php'] = 'PHP Example';
+$string['api_example_js'] = 'JavaScript Example';
+$string['api_required_permissions'] = 'Required Permissions';
+$string['api_endpoint'] = 'Endpoint';
+$string['api_required_capability'] = 'Required Capability';
+$string['api_code_examples'] = 'Code Examples';
 
 // Cadenas para error y éxito
 $string['error_invalid_url'] = 'Invalid URL format.';
@@ -776,14 +773,6 @@ $string['error_no_thresholds_provided'] = 'No thresholds provided to update.';
 $string['param_user_threshold'] = 'New threshold for daily users';
 $string['param_disk_threshold'] = 'New threshold for disk space in GB';
 
-// Cadenas adicionales para la API para la documentación
-$string['api_example_php'] = 'PHP Example';
-$string['api_example_js'] = 'JavaScript Example';
-$string['api_required_permissions'] = 'Required Permissions';
-$string['api_endpoint'] = 'Endpoint';
-$string['api_required_capability'] = 'Required Capability';
-$string['api_code_examples'] = 'Code Examples';
-
 // Cadenas para los valores que se devuelven en get_monitor_stats
 $string['site_name'] = 'Site name';
 $string['site_shortname'] = 'Site short name';
@@ -805,6 +794,9 @@ $string['filedir_percentage'] = 'File directory size percentage';
 $string['cache_bytes'] = 'Cache size in bytes';
 $string['cache_readable'] = 'Human-readable cache size';
 $string['cache_percentage'] = 'Cache size percentage';
+$string['backup_bytes'] = 'Backup size in bytes';
+$string['backup_readable'] = 'Human-readable backup size';
+$string['backup_percentage'] = 'Backup size percentage';
 $string['others_bytes'] = 'Other directories size in bytes';
 $string['others_readable'] = 'Human-readable other directories size';
 $string['others_percentage'] = 'Other directories size percentage';
@@ -815,6 +807,8 @@ $string['course_fullname'] = 'Course full name';
 $string['course_shortname'] = 'Course short name';
 $string['course_size_bytes'] = 'Course size in bytes';
 $string['course_size_readable'] = 'Human-readable course size';
+$string['course_backup_size_bytes'] = 'Course backup size in bytes';
+$string['course_backup_size_readable'] = 'Human-readable course backup size';
 $string['course_percentage'] = 'Course size percentage';
 $string['course_backup_count'] = 'Course backup count';
 $string['disk_calculation_timestamp'] = 'Disk calculation timestamp';
@@ -836,27 +830,6 @@ $string['notification_threshold'] = 'Human-readable threshold';
 $string['notification_threshold_raw'] = 'Threshold in bytes or user count';
 $string['notification_timecreated'] = 'Creation timestamp';
 $string['notification_timereadable'] = 'Human-readable date and time';
-
-// Cadenas para register_webhook
-$string['webhook_event_type'] = 'Event type (disk_warning, user_warning)';
-$string['webhook_events_list'] = 'List of events to subscribe to';
-$string['webhook_success'] = 'Indicates whether the operation was successful';
-$string['webhook_message'] = 'Descriptive message of the result';
-$string['webhook_id'] = 'ID of the registered or updated webhook';
-
-// Cadenas para get_usage_data
-$string['usage_disk_current'] = 'Current disk usage in bytes';
-$string['usage_disk_current_readable'] = 'Human-readable current disk usage';
-$string['usage_disk_threshold'] = 'Disk threshold in bytes';
-$string['usage_disk_threshold_readable'] = 'Human-readable disk threshold';
-$string['usage_disk_percentage'] = 'Disk usage percentage';
-$string['usage_disk_last_calculated'] = 'Timestamp of last disk calculation';
-$string['usage_user_current'] = 'Current daily users';
-$string['usage_user_threshold'] = 'User threshold';
-$string['usage_user_percentage'] = 'User usage percentage';
-$string['usage_user_last_calculated'] = 'Timestamp of last user calculation';
-$string['usage_user_max_90_days'] = 'Maximum users in 90 days';
-$string['usage_user_max_90_days_date'] = 'Timestamp of maximum users date';
 
 // Cadenas para set_usage_thresholds_returns
 $string['threshold_success'] = 'Indicates whether the operation was generally successful';
