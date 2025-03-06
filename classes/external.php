@@ -67,11 +67,19 @@ class report_usage_monitor_external extends external_api {
         $user_threshold = $reportconfig->max_daily_users_threshold;
         $users_percent = calculate_threshold_percentage($users_today, $user_threshold);
         
-        // Analizar directorios
-        $dir_analysis = analyze_disk_usage_by_directory($CFG->dataroot);
+        // Analizar directorios - usar datos precalculados si están disponibles
+        $dir_analysis_json = $reportconfig->dir_analysis ?? '{}';
+        $dir_analysis = json_decode($dir_analysis_json, true);
+        if (empty($dir_analysis) || !is_array($dir_analysis)) {
+            $dir_analysis = analyze_disk_usage_by_directory($CFG->dataroot);
+        }
         
-        // Obtener cursos más grandes
-        $largest_courses = get_largest_courses(5);
+        // Obtener cursos más grandes - usar datos precalculados si están disponibles
+        $largest_courses_json = $reportconfig->largest_courses ?? '[]';
+        $largest_courses = json_decode($largest_courses_json);
+        if (empty($largest_courses)) {
+            $largest_courses = get_largest_courses(5);
+        }
         
         // Crear estructura de respuesta
         $response = array(
@@ -106,6 +114,11 @@ class report_usage_monitor_external extends external_api {
                         'readable' => display_size($dir_analysis['cache']),
                         'percentage' => round(($dir_analysis['cache'] / $disk_usage) * 100, 2)
                     ),
+                    'backup' => array(
+                        'bytes' => $dir_analysis['backup'] ?? 0,
+                        'readable' => display_size($dir_analysis['backup'] ?? 0),
+                        'percentage' => round((($dir_analysis['backup'] ?? 0) / $disk_usage) * 100, 2)
+                    ),
                     'others' => array(
                         'bytes' => $dir_analysis['others'],
                         'readable' => display_size($dir_analysis['others']),
@@ -120,14 +133,14 @@ class report_usage_monitor_external extends external_api {
                 'max_90_days' => !empty($reportconfig->max_userdaily_for_90_days_users) ? 
                                 $reportconfig->max_userdaily_for_90_days_users : 0,
                 'max_90_days_date' => !empty($reportconfig->max_userdaily_for_90_days_date) ? 
-                                    date('Y-m-d', $reportconfig->max_userdaily_for_90_days_date) : null
+                                date('Y-m-d', $reportconfig->max_userdaily_for_90_days_date) : null
             ),
             'largest_courses' => array(),
             'timestamps' => array(
                 'disk_calculation' => !empty($reportconfig->lastexecutioncalculate) ? 
-                                   $reportconfig->lastexecutioncalculate : 0,
+                               $reportconfig->lastexecutioncalculate : 0,
                 'users_calculation' => !empty($reportconfig->lastexecution) ? 
-                                    $reportconfig->lastexecution : 0
+                                $reportconfig->lastexecution : 0
             )
         );
         
@@ -137,8 +150,10 @@ class report_usage_monitor_external extends external_api {
                 'id' => $course->id,
                 'fullname' => format_string($course->fullname),
                 'shortname' => format_string($course->shortname),
-                'size_bytes' => $course->totalsize,
-                'size_readable' => display_size($course->totalsize),
+                'size_bytes' => $course->filesize,
+                'size_readable' => display_size($course->filesize),
+                'backup_size_bytes' => $course->backupsize ?? 0,
+                'backup_size_readable' => display_size($course->backupsize ?? 0),
                 'percentage' => $course->percentage,
                 'backup_count' => $course->backupcount
             );
@@ -196,6 +211,13 @@ class report_usage_monitor_external extends external_api {
                                         'percentage' => new external_value(PARAM_FLOAT, get_string('cache_percentage', 'report_usage_monitor'))
                                     )
                                 ),
+                                'backup' => new external_single_structure(
+                                    array(
+                                        'bytes' => new external_value(PARAM_INT, get_string('backup_bytes', 'report_usage_monitor')),
+                                        'readable' => new external_value(PARAM_TEXT, get_string('backup_readable', 'report_usage_monitor')),
+                                        'percentage' => new external_value(PARAM_FLOAT, get_string('backup_percentage', 'report_usage_monitor'))
+                                    )
+                                ),
                                 'others' => new external_single_structure(
                                     array(
                                         'bytes' => new external_value(PARAM_INT, get_string('others_bytes', 'report_usage_monitor')),
@@ -224,6 +246,8 @@ class report_usage_monitor_external extends external_api {
                             'shortname' => new external_value(PARAM_TEXT, get_string('course_shortname', 'report_usage_monitor')),
                             'size_bytes' => new external_value(PARAM_INT, get_string('course_size_bytes', 'report_usage_monitor')),
                             'size_readable' => new external_value(PARAM_TEXT, get_string('course_size_readable', 'report_usage_monitor')),
+                            'backup_size_bytes' => new external_value(PARAM_INT, get_string('course_backup_size_bytes', 'report_usage_monitor')),
+                            'backup_size_readable' => new external_value(PARAM_TEXT, get_string('course_backup_size_readable', 'report_usage_monitor')),
                             'percentage' => new external_value(PARAM_FLOAT, get_string('course_percentage', 'report_usage_monitor')),
                             'backup_count' => new external_value(PARAM_INT, get_string('course_backup_count', 'report_usage_monitor'))
                         )
@@ -338,95 +362,6 @@ class report_usage_monitor_external extends external_api {
                         )
                     )
                 )
-            )
-        );
-    }
-    
-    /**
-     * Devuelve la definición de parámetros para register_webhook.
-     *
-     * @return external_function_parameters
-     */
-    public static function register_webhook_parameters() {
-        return new external_function_parameters(
-            array(
-                'url' => new external_value(PARAM_URL, get_string('webhook_url', 'report_usage_monitor')),
-                'events' => new external_multiple_structure(
-                    new external_value(PARAM_ALPHA, get_string('webhook_event_type', 'report_usage_monitor')),
-                    get_string('webhook_events_list', 'report_usage_monitor'), 
-                    VALUE_DEFAULT, 
-                    array('disk_warning', 'user_warning')
-                ),
-                'secret' => new external_value(PARAM_TEXT, get_string('webhook_secret', 'report_usage_monitor'), VALUE_DEFAULT, '')
-            )
-        );
-    }
-
-    /**
-     * Registra un webhook para recibir notificaciones de cambios.
-     *
-     * @param string $url URL del webhook
-     * @param array $events Lista de eventos a los que suscribirse
-     * @param string $secret Clave secreta para firmar las notificaciones
-     * @return array Resultado del registro
-     */
-    public static function register_webhook($url, $events = array('disk_warning', 'user_warning'), $secret = '') {
-        global $DB;
-        
-        // Verificar permisos
-        $context = context_system::instance();
-        self::validate_context($context);
-        require_capability('moodle/site:config', $context);
-        
-        // Validar parámetros
-        $params = self::validate_parameters(self::register_webhook_parameters(), 
-                                           array('url' => $url, 'events' => $events, 'secret' => $secret));
-        
-        // Verificar si ya existe un webhook con esta URL
-        $existingwebhook = $DB->get_record('report_usage_monitor_webhook', array('url' => $params['url']));
-        
-        if ($existingwebhook) {
-            // Actualizar webhook existente
-            $webhook = new stdClass();
-            $webhook->id = $existingwebhook->id;
-            $webhook->events = json_encode($params['events']);
-            $webhook->secret = $params['secret'];
-            $webhook->timemodified = time();
-            
-            $DB->update_record('report_usage_monitor_webhook', $webhook);
-            $webhookid = $existingwebhook->id;
-            $message = get_string('webhook_updated', 'report_usage_monitor');
-        } else {
-            // Crear nuevo webhook
-            $webhook = new stdClass();
-            $webhook->url = $params['url'];
-            $webhook->events = json_encode($params['events']);
-            $webhook->secret = $params['secret'];
-            $webhook->timecreated = time();
-            $webhook->timemodified = time();
-            
-            $webhookid = $DB->insert_record('report_usage_monitor_webhook', $webhook);
-            $message = get_string('webhook_added', 'report_usage_monitor');
-        }
-        
-        return array(
-            'success' => true,
-            'message' => $message,
-            'webhook_id' => $webhookid
-        );
-    }
-
-    /**
-     * Devuelve la definición de resultado para register_webhook.
-     *
-     * @return external_description
-     */
-    public static function register_webhook_returns() {
-        return new external_single_structure(
-            array(
-                'success' => new external_value(PARAM_BOOL, get_string('webhook_success', 'report_usage_monitor')),
-                'message' => new external_value(PARAM_TEXT, get_string('webhook_message', 'report_usage_monitor')),
-                'webhook_id' => new external_value(PARAM_INT, get_string('webhook_id', 'report_usage_monitor'))
             )
         );
     }
