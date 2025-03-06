@@ -43,15 +43,6 @@ $functions = array(
         'capabilities'  => 'report/usage_monitor:view',
         'ajax'          => true,
     ),
-    'report_usage_monitor_register_webhook' => array(
-        'classname'     => 'report_usage_monitor_external',
-        'methodname'    => 'register_webhook',
-        'classpath'     => 'report/usage_monitor/classes/external.php',
-        'description'   => 'Registra un webhook para recibir notificaciones.',
-        'type'          => 'write',
-        'capabilities'  => 'moodle/site:config',
-        'ajax'          => true,
-    ),
     // Nuevos métodos GET y SET simplificados
     'report_usage_monitor_get_usage_data' => array(
         'classname'     => 'report_usage_monitor_external',
@@ -79,7 +70,6 @@ $services = array(
         'functions' => array(
             'report_usage_monitor_get_monitor_stats',
             'report_usage_monitor_get_notification_history',
-            'report_usage_monitor_register_webhook',
             'report_usage_monitor_get_usage_data',
             'report_usage_monitor_set_usage_thresholds',
         ),
