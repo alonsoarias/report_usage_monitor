@@ -159,27 +159,12 @@ if ($ADMIN->fulltree) {
         ));
     }
     
-    // Configuración de integración con API
-    $settings->add(new admin_setting_heading(
-        'report_usage_monitor/integrationsettings',
-        get_string('integrationsettings', 'report_usage_monitor'),
-        get_string('integrationsettingsinfo', 'report_usage_monitor')
-    ));
-    
     // Habilitar API para integración con sistemas externos
     $settings->add(new admin_setting_configcheckbox(
         'report_usage_monitor/enable_api',
         get_string('enable_api', 'report_usage_monitor'),
         get_string('configenable_api', 'report_usage_monitor'),
         1 // Habilitado por defecto
-    ));
-    
-    // Habilitar webhooks - solo la configuración básica
-    $settings->add(new admin_setting_configcheckbox(
-        'report_usage_monitor/enable_webhooks',
-        get_string('enable_webhooks', 'report_usage_monitor'),
-        get_string('configenable_webhooks', 'report_usage_monitor'),
-        0 // Deshabilitado por defecto
     ));
     
     // Créditos y descargo de responsabilidad
@@ -195,4 +180,11 @@ $ADMIN->add('reports', new admin_externalpage(
     'report_usage_monitor',
     get_string('pluginname', 'report_usage_monitor'),
     new moodle_url('/report/usage_monitor/index.php')
+));
+
+// Agregar página para documentación de la API
+$ADMIN->add('reportplugins', new admin_externalpage(
+    'report_usage_monitor_api',
+    get_string('api_documentation', 'report_usage_monitor'),
+    new moodle_url('/report/usage_monitor/api-documentation.php')
 ));
