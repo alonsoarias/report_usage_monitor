@@ -73,10 +73,6 @@ class notification_userlimit extends \core\task\scheduled_task
         // Obtener configuraciones del plugin
         $reportconfig = get_config('report_usage_monitor');
         
-        // Verificar si la API/Webhooks están habilitados
-        $api_enabled = !empty($reportconfig->enable_api);
-        $webhooks_enabled = !empty($reportconfig->enable_webhooks);
-        
         // Obtener el umbral de usuarios configurado
         $user_threshold = (int)($reportconfig->max_daily_users_threshold ?? 100);
         
@@ -163,11 +159,6 @@ class notification_userlimit extends \core\task\scheduled_task
             // Registrar la notificación en el historial
             $this->log_notification($users_percent, $users_count, $user_threshold);
             
-            // Enviar notificación a webhooks externos si están habilitados
-            if ($webhooks_enabled) {
-                $this->notify_webhooks('user_warning', $users_percent, $users_count, $user_threshold);
-            }
-            
             if (debugging('', DEBUG_DEVELOPER)) {
                 mtrace("Notificación enviada con éxito.");
             }
@@ -239,22 +230,5 @@ class notification_userlimit extends \core\task\scheduled_task
         }
         
         return false;
-    }
-    
-    /**
-     * Envía notificaciones a webhooks externos.
-     * 
-     * @param string $event_type Tipo de evento.
-     * @param float $percentage Porcentaje de uso.
-     * @param int $value Valor actual.
-     * @param int $threshold Umbral.
-     * @return bool
-     */
-    private function notify_webhooks($event_type, $percentage, $value, $threshold)
-    {
-        global $DB, $CFG;
-        
-        // No proceder si la característica de webhooks no está implementada completamente
-        return true;
     }
 }
