@@ -70,7 +70,7 @@ class disk_usage extends \core\task\scheduled_task
         // Guardar los resultados detallados como JSON en la configuración
         set_config('dir_analysis', json_encode($dir_analysis), 'report_usage_monitor');
         
-        // Obtener y guardar los cursos más grandes
+        // Obtener y guardar los cursos más grandes con la nueva función mejorada
         $largest_courses = get_largest_courses(5);
         set_config('largest_courses', json_encode($largest_courses), 'report_usage_monitor');
         
