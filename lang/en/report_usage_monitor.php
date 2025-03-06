@@ -53,6 +53,7 @@ $string['processdisknotificationtask'] = 'Process disk usage notification task';
 $string['processuserlimitnotificationtask'] = 'Process daily user limit notification task';
 $string['dateformatsql'] = '%m/%d/%Y';
 $string['dateformat'] = 'm/d/Y';
+$string['datetimeformat'] = 'M d, Y H:i';
 $string['disk_quota'] = 'Disk Quota';
 $string['configdisk_quota'] = 'Disk Quota in gigabytes';
 $string['activateshellexec'] = 'The shell_exec function is not active on this server. To use the auto-detection of the path to du, you need to enable shell_exec in your server configuration.';
@@ -696,6 +697,8 @@ $string['of_limit'] = '% of limit ({$a})';
 $string['disk_summary'] = 'Disk Usage Overview';
 $string['users_summary'] = 'Users Activity Overview';
 $string['disk_usage_distribution'] = 'Disk Usage Distribution';
+$string['disk_usage_history'] = 'Disk Usage History (Last 30 Days)';
+$string['percentage_used'] = 'Percentage Used';
 $string['directory'] = 'Directory';
 $string['size'] = 'Size';
 $string['percentage'] = 'Percentage';
@@ -711,6 +714,9 @@ $string['moodle_version'] = 'Moodle Version';
 $string['total_courses'] = 'Total Courses';
 $string['backup_per_course'] = 'Backups per Course';
 $string['registered_users'] = 'Registered Users';
+$string['registered_users_count'] = 'Registered Users';
+$string['active_users'] = 'active users';
+$string['suspended_users'] = 'suspended users';
 $string['disk_usage_by_directory'] = 'Disk Usage by Directory';
 $string['largest_courses'] = 'Largest Courses';
 $string['course'] = 'Course';
@@ -726,6 +732,7 @@ $string['user_count_ok'] = 'User count is at an acceptable level. No immediate a
 $string['user_limit_tips'] = 'Tips for managing user limit:';
 $string['tip_user_inactive'] = 'Consider cleaning up inactive user accounts that haven\'t logged in for a long time.';
 $string['tip_user_limit'] = 'If the number of users is consistently approaching the limit, consider increasing your quota.';
+$string['last_calculation'] = 'Last calculation';
 
 // Cadenas para settings.php
 $string['mainsettings'] = 'Main settings';
@@ -756,7 +763,7 @@ $string['success_operation_completed'] = 'Operation completed successfully.';
 $string['reportinfotext'] = 'This plugin has been created for another success story of <strong>IngeWeb</strong>. Visit us at <a target="_blank" href="http://ingeweb.co/">IngeWeb - Solutions to succeed on the Internet</a>.';
 $string['exclusivedisclaimer'] = 'This plugin is part of, and is to be exclusively used with the Moodle hosting service provided by <a target="_blank" href="http://ingeweb.co/">IngeWeb</a>.';
 
-// Nuevas cadenas para los métodos API
+// Cadenas para los métodos API
 $string['get_usage_data'] = 'Get usage data';
 $string['get_usage_data_desc'] = 'Retrieves precalculated usage data for disk and users with minimal overhead.';
 $string['set_usage_thresholds'] = 'Set usage thresholds';
