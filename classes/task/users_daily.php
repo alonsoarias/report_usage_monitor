@@ -20,7 +20,7 @@
  * @package     report_usage_monitor
  * @category    admin
  * @copyright   2023 Soporte IngeWeb <soporte@ingeweb.co>
- * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 o posterior
+ * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 namespace report_usage_monitor\task;
@@ -94,6 +94,33 @@ class users_daily extends \core\task\scheduled_task
                 update_min_top_sql($users['fecha'], $users['usuarios'], $menor);
                 if (debugging('', DEBUG_DEVELOPER)) {
                     mtrace("Actualizando registro existente.");
+                }
+            }
+        }
+        
+        // Calcular el porcentaje de uso respecto al umbral
+        $reportconfig = get_config('report_usage_monitor');
+        $users_today = !empty($reportconfig->totalusersdaily) ? ($reportconfig->totalusersdaily) : 0;
+        $max_users_threshold = (int)($reportconfig->max_daily_users_threshold ?? 100);
+        $users_percent = calculate_threshold_percentage($users_today, $max_users_threshold);
+        $users_warning_class = ($users_percent < 70) ? 'bg-success' : (($users_percent < 90) ? 'bg-warning' : 'bg-danger');
+        
+        // Guardar valores precomputados
+        set_config('users_percent', $users_percent, 'report_usage_monitor');
+        set_config('users_warning_class', $users_warning_class, 'report_usage_monitor');
+        
+        // Limpiar datos antiguos
+        // Clean up records older than 6 months
+        $sixMonthsAgo = time() - (180 * 24 * 60 * 60); // 180 days
+        
+        // Para report_usage_monitor_history tabla
+        if ($DB->get_manager()->table_exists('report_usage_monitor_history')) {
+            $oldHistoryRecords = $DB->get_records_select('report_usage_monitor_history', 'timecreated < ?', [$sixMonthsAgo]);
+            if (!empty($oldHistoryRecords)) {
+                $DB->delete_records_select('report_usage_monitor_history', 'timecreated < ?', [$sixMonthsAgo]);
+                
+                if (debugging('', DEBUG_DEVELOPER)) {
+                    mtrace("Removed " . count($oldHistoryRecords) . " records older than 6 months from report_usage_monitor_history.");
                 }
             }
         }
