@@ -53,6 +53,7 @@ $string['usertable'] = 'Tabla de top usuarios';
 $string['userchart'] = 'Graficar top usuarios';
 $string['dateformatsql'] = '%d/%m/%Y';
 $string['dateformat'] = 'd/m/Y';
+$string['datetimeformat'] = 'd M, Y H:i';
 $string['disk_quota'] = 'Cuota de disco';
 $string['configdisk_quota'] = 'Cuota de disco en gigabytes'; 
 $string['activateshellexec'] = 'La función shell_exec no está activa en este servidor. Para utilizar la detección automática del camino a du, debes habilitar shell_exec en la configuración de tu servidor.';
@@ -696,6 +697,8 @@ $string['of_limit'] = '% del límite ({$a})';
 $string['disk_summary'] = 'Resumen de Uso de Disco';
 $string['users_summary'] = 'Resumen de Actividad de Usuarios';
 $string['disk_usage_distribution'] = 'Distribución de Uso de Disco';
+$string['disk_usage_history'] = 'Historial de Uso de Disco (Últimos 30 Días)';
+$string['percentage_used'] = 'Porcentaje Utilizado';
 $string['directory'] = 'Directorio';
 $string['size'] = 'Tamaño';
 $string['percentage'] = 'Porcentaje';
@@ -711,6 +714,9 @@ $string['moodle_version'] = 'Versión de Moodle';
 $string['total_courses'] = 'Total de Cursos';
 $string['backup_per_course'] = 'Copias de Seguridad por Curso';
 $string['registered_users'] = 'Usuarios Registrados';
+$string['registered_users_count'] = 'Usuarios Registrados';
+$string['active_users'] = 'usuarios activos';
+$string['suspended_users'] = 'usuarios suspendidos';
 $string['disk_usage_by_directory'] = 'Uso de Disco por Directorio';
 $string['largest_courses'] = 'Cursos más Grandes';
 $string['course'] = 'Curso';
@@ -726,6 +732,7 @@ $string['user_count_ok'] = 'El recuento de usuarios está en un nivel aceptable.
 $string['user_limit_tips'] = 'Consejos para gestionar el límite de usuarios:';
 $string['tip_user_inactive'] = 'Considere limpiar las cuentas de usuario inactivas que no han iniciado sesión durante mucho tiempo.';
 $string['tip_user_limit'] = 'Si el número de usuarios se acerca constantemente al límite, considere aumentar su cuota.';
+$string['last_calculation'] = 'Último cálculo';
 
 // Cadenas para settings.php
 $string['mainsettings'] = 'Configuraciones principales';
@@ -735,20 +742,17 @@ $string['disk_warning_level'] = 'Nivel de advertencia de disco';
 $string['configdisk_warning_level'] = 'Porcentaje de uso de disco que activa las advertencias.';
 $string['users_warning_level'] = 'Nivel de advertencia de usuarios';
 $string['configusers_warning_level'] = 'Porcentaje del límite de usuarios que activa las advertencias.';
-$string['integrationsettings'] = 'Configuración de integración';
-$string['integrationsettingsinfo'] = 'Configure la integración con sistemas externos a través de API y webhooks.';
 $string['enable_api'] = 'Habilitar API';
 $string['configenable_api'] = 'Habilitar acceso API para que sistemas externos obtengan información de uso.';
-$string['enable_webhooks'] = 'Habilitar webhooks';
-$string['configenable_webhooks'] = 'Habilitar webhooks para enviar notificaciones a sistemas externos.';
 
 // Cadenas para API básica
 $string['api_documentation'] = 'Documentación de API';
-$string['webhook_url'] = 'URL del Webhook';
-$string['webhook_secret'] = 'Secreto del Webhook';
-$string['webhook_events'] = 'Eventos del Webhook';
-$string['webhook_event_disk_warning'] = 'Advertencia de espacio en disco';
-$string['webhook_event_user_warning'] = 'Advertencia de límite de usuarios';
+$string['api_example_php'] = 'Ejemplo en PHP';
+$string['api_example_js'] = 'Ejemplo en JavaScript';
+$string['api_required_permissions'] = 'Permisos Requeridos';
+$string['api_endpoint'] = 'Endpoint';
+$string['api_required_capability'] = 'Capacidad Requerida';
+$string['api_code_examples'] = 'Ejemplos de Código';
 
 // Cadenas para error y éxito
 $string['error_invalid_url'] = 'Formato de URL inválido.';
@@ -775,14 +779,6 @@ $string['error_no_thresholds_provided'] = 'No se proporcionaron umbrales para ac
 // Parámetros para los nuevos métodos
 $string['param_user_threshold'] = 'Nuevo umbral para usuarios diarios';
 $string['param_disk_threshold'] = 'Nuevo umbral para espacio en disco en GB';
-
-// Cadenas adicionales para la API para la documentación
-$string['api_example_php'] = 'Ejemplo en PHP';
-$string['api_example_js'] = 'Ejemplo en JavaScript';
-$string['api_required_permissions'] = 'Permisos Requeridos';
-$string['api_endpoint'] = 'Endpoint';
-$string['api_required_capability'] = 'Capacidad Requerida';
-$string['api_code_examples'] = 'Ejemplos de Código';
 
 // Cadenas para los valores que se devuelven en get_monitor_stats
 $string['site_name'] = 'Nombre del sitio';
@@ -836,27 +832,6 @@ $string['notification_threshold'] = 'Umbral legible';
 $string['notification_threshold_raw'] = 'Umbral en bytes o número de usuarios';
 $string['notification_timecreated'] = 'Timestamp de creación';
 $string['notification_timereadable'] = 'Fecha y hora legibles';
-
-// Cadenas para register_webhook
-$string['webhook_event_type'] = 'Tipo de evento (disk_warning, user_warning)';
-$string['webhook_events_list'] = 'Lista de eventos a los que suscribirse';
-$string['webhook_success'] = 'Indica si la operación fue exitosa';
-$string['webhook_message'] = 'Mensaje descriptivo del resultado';
-$string['webhook_id'] = 'ID del webhook registrado o actualizado';
-
-// Cadenas para get_usage_data
-$string['usage_disk_current'] = 'Uso actual de disco en bytes';
-$string['usage_disk_current_readable'] = 'Uso actual de disco en formato legible';
-$string['usage_disk_threshold'] = 'Umbral de disco en bytes';
-$string['usage_disk_threshold_readable'] = 'Umbral de disco en formato legible';
-$string['usage_disk_percentage'] = 'Porcentaje de uso de disco';
-$string['usage_disk_last_calculated'] = 'Timestamp del último cálculo de disco';
-$string['usage_user_current'] = 'Usuarios diarios actuales';
-$string['usage_user_threshold'] = 'Umbral de usuarios';
-$string['usage_user_percentage'] = 'Porcentaje de uso de usuarios';
-$string['usage_user_last_calculated'] = 'Timestamp del último cálculo de usuarios';
-$string['usage_user_max_90_days'] = 'Máximo de usuarios en 90 días';
-$string['usage_user_max_90_days_date'] = 'Timestamp de la fecha de máximo de usuarios';
 
 // Cadenas para set_usage_thresholds_returns
 $string['threshold_success'] = 'Indica si la operación fue exitosa en general';
