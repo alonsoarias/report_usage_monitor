@@ -85,6 +85,7 @@ function update_min_top_sql($fecha, $usuarios, $min)
 
 /**
  * Insertar un registro si el top de usuarios diarios no tiene 10 registros.
+ * Mantiene solo los 10 registros más recientes.
  *
  * @param string $fecha Fecha a insertar en el top.
  * @param int $cantidad_usuarios Cantidad de usuarios a insertar en el top.
@@ -93,11 +94,31 @@ function update_min_top_sql($fecha, $usuarios, $min)
 function insert_top_sql($fecha, $cantidad_usuarios)
 {
     global $DB;
+    
+    // Insert the new record
     $DB->execute(
         "INSERT INTO {report_usage_monitor} (fecha, cantidad_usuarios) 
          VALUES (?, ?)",
         [$fecha, $cantidad_usuarios]
     );
+    
+    // Count records and remove excess
+    $count = $DB->count_records('report_usage_monitor');
+    if ($count > 10) {
+        // Get the IDs of the oldest records
+        $sql = "SELECT id FROM {report_usage_monitor} ORDER BY fecha ASC LIMIT " . ($count - 10);
+        $records = $DB->get_records_sql($sql);
+        
+        if (!empty($records)) {
+            $ids = array_keys($records);
+            // Delete the oldest records
+            $DB->delete_records_list('report_usage_monitor', 'id', $ids);
+            
+            if (debugging('', DEBUG_DEVELOPER)) {
+                mtrace("Removed " . count($ids) . " old records to maintain 10 record limit.");
+            }
+        }
+    }
 }
 
 /**
@@ -423,6 +444,9 @@ function get_largest_courses($limit = 5) {
         $course->percentage = $totalfilessize > 0
             ? round(($course->filesize / $totalfilessize) * 100, 2)
             : 0;
+            
+        // Calculate total size (including backups)
+        $course->totalsize = $course->filesize + $course->backupsize;
     }
 
     return $courses;
@@ -448,11 +472,58 @@ function display_size_in_gb($sizeInBytes, $precision = 2)
     return round($sizeInGb, $precision);
 }
 
-// Función para comparar las fechas en formato 'd/m/Y' y ordenar en orden ascendente.
-function compararFechas($fecha1, $fecha2)
-{
+/**
+ * Función para comparar las fechas en diferentes formatos y ordenar en orden ascendente.
+ * Mejorada para ser más robusta y manejar diferentes formatos.
+ *
+ * @param string $fecha1 Primera fecha a comparar.
+ * @param string $fecha2 Segunda fecha a comparar.
+ * @return int Resultado de la comparación (-1, 0, 1).
+ */
+function compararFechas($fecha1, $fecha2) {
+    // Try the expected d/m/Y format first
     $date1 = DateTime::createFromFormat('d/m/Y', $fecha1);
     $date2 = DateTime::createFromFormat('d/m/Y', $fecha2);
+    
+    // If either date fails to parse, try other common formats
+    if (!$date1 || !$date2) {
+        $formats = ['Y-m-d', 'm/d/Y', 'Y/m/d', 'Y-m-d H:i:s'];
+        
+        foreach ($formats as $format) {
+            if (!$date1) {
+                $date1 = DateTime::createFromFormat($format, $fecha1);
+            }
+            if (!$date2) {
+                $date2 = DateTime::createFromFormat($format, $fecha2);
+            }
+            
+            if ($date1 && $date2) {
+                break;
+            }
+        }
+        
+        // Last resort: try to use strtotime
+        if (!$date1) {
+            $timestamp1 = strtotime($fecha1);
+            if ($timestamp1) {
+                $date1 = new DateTime();
+                $date1->setTimestamp($timestamp1);
+            } else {
+                $date1 = new DateTime('@0');  // Fallback
+            }
+        }
+        
+        if (!$date2) {
+            $timestamp2 = strtotime($fecha2);
+            if ($timestamp2) {
+                $date2 = new DateTime();
+                $date2->setTimestamp($timestamp2);
+            } else {
+                $date2 = new DateTime('@0');  // Fallback
+            }
+        }
+    }
+    
     return $date1 <=> $date2;
 }
 
