@@ -222,6 +222,7 @@ function generate_email_user($email, $name = '', $id = -99)
 
 /**
  * Adds up all the files in a directory and works out the size.
+ * Optimizado para usar 'du' cuando esté disponible.
  *
  * @param string $rootdir  The directory to start from
  * @param string $excludefile A file to exclude when summing directory size
@@ -280,7 +281,52 @@ function directory_size($rootdir, $excludefile = '')
 }
 
 /**
+ * Get SQL for calculating course file sizes including all relevant contexts.
+ * Enhanced version based on report_coursesize approach.
+ *
+ * @return string SQL query that returns course ID and total file size
+ */
+function enhanced_course_filesize_sql() {
+    // Include files from course context, block context, and module context
+    $sqlunion = "UNION ALL
+                SELECT c.id, f.filesize
+                FROM {block_instances} bi
+                JOIN {context} cx1 ON cx1.contextlevel = " . CONTEXT_BLOCK . " AND cx1.instanceid = bi.id
+                JOIN {context} cx2 ON cx2.contextlevel = " . CONTEXT_COURSE . " AND cx2.id = bi.parentcontextid
+                JOIN {course} c ON c.id = cx2.instanceid
+                JOIN {files} f ON f.contextid = cx1.id
+            UNION ALL
+                SELECT c.id, f.filesize
+                FROM {course_modules} cm
+                JOIN {context} cx ON cx.contextlevel = " . CONTEXT_MODULE . " AND cx.instanceid = cm.id
+                JOIN {course} c ON c.id = cm.course
+                JOIN {files} f ON f.contextid = cx.id";
+
+    return "SELECT id AS course, SUM(filesize) AS filesize
+            FROM (SELECT c.id, f.filesize
+                  FROM {course} c
+                  JOIN {context} cx ON cx.contextlevel = " . CONTEXT_COURSE . " AND cx.instanceid = c.id
+                  JOIN {files} f ON f.contextid = cx.id {$sqlunion}) x
+            GROUP BY id";
+}
+
+/**
+ * Get SQL for calculating course backup sizes.
+ *
+ * @return string SQL query that returns course ID and backup size
+ */
+function enhanced_course_backupsize_sql() {
+    return "SELECT id AS course, SUM(filesize) AS filesize
+            FROM (SELECT c.id, f.filesize
+                  FROM {course} c
+                  JOIN {context} cx ON cx.contextlevel = " . CONTEXT_COURSE . " AND cx.instanceid = c.id
+                  JOIN {files} f ON f.contextid = cx.id AND f.component = 'backup') x
+            GROUP BY id";
+}
+
+/**
  * Analiza el uso de disco por directorios específicos
+ * Versión mejorada para análisis más detallado.
  *
  * @param string $rootdir Directorio raíz a analizar
  * @return array Arreglo con los tamaños de cada directorio específico
@@ -293,6 +339,8 @@ function analyze_disk_usage_by_directory($rootdir) {
         'filedir' => $rootdir . '/filedir',
         'cache' => $rootdir . '/cache',
         'temp' => $rootdir . '/temp',
+        'backup' => $rootdir . '/backup',
+        'sessions' => $rootdir . '/sessions',
     ];
     
     $usage = [];
@@ -329,7 +377,8 @@ function analyze_disk_usage_by_directory($rootdir) {
 }
 
 /**
- * Recupera los cursos que más espacio ocupan
+ * Recupera los cursos que más espacio ocupan.
+ * Versión mejorada para incluir todos los archivos relevantes.
  *
  * @param int $limit Número de cursos a recuperar
  * @return array Arreglo con información de los cursos
@@ -337,45 +386,89 @@ function analyze_disk_usage_by_directory($rootdir) {
 function get_largest_courses($limit = 5) {
     global $DB;
 
-    // Consulta optimizada para rendimiento
-    $sql = "SELECT c.id, c.fullname, c.shortname,
-                   COUNT(f.id) AS filecount, 
-                   SUM(f.filesize) AS totalsize
-              FROM {course} c
-              JOIN {context} ctx ON ctx.instanceid = c.id AND ctx.contextlevel = 50
-              JOIN {files} f ON f.contextid = ctx.id
-             WHERE c.id != :siteid
-               AND f.filesize > 0
-               AND f.component != 'backup'
-          GROUP BY c.id, c.fullname, c.shortname
-          ORDER BY totalsize DESC";
-
-    // Al usar get_records_sql($sql, $params, $start, $limit),
-    // Moodle inyecta la cláusula "LIMIT" apropiada sin romper la sintaxis.
+    // Get file sizes from all relevant contexts
+    $filesql = enhanced_course_filesize_sql();
+    $sql = "SELECT c.id, c.fullname, c.shortname, c.category, rc.filesize
+            FROM {course} c
+            JOIN ($filesql) rc on rc.course = c.id
+            WHERE c.id != :siteid
+            ORDER BY rc.filesize DESC";
+    
     $params = ['siteid' => SITEID];
     $courses = $DB->get_records_sql($sql, $params, 0, $limit);
 
-    // Para cada curso, buscamos backups y calculamos porcentajes
+    // Get backup sizes
+    $backupsql = enhanced_course_backupsize_sql();
+    $backupsizes = $DB->get_records_sql($backupsql);
+
+    // Calculate additional data for each course
+    $totalfilessize = $DB->get_field_sql("SELECT SUM(filesize) FROM {files} WHERE filesize > 0");
+    
     foreach ($courses as $course) {
-        // Contar backups
+        // Add backup size
+        $course->backupsize = isset($backupsizes[$course->id]) ? $backupsizes[$course->id]->filesize : 0;
+        
+        // Count backups
         $course->backupcount = $DB->count_records_sql("
             SELECT COUNT(f.id)
-              FROM {files} f
-              JOIN {context} ctx2 ON f.contextid = ctx2.id
-             WHERE ctx2.instanceid = :courseid
-               AND ctx2.contextlevel = 50
-               AND f.component = 'backup'
-               AND f.filearea = 'automated'
+            FROM {files} f
+            JOIN {context} ctx ON f.contextid = ctx.id
+            WHERE ctx.instanceid = :courseid
+              AND ctx.contextlevel = " . CONTEXT_COURSE . "
+              AND f.component = 'backup'
+              AND f.filearea = 'automated'
         ", ['courseid' => $course->id]);
-
-        // Calcular porcentaje relativo al total de archivos en site
-        $totalfilessize = $DB->get_field_sql("SELECT SUM(filesize) FROM {files} WHERE filesize > 0");
+        
+        // Calculate percentage of total site files
         $course->percentage = $totalfilessize > 0
-            ? round(($course->totalsize / $totalfilessize) * 100, 2)
+            ? round(($course->filesize / $totalfilessize) * 100, 2)
             : 0;
     }
 
     return $courses;
+}
+
+/**
+ * Convierte el tamaño de bytes a gigabytes.
+ *
+ * @param mixed $sizeInBytes El tamaño en bytes que se quiere convertir.
+ * @param int $precision El número de decimales a mostrar.
+ * @return string El tamaño en gigabytes, formateado como cadena.
+ */
+function display_size_in_gb($sizeInBytes, $precision = 2)
+{
+    // Verifica si el valor es numérico y no es null.
+    if (!is_numeric($sizeInBytes) || $sizeInBytes === null) {
+        debugging("display_size_in_gb: se esperaba un valor numérico, recibido: " . var_export($sizeInBytes, true), DEBUG_DEVELOPER);
+        return '0'; // Retorna '0 GB' como un valor seguro por defecto.
+    }
+
+    // Conversión de bytes a GB.
+    $sizeInGb = $sizeInBytes / (1024 * 1024 * 1024);
+    return round($sizeInGb, $precision);
+}
+
+// Función para comparar las fechas en formato 'd/m/Y' y ordenar en orden ascendente.
+function compararFechas($fecha1, $fecha2)
+{
+    $date1 = DateTime::createFromFormat('d/m/Y', $fecha1);
+    $date2 = DateTime::createFromFormat('d/m/Y', $fecha2);
+    return $date1 <=> $date2;
+}
+
+/**
+ * Calcula el porcentaje de uso en relación con un umbral.
+ *
+ * @param int $current_value El valor actual (número de usuarios, uso del disco, etc.).
+ * @param int $threshold El umbral máximo permitido.
+ * @return float El porcentaje de uso.
+ */
+function calculate_threshold_percentage($current_value, $threshold)
+{
+    if ($threshold == 0) {
+        return 0;
+    }
+    return ($current_value / $threshold) * 100;
 }
 
 /**
@@ -386,7 +479,7 @@ function get_largest_courses($limit = 5) {
  * @return float Tasa de crecimiento porcentual
  */
 function calculate_growth_rate($type = 'users', $days = 30) {
-    global $DB, $CFG;
+    global $DB;
     
     if ($type === 'users') {
         // Consulta optimizada para rendimiento
@@ -423,18 +516,35 @@ function calculate_growth_rate($type = 'users', $days = 30) {
         $growth_rate = (($last_day_users - $first_day_users) / $first_day_users) * 100;
         
     } elseif ($type === 'disk') {
-        // Para el disco, utilizamos la configuración almacenada
-        $reportconfig = get_config('report_usage_monitor');
+        // Para el disco, calculamos el promedio de crecimiento diario
+        $sql = "SELECT MIN(timecreated) AS oldest_time, MAX(timecreated) AS newest_time, 
+                       MIN(value) AS oldest_size, MAX(value) AS newest_size
+                FROM {report_usage_monitor_history}
+                WHERE type = 'disk' 
+                AND timecreated > :time_threshold";
+                
+        $time_threshold = time() - ($days * 86400);
+        $result = $DB->get_record_sql($sql, ['time_threshold' => $time_threshold]);
         
-        // Si no tenemos datos históricos, estimamos basado en la tasa actual
-        if (empty($reportconfig->disk_growth_history)) {
-            return 5; // Asumimos un 5% de crecimiento mensual por defecto
+        if ($result && $result->oldest_time && $result->oldest_size > 0) {
+            $time_diff = $result->newest_time - $result->oldest_time;
+            $size_diff = $result->newest_size - $result->oldest_size;
+            
+            // Si tenemos suficiente historia y hay diferencia de tamaño
+            if ($time_diff > 0 && $size_diff != 0) {
+                $days_diff = $time_diff / 86400;
+                $daily_change = $size_diff / $days_diff;
+                
+                // Calculamos la tasa porcentual de crecimiento diario
+                $daily_percent = ($daily_change / $result->oldest_size) * 100;
+                
+                // Proyectamos a 30 días
+                $growth_rate = $daily_percent * 30;
+                return round($growth_rate, 2);
+            }
         }
         
-        // Implementar lógica basada en datos históricos si están disponibles
-        $growth_rate = 5; // Valor por defecto para esta versión
-    } else {
-        $growth_rate = 0;
+        return 5; // Valor por defecto (5% mensual)
     }
     
     return round($growth_rate, 2);
@@ -523,49 +633,6 @@ function generate_top_courses_html($courses) {
 }
 
 /**
- * Convierte el tamaño de bytes a gigabytes.
- *
- * @param mixed $sizeInBytes El tamaño en bytes que se quiere convertir.
- * @param int $precision El número de decimales a mostrar.
- * @return string El tamaño en gigabytes, formateado como cadena.
- */
-function display_size_in_gb($sizeInBytes, $precision = 2)
-{
-    // Verifica si el valor es numérico y no es null.
-    if (!is_numeric($sizeInBytes) || $sizeInBytes === null) {
-        debugging("display_size_in_gb: se esperaba un valor numérico, recibido: " . var_export($sizeInBytes, true), DEBUG_DEVELOPER);
-        return '0'; // Retorna '0 GB' como un valor seguro por defecto.
-    }
-
-    // Conversión de bytes a GB.
-    $sizeInGb = $sizeInBytes / (1024 * 1024 * 1024);
-    return round($sizeInGb, $precision);
-}
-
-// Función para comparar las fechas en formato 'd/m/Y' y ordenar en orden ascendente.
-function compararFechas($fecha1, $fecha2)
-{
-    $date1 = DateTime::createFromFormat('d/m/Y', $fecha1);
-    $date2 = DateTime::createFromFormat('d/m/Y', $fecha2);
-    return $date1 <=> $date2;
-}
-
-/**
- * Calcula el porcentaje de uso en relación con un umbral.
- *
- * @param int $current_value El valor actual (número de usuarios, uso del disco, etc.).
- * @param int $threshold El umbral máximo permitido.
- * @return float El porcentaje de uso.
- */
-function calculate_threshold_percentage($current_value, $threshold)
-{
-    if ($threshold == 0) {
-        return 0;
-    }
-    return ($current_value / $threshold) * 100;
-}
-
-/**
  * Envía una notificación por correo cuando se supera el límite de usuarios diarios.
  *
  * Versión mejorada que incluye más información y un diseño visual mejorado.
@@ -588,7 +655,7 @@ function email_notify_user_limit($numberofusers, $fecha, $percentage)
     $a->threshold = $reportconfig->max_daily_users_threshold;
     $a->numberofusers = $numberofusers;
     $a->lastday = $fecha;
-    $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php?view=userstopnum';
+    $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php';
     $a->siteurl = $CFG->wwwroot;
     $a->percentaje = round($percentage, 2);
     $a->excess_users = max(0, $numberofusers - $a->threshold);
@@ -669,7 +736,7 @@ function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAc
     $a->backupcount = get_config('backup', 'backup_auto_max_kept');
     $a->threshold = $reportconfig->max_daily_users_threshold;
     $a->numberofusers = $userAccessCount;
-    $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php?view=diskusage';
+    $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php';
     $a->siteurl = $CFG->wwwroot;
     $a->lastday = date('d/m/Y');
     $a->coursescount = $DB->count_records('course');
@@ -678,19 +745,27 @@ function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAc
     $a->moodle_release = $CFG->release;
 
     // Análisis por directorios
-    $usage_by_dir = analyze_disk_usage_by_directory($CFG->dataroot);
+    $dir_analysis_json = $reportconfig->dir_analysis ?? '{}';
+    $dir_analysis = json_decode($dir_analysis_json, true);
+    if (empty($dir_analysis) || !is_array($dir_analysis)) {
+        $dir_analysis = analyze_disk_usage_by_directory($CFG->dataroot);
+    }
     
     // Formateamos los tamaños y calculamos porcentajes
-    $a->db_percent = round(($usage_by_dir['database'] / $disk_usage) * 100, 2);
-    $a->filedir_size = display_size($usage_by_dir['filedir']);
-    $a->filedir_percent = round(($usage_by_dir['filedir'] / $disk_usage) * 100, 2);
-    $a->cache_size = display_size($usage_by_dir['cache']);
-    $a->cache_percent = round(($usage_by_dir['cache'] / $disk_usage) * 100, 2);
-    $a->other_size = display_size($usage_by_dir['others']);
-    $a->other_percent = round(($usage_by_dir['others'] / $disk_usage) * 100, 2);
+    $a->db_percent = round(($dir_analysis['database'] / $disk_usage) * 100, 2);
+    $a->filedir_size = display_size($dir_analysis['filedir']);
+    $a->filedir_percent = round(($dir_analysis['filedir'] / $disk_usage) * 100, 2);
+    $a->cache_size = display_size($dir_analysis['cache']);
+    $a->cache_percent = round(($dir_analysis['cache'] / $disk_usage) * 100, 2);
+    $a->other_size = display_size($dir_analysis['others']);
+    $a->other_percent = round(($dir_analysis['others'] / $disk_usage) * 100, 2);
 
     // Cursos más grandes
-    $largest_courses = get_largest_courses(5);
+    $largest_courses_json = $reportconfig->largest_courses ?? '[]';
+    $largest_courses = json_decode($largest_courses_json);
+    if (empty($largest_courses)) {
+        $largest_courses = get_largest_courses(5);
+    }
     $a->top_courses_rows = generate_top_courses_html($largest_courses);
 
     // Generar direcciones de correo
