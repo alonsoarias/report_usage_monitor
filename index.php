@@ -1,6 +1,6 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
-// 
+//
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
@@ -182,8 +182,6 @@ echo $OUTPUT->header();
 // -------------------------------------------------------------------------
 // Disclaimer debajo del header
 // -------------------------------------------------------------------------
-
-// Mostramos el disclaimer en un alert info:
 echo '<div class="alert alert-info mb-2 text-center small">';
 echo (get_string('exclusivedisclaimer', 'report_usage_monitor'));
 echo '</div>';
@@ -220,16 +218,10 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                     </div>
                     <div class="text-center">
                         <h5>
-                            <?php
-                            // Mostramos en GB con 2 decimales:
-                            echo $disk_usage_gb . ' GB / ' . $quotadisk_gb . ' GB';
-                            ?>
+                            <?php echo $disk_usage_gb . ' GB / ' . $quotadisk_gb . ' GB'; ?>
                         </h5>
                         <p class="text-muted">
                             <?php echo get_string('lastexecutioncalculate', 'report_usage_monitor', $lastexec_disk); ?>
-                        </p>
-                        <p class="text-muted mt-2 mb-0">
-                            <small><?php echo get_string('last_calculation', 'report_usage_monitor'); ?>: <?php echo $lastexec_time_disk; ?></small>
                         </p>
                     </div>
                 </div>
@@ -263,9 +255,6 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                         <p class="text-muted">
                             <?php echo get_string('lastexecution', 'report_usage_monitor', $lastexec_users); ?>
                         </p>
-                        <p class="text-muted mt-2 mb-0">
-                            <small><?php echo get_string('last_calculation', 'report_usage_monitor'); ?>: <?php echo $lastexec_time_users; ?></small>
-                        </p>
                     </div>
                 </div>
             </div>
@@ -290,26 +279,6 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
             </div>
         </div>
     </div><!-- fin row tarjetas -->
-    
-    <!-- SECCIÓN: Historial de uso de disco (últimos 30 días) -->
-    <div class="row">
-        <div class="col-12 mb-4">
-            <div class="card shadow-sm">
-                <div class="card-header">
-                    <h5 class="mb-0"><?php echo get_string('disk_usage_history', 'report_usage_monitor'); ?></h5>
-                </div>
-                <div class="card-body">
-                    <?php if (!empty($disk_history_labels)): ?>
-                        <canvas id="chartjs-disk-history" style="height: 300px;"></canvas>
-                    <?php else: ?>
-                        <div class="alert alert-info">
-                            <?php echo get_string('notcalculatedyet', 'report_usage_monitor'); ?>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-    </div><!-- fin row historial disco -->
     
     <!-- SECCIÓN B: Distribución disco (gráfica + tablas) -->
     <div class="row">
@@ -429,6 +398,26 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
         </div>
     </div><!-- fin row -->
 
+    <!-- SECCIÓN: Historial de uso de disco (últimos 30 días) -->
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0"><?php echo get_string('disk_usage_history', 'report_usage_monitor'); ?></h5>
+                </div>
+                <div class="card-body">
+                    <?php if (!empty($disk_history_labels)): ?>
+                        <canvas id="chartjs-disk-history" style="height: 300px;"></canvas>
+                    <?php else: ?>
+                        <div class="alert alert-info">
+                            <?php echo get_string('notcalculatedyet', 'report_usage_monitor'); ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div><!-- fin row historial disco -->
+
     <!-- SECCIÓN C: Usuarios últimos 10 días (con tab para Tabla / Gráfica) -->
     <div class="row mb-4">
         <div class="col-12">
@@ -436,7 +425,6 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                 <div class="card-header">
                     <h5 class="mb-0">
                         <?php echo get_string('lastusers', 'report_usage_monitor'); ?>
-                        <!-- "Usuarios diarios de los últimos 10 días" -->
                     </h5>
                 </div>
                 <div class="card-body">
@@ -514,7 +502,6 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
             <div class="card shadow-sm mb-4">
                 <div class="card-header">
                     <h5 class="mb-0"><?php echo get_string('topuser', 'report_usage_monitor'); ?></h5>
-                    <!-- "Top 10 usuarios diarios" -->
                 </div>
                 <div class="card-body p-0">
                     <table class="table table-striped mb-0">
@@ -684,7 +671,6 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
             new Chart(donutCtx, {
                 type: "doughnut",
                 data: {
-                    // Etiquetas y valores en GB
                     labels: <?php echo json_encode($doughnutLabels); ?>,
                     datasets: [{
                         data: <?php echo json_encode($doughnutData); ?>,
@@ -699,14 +685,15 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                 },
                 options: {
                     maintainAspectRatio: false,
-                    cutoutPercentage: 65,
-                    tooltips: {
-                        callbacks: {
-                            label: function(tooltipItem, data) {
-                                var index = tooltipItem.index;
-                                var label = data.labels[index] || '';
-                                var valueGb = data.datasets[0].data[index]; // num en GB
-                                return label + ': ' + valueGb + ' GB';
+                    cutout: '65%',
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    let valueGb = context.parsed;
+                                    return label + ': ' + valueGb + ' GB';
+                                }
                             }
                         }
                     }
@@ -732,16 +719,16 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                 options: {
                     maintainAspectRatio: false,
                     scales: {
-                        xAxes: [{
-                            gridLines: {
+                        x: {
+                            grid: {
                                 color: "rgba(0,0,0,0.05)"
                             }
-                        }],
-                        yAxes: [{
-                            gridLines: {
+                        },
+                        y: {
+                            grid: {
                                 color: "rgba(0,0,0,0.05)"
                             }
-                        }]
+                        }
                     }
                 }
             });
@@ -765,17 +752,19 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                 options: {
                     maintainAspectRatio: false,
                     scales: {
-                        yAxes: [{
+                        y: {
+                            beginAtZero: true,
                             ticks: {
-                                beginAtZero: true,
                                 callback: function(value) { return value + "%"; }
                             }
-                        }]
+                        }
                     },
-                    tooltips: {
-                        callbacks: {
-                            label: function(tooltipItem, data) {
-                                return tooltipItem.yLabel + '%';
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.parsed.y + '%';
+                                }
                             }
                         }
                     }
