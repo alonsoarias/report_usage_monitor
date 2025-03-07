@@ -25,18 +25,22 @@
 
 /**
  * Obtener la lista de usuarios de los últimos 10 días.
- * Refactorizado para trabajar directamente con timestamps.
+ * Refactorizado para usar aritmética de timestamps para agrupación por día.
  *
  * @return string Consulta SQL para obtener la lista de usuarios.
  */
 function report_user_daily_sql()
 {
-    return "SELECT UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(timecreated))) as timestamp_fecha, 
-                   count(DISTINCT userid) as conteo_accesos_unicos
+    // Calcular timestamps constantes para mejorar rendimiento
+    $today_start = strtotime('today midnight');
+    $ten_days_ago = strtotime('-10 days midnight');
+    $yesterday_end = $today_start - 1;
+    
+    return "SELECT (timecreated - (timecreated % 86400)) as timestamp_fecha, 
+                   COUNT(DISTINCT userid) as conteo_accesos_unicos
             FROM {logstore_standard_log}
-            WHERE `action`='loggedin' 
-            AND timecreated BETWEEN UNIX_TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 10 DAY)) 
-                              AND UNIX_TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY))
+            WHERE action = 'loggedin' 
+              AND timecreated BETWEEN $ten_days_ago AND $yesterday_end
             GROUP BY timestamp_fecha 
             ORDER BY timestamp_fecha DESC";
 }
@@ -168,68 +172,79 @@ function insert_top_sql($fecha, $cantidad_usuarios)
 /**
  * Obtener la cantidad de usuarios conectados el día de ayer.
  * Optimizado para usar índices en logstore_standard_log (action, timecreated)
- * Refactorizado para trabajar directamente con timestamps.
+ * Refactorizado para usar aritmética de timestamps para agrupación por día.
  *
  * @return string Consulta SQL para obtener la cantidad de usuarios conectados.
  */
 function user_limit_daily_sql()
 {
-    return "SELECT count(DISTINCT `userid`) as conteo_accesos_unicos, 
-                   UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(timecreated))) as timestamp_fecha
+    // Calcular timestamps
+    $yesterday_start = strtotime('yesterday midnight');
+    $today_start = strtotime('today midnight');
+    
+    return "SELECT COUNT(DISTINCT userid) as conteo_accesos_unicos, 
+                   (timecreated - (timecreated % 86400)) as timestamp_fecha
             FROM {logstore_standard_log}
-            WHERE `action` = 'loggedin' 
-              AND timecreated BETWEEN UNIX_TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY)) 
-                                AND UNIX_TIMESTAMP(CURDATE())
-            GROUP by timestamp_fecha";
+            WHERE action = 'loggedin' 
+              AND timecreated BETWEEN $yesterday_start AND $today_start
+            GROUP BY timestamp_fecha";
 }
 
 /**
  * Obtener el límite diario de usuarios para una tarea específica.
- * Optimizado para rendimiento y refactorizado para usar timestamps.
+ * Optimizado para rendimiento usando aritmética de timestamps para agrupación por día.
  *
  * @return string Consulta SQL para obtener el límite diario de usuarios.
  */
 function user_limit_daily_task()
 {
-    return "SELECT UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(timecreated))) as fecha, 
-                   count(DISTINCT userid) as conteo_accesos_unicos 
+    // Calcular timestamps
+    $yesterday_start = strtotime('yesterday midnight');
+    $today_start = strtotime('today midnight');
+    
+    return "SELECT (timecreated - (timecreated % 86400)) as fecha, 
+                   COUNT(DISTINCT userid) as conteo_accesos_unicos 
             FROM {logstore_standard_log}
-            WHERE `action` = 'loggedin' 
-              AND timecreated BETWEEN UNIX_TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY)) 
-                                AND UNIX_TIMESTAMP(CURDATE())
-            GROUP by fecha";
+            WHERE action = 'loggedin' 
+              AND timecreated BETWEEN $yesterday_start AND $today_start
+            GROUP BY fecha";
 }
 
 /**
  * Recuperar los usuarios conectados hoy.
- * Optimizado para usar índice en user.lastaccess y refactorizado para timestamps.
+ * Optimizado para usar índice en user.lastaccess y aritmética de timestamps para agrupación por día.
  *
  * @return string Consulta SQL para obtener los usuarios conectados hoy.
  */
 function users_today()
 {
-    return "SELECT UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(lastaccess))) as timestamp_fecha, 
-                   count(DISTINCT id) as conteo_accesos_unicos 
+    // Un día en segundos
+    $one_day_ago = time() - 86400;
+    
+    return "SELECT (lastaccess - (lastaccess % 86400)) as timestamp_fecha, 
+                   COUNT(DISTINCT id) as conteo_accesos_unicos 
             FROM {user}
-            WHERE lastaccess >= UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 1 DAY))
+            WHERE lastaccess >= $one_day_ago
             GROUP BY timestamp_fecha";
 }
 
 /**
  * Obtener el número máximo de accesos en los últimos 90 días.
- * Optimizado para usar índices y mejorar rendimiento.
- * Refactorizado para trabajar directamente con timestamps.
+ * Optimizado para usar índices y mejorar rendimiento con aritmética de timestamps para agrupación por día.
  *
  * @return string Consulta SQL para obtener el número máximo de accesos en los últimos 90 días.
  */
 function max_userdaily_for_90_days()
 {
-    return "SELECT UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(timecreated))) as fecha, 
-                   count(DISTINCT userid) as usuarios 
+    // 90 días en segundos: 90 * 86400
+    $ninety_days_ago = time() - (90 * 86400);
+    
+    return "SELECT (timecreated - (timecreated % 86400)) as fecha, 
+                   COUNT(DISTINCT userid) as usuarios 
             FROM {logstore_standard_log}
-            WHERE `action` = 'loggedin' 
-              AND timecreated >= UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 90 DAY))  
-            GROUP by fecha
+            WHERE action = 'loggedin' 
+              AND timecreated >= $ninety_days_ago
+            GROUP BY fecha
             ORDER BY usuarios DESC 
             LIMIT 1";
 }
@@ -398,9 +413,6 @@ function analyze_disk_usage_by_directory($rootdir) {
     $directories = [
         'filedir' => $rootdir . '/filedir',
         'cache' => $rootdir . '/cache',
-        'temp' => $rootdir . '/temp',
-        'backup' => $rootdir . '/backup',
-        'sessions' => $rootdir . '/sessions',
     ];
     
     $usage = [];
@@ -523,23 +535,25 @@ function format_timestamp_date($timestamp, $format = null) {
     // Validación estricta del timestamp
     if (!is_numeric($timestamp)) {
         debugging('format_timestamp_date: Se esperaba un timestamp numérico, recibido: ' . var_export($timestamp, true), DEBUG_DEVELOPER);
-        return get_string('unknowndate', 'report_usage_monitor');
+        return date('d/m/Y'); // Fecha actual como fallback
     }
     
     if ($timestamp <= 0) {
         debugging('format_timestamp_date: Timestamp inválido: ' . $timestamp, DEBUG_DEVELOPER);
-        return get_string('unknowndate', 'report_usage_monitor');
+        return date('d/m/Y'); // Fecha actual como fallback
     }
     
+    // NO USAR get_string() AQUÍ - Usar un formato explícito
     if (empty($format)) {
-        $format = get_string('dateformat', 'report_usage_monitor');
+        // En lugar de obtener el formato de las cadenas de idioma, usarlo directamente
+        $format = 'd/m/Y';
     }
     
     try {
         return userdate($timestamp, $format);
     } catch (Exception $e) {
         debugging('format_timestamp_date: Error al formatear timestamp ' . $timestamp . ': ' . $e->getMessage(), DEBUG_DEVELOPER);
-        return get_string('unknowndate', 'report_usage_monitor');
+        return date('d/m/Y'); // Fecha actual como fallback
     }
 }
 
@@ -736,17 +750,20 @@ function generate_historical_data_html($limit = 10, $max_threshold = 100) {
     
     $html = '';
     
-    // Consulta optimizada para usar índices y reducir carga
-    $sql = "SELECT UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(timecreated))) as fecha, 
+    // Calcular timestamps para el rango de fechas
+    $limit_days_ago = time() - ($limit * 86400);
+    
+    // Consulta optimizada usando aritmética de timestamps para agrupación por día
+    $sql = "SELECT (timecreated - (timecreated % 86400)) as fecha, 
                    COUNT(DISTINCT userid) as usuarios
             FROM {logstore_standard_log}
             WHERE action = 'loggedin'
-              AND timecreated > UNIX_TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL :limit DAY))
-            GROUP BY DATE(FROM_UNIXTIME(timecreated))
+              AND timecreated > :limit_days_ago
+            GROUP BY (timecreated - (timecreated % 86400))
             ORDER BY fecha DESC
             LIMIT :limit";
     
-    $records = $DB->get_records_sql($sql, ['limit' => $limit]);
+    $records = $DB->get_records_sql($sql, ['limit_days_ago' => $limit_days_ago, 'limit' => $limit]);
     
     foreach ($records as $record) {
         // Validar que la fecha sea un timestamp válido
