@@ -93,7 +93,7 @@ class disk_usage extends \core\task\scheduled_task
         
         // Guardar timestamp de última ejecución
         $execution_time = time();
-        set_config('lastexecutioncalculate', $execution_time, 'report_usage_monitor');
+        set_config('lastexecutioncalculatedisk', $execution_time, 'report_usage_monitor');
         
         // Registrar en el historial para poder mostrar gráficas de tendencia
         if ($DB->get_manager()->table_exists('report_usage_monitor_history')) {
