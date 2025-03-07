@@ -114,6 +114,12 @@ class notification_userlimit extends \core\task\scheduled_task
         $users_percent = calculate_threshold_percentage($users_count, $user_threshold);
         $fecha_timestamp = $lastday_users_record->timestamp_fecha;
         
+        // Verificar que el timestamp sea válido
+        if (!is_numeric($fecha_timestamp) || $fecha_timestamp <= 0) {
+            debugging('notify_user_limit: Timestamp inválido obtenido: ' . var_export($fecha_timestamp, true), DEBUG_DEVELOPER);
+            $fecha_timestamp = time(); // Usar timestamp actual como fallback
+        }
+        
         if (debugging('', DEBUG_DEVELOPER)) {
             mtrace("Usuarios únicos: $users_count, Porcentaje: $users_percent%, Fecha: " . format_timestamp_date($fecha_timestamp));
         }
@@ -183,6 +189,12 @@ class notification_userlimit extends \core\task\scheduled_task
      */
     private function calculate_notification_interval($users_percent)
     {
+        // Validación del parámetro
+        if (!is_numeric($users_percent)) {
+            debugging('calculate_notification_interval: Porcentaje no numérico: ' . var_export($users_percent, true), DEBUG_DEVELOPER);
+            return PHP_INT_MAX; // No notificar en caso de error
+        }
+
         $thresholds = [
             100 => 24 * 60 * 60,     // 1 día cuando se supera el 100%
             90 => 3 * 24 * 60 * 60,  // 3 días cuando se supera el 90%
@@ -219,13 +231,19 @@ class notification_userlimit extends \core\task\scheduled_task
             $record->threshold = $user_threshold;
             $record->timecreated = time();
             
+            // Usar transacción para garantizar consistencia
+            $transaction = $DB->start_delegated_transaction();
+            
             try {
                 $DB->insert_record('report_usage_monitor_history', $record);
+                $transaction->allow_commit();
+                
                 if (debugging('', DEBUG_DEVELOPER)) {
                     mtrace("Notificación registrada en el historial.");
                 }
                 return true;
             } catch (\Exception $e) {
+                $transaction->rollback($e);
                 if (debugging('', DEBUG_DEVELOPER)) {
                     mtrace("Error al registrar la notificación: " . $e->getMessage());
                 }
