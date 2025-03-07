@@ -270,11 +270,8 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                 </div>
                 <div class="card-body text-center">
                     <h2 class="display-5">
-                        <?php echo $max_90_days_users; ?>
+                    <?php echo $max_90_days_users; ?> / <?php echo $max_users_threshold; ?>
                     </h2>
-                    <p class="text-muted">
-                        <?php echo $max_90_days_users; ?> / <?php echo $max_users_threshold; ?>
-                    </p>
                 </div>
             </div>
         </div>
