@@ -121,7 +121,8 @@ class notification_userlimit extends \core\task\scheduled_task
         }
         
         if (debugging('', DEBUG_DEVELOPER)) {
-            mtrace("Usuarios únicos: $users_count, Porcentaje: $users_percent%, Fecha: " . format_timestamp_date($fecha_timestamp));
+            // CORRECCIÓN: Usar date() directamente en lugar de format_timestamp_date()
+            mtrace("Usuarios únicos: $users_count, Porcentaje: $users_percent%, Fecha: " . date('d/m/Y', $fecha_timestamp));
         }
         
         // Verificar si el porcentaje supera el nivel de advertencia configurado
