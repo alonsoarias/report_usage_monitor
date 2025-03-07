@@ -96,6 +96,20 @@ $filedir_gb  = display_size_in_gb($dir_analysis['filedir']  ?? 0, 2);
 $cache_gb    = display_size_in_gb($dir_analysis['cache']    ?? 0, 2);
 $others_gb   = display_size_in_gb($dir_analysis['others']   ?? 0, 2);
 
+// Inicialización de variables para el gráfico de dona (distribución de disco)
+$doughnutLabels = [
+    get_string('database', 'report_usage_monitor'),
+    get_string('files_dir', 'report_usage_monitor'),
+    get_string('cache', 'report_usage_monitor'),
+    get_string('others', 'report_usage_monitor')
+];
+$doughnutData = [
+    $database_gb,
+    $filedir_gb,
+    $cache_gb,
+    $others_gb,
+];
+
 $largest_courses_json = $reportconfig->largest_courses ?? '[]';
 $largest_courses = json_decode($largest_courses_json);
 
@@ -118,6 +132,16 @@ foreach ($userdaily_records as $record) {
     }
     
     $formatted_userdaily_records[] = $new_record;
+}
+
+// Inicialización de variables para el gráfico de líneas (usuarios últimos 10 días)
+$last10daysLabels = [];
+$last10daysData   = [];
+if (!empty($formatted_userdaily_records)) {
+    foreach ($formatted_userdaily_records as $day) {
+        $last10daysLabels[] = $day->fecha_formateada;
+        $last10daysData[] = (int)$day->conteo_accesos_unicos;
+    }
 }
 
 $userdailytop_sql = report_user_daily_top_sql();
@@ -196,28 +220,6 @@ if (count($daily_data) < 30) {
 foreach ($daily_data as $data) {
     $disk_history_labels[] = $data['label'];
     $disk_history_data[] = $data['percentage'];
-}
-
-$doughnutLabels = [
-    get_string('database', 'report_usage_monitor'),
-    get_string('files_dir', 'report_usage_monitor'),
-    get_string('cache', 'report_usage_monitor'),
-    get_string('others', 'report_usage_monitor')
-];
-$doughnutData = [
-    $database_gb,
-    $filedir_gb,
-    $cache_gb,
-    $others_gb,
-];
-
-$last10daysLabels = [];
-$last10daysData   = [];
-if (!empty($formatted_userdaily_records)) {
-    foreach ($formatted_userdaily_records as $day) {
-        $last10daysLabels[] = $day->fecha_formateada;
-        $last10daysData[] = (int)$day->conteo_accesos_unicos;
-    }
 }
 
 echo $OUTPUT->header();
@@ -709,7 +711,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
 
         // ========== Gráfico Doughnut (distribución de disco) ==========
         var donutCtx = document.getElementById("chartjs-doughnut");
-        if (donutCtx) {
+        if (donutCtx && <?php echo !empty($doughnutData) ? 'true' : 'false'; ?>) {
             new Chart(donutCtx, {
                 type: "doughnut",
                 data: {
@@ -745,7 +747,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
 
         // ========== Gráfico Line (últimos 10 días - Usuarios) ==========
         var last10Ctx = document.getElementById("chartjs-last10days");
-        if (last10Ctx) {
+        if (last10Ctx && <?php echo !empty($last10daysLabels) ? 'true' : 'false'; ?>) {
             new Chart(last10Ctx, {
                 type: "line",
                 data: {
@@ -826,7 +828,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
         
         // ========== Gráfico Line (historial de uso de disco) ==========
         var diskHistoryCtx = document.getElementById("chartjs-disk-history");
-        if (diskHistoryCtx) {
+        if (diskHistoryCtx && <?php echo !empty($disk_history_labels) ? 'true' : 'false'; ?>) {
             new Chart(diskHistoryCtx, {
                 type: "line",
                 data: {
@@ -846,7 +848,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                         borderColor: "#ffc107",
                         borderDash: [5, 5],
                         pointRadius: 0,
-                        data: Array(<?php echo json_encode($disk_history_labels); ?>.length).fill(70)
+                        data: Array(<?php echo !empty($disk_history_labels) ? count($disk_history_labels) : 0; ?>).fill(70)
                     },
                     {
                         label: "<?php echo get_string('critical90', 'report_usage_monitor'); ?>",
@@ -854,7 +856,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                         borderColor: "#dc3545",
                         borderDash: [5, 5],
                         pointRadius: 0,
-                        data: Array(<?php echo json_encode($disk_history_labels); ?>.length).fill(90)
+                        data: Array(<?php echo !empty($disk_history_labels) ? count($disk_history_labels) : 0; ?>).fill(90)
                     },
                     {
                         label: "<?php echo get_string('limit100', 'report_usage_monitor'); ?>",
@@ -862,7 +864,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                         borderColor: "#6c757d",
                         borderDash: [2, 2],
                         pointRadius: 0,
-                        data: Array(<?php echo json_encode($disk_history_labels); ?>.length).fill(100)
+                        data: Array(<?php echo !empty($disk_history_labels) ? count($disk_history_labels) : 0; ?>).fill(100)
                     }]
                 },
                 options: {
