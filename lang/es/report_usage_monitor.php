@@ -838,3 +838,35 @@ $string['threshold_success'] = 'Indica si la operación fue exitosa en general';
 $string['user_threshold_updated_status'] = 'Indica si se actualizó el umbral de usuarios';
 $string['disk_threshold_updated_status'] = 'Indica si se actualizó el umbral de disco';
 $string['threshold_message'] = 'Mensaje informativo o de error';
+
+
+// Cadenas adicionales para las proyecciones y tasas de crecimiento
+$string['usage_disk_current'] = 'Uso actual de disco en bytes';
+$string['usage_disk_current_readable'] = 'Uso actual de disco en formato legible';
+$string['usage_disk_threshold'] = 'Umbral de disco en bytes';
+$string['usage_disk_threshold_readable'] = 'Umbral de disco en formato legible';
+$string['usage_disk_percentage'] = 'Porcentaje de uso de disco';
+$string['usage_disk_last_calculated'] = 'Timestamp del último cálculo de disco';
+
+$string['usage_user_current'] = 'Usuarios actuales';
+$string['usage_user_threshold'] = 'Umbral de usuarios';
+$string['usage_user_percentage'] = 'Porcentaje de uso de usuarios';
+$string['usage_user_last_calculated'] = 'Timestamp del último cálculo de usuarios';
+$string['usage_user_max_90_days'] = 'Máximo de usuarios en los últimos 90 días';
+$string['usage_user_max_90_days_date'] = 'Timestamp de la fecha con máximo de usuarios';
+
+// Cadenas para las proyecciones
+$string['growth_rate_disk'] = 'Tasa de crecimiento de disco';
+$string['growth_rate_disk_desc'] = 'Tasa de crecimiento mensual del uso de disco en porcentaje';
+$string['growth_rate_users'] = 'Tasa de crecimiento de usuarios';
+$string['growth_rate_users_desc'] = 'Tasa de crecimiento mensual del número de usuarios en porcentaje';
+$string['days_to_threshold_disk'] = 'Días hasta umbral de disco';
+$string['days_to_threshold_disk_desc'] = 'Días proyectados hasta alcanzar el umbral de advertencia de disco';
+$string['days_to_threshold_users'] = 'Días hasta umbral de usuarios';
+$string['days_to_threshold_users_desc'] = 'Días proyectados hasta alcanzar el umbral de advertencia de usuarios';
+
+// Cadenas para la API mejorada
+$string['api_projections_title'] = 'Proyecciones de crecimiento';
+$string['api_projections_desc'] = 'Datos de proyección de crecimiento y días estimados para alcanzar umbrales';
+$string['api_monthly_growth_rate'] = 'Tasa de crecimiento mensual';
+$string['api_projection_days'] = 'Días para alcanzar umbral';
