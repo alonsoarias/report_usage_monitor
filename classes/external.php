@@ -141,6 +141,25 @@ class report_usage_monitor_external extends external_api {
                                $reportconfig->lastexecutioncalculate : 0,
                 'users_calculation' => !empty($reportconfig->lastexecution) ? 
                                 $reportconfig->lastexecution : 0
+            ),
+            // NUEVOS CAMPOS: Tasas de crecimiento y proyecciones
+            'growth_rates' => array(
+                'disk' => array(
+                    'monthly_percent' => calculate_growth_rate('disk'),
+                    'projected_days_to_threshold' => project_limit_date(
+                        $disk_usage, 
+                        $quotadisk * 0.9, // Proyección para alcanzar el 90% del umbral
+                        calculate_growth_rate('disk')
+                    )
+                ),
+                'users' => array(
+                    'monthly_percent' => calculate_growth_rate('users'),
+                    'projected_days_to_threshold' => project_limit_date(
+                        $users_today,
+                        $user_threshold * 0.9, // Proyección para alcanzar el 90% del umbral
+                        calculate_growth_rate('users')
+                    )
+                )
             )
         );
         
@@ -258,6 +277,23 @@ class report_usage_monitor_external extends external_api {
                         'disk_calculation' => new external_value(PARAM_INT, get_string('disk_calculation_timestamp', 'report_usage_monitor')),
                         'users_calculation' => new external_value(PARAM_INT, get_string('users_calculation_timestamp', 'report_usage_monitor'))
                     )
+                ),
+                // Nueva estructura para datos de crecimiento y proyecciones
+                'growth_rates' => new external_single_structure(
+                    array(
+                        'disk' => new external_single_structure(
+                            array(
+                                'monthly_percent' => new external_value(PARAM_FLOAT, 'Tasa de crecimiento mensual de disco en porcentaje'),
+                                'projected_days_to_threshold' => new external_value(PARAM_INT, 'Días proyectados para alcanzar el umbral de advertencia')
+                            )
+                        ),
+                        'users' => new external_single_structure(
+                            array(
+                                'monthly_percent' => new external_value(PARAM_FLOAT, 'Tasa de crecimiento mensual de usuarios en porcentaje'),
+                                'projected_days_to_threshold' => new external_value(PARAM_INT, 'Días proyectados para alcanzar el umbral de advertencia')
+                            )
+                        )
+                    )
                 )
             )
         );
@@ -324,7 +360,7 @@ class report_usage_monitor_external extends external_api {
                 'threshold' => $record->type === 'disk' ? display_size($record->threshold) : $record->threshold,
                 'threshold_raw' => $record->threshold,
                 'timecreated' => $record->timecreated,
-                'timereadable' => userdate($record->timecreated)
+                'timereadable' => format_timestamp_date($record->timecreated, get_string('datetimeformat', 'report_usage_monitor'))
             );
         }
         
@@ -424,6 +460,21 @@ class report_usage_monitor_external extends external_api {
                                 $reportconfig->max_userdaily_for_90_days_users : 0,
                 'max_90_days_date' => !empty($reportconfig->max_userdaily_for_90_days_date) ? 
                                     $reportconfig->max_userdaily_for_90_days_date : 0
+            ),
+            // NUEVOS CAMPOS para proyecciones
+            'projections' => array(
+                'disk_growth_rate' => calculate_growth_rate('disk'),
+                'users_growth_rate' => calculate_growth_rate('users'),
+                'days_to_disk_threshold' => project_limit_date(
+                    $disk_usage, 
+                    $quotadisk * 0.9,
+                    calculate_growth_rate('disk')
+                ),
+                'days_to_users_threshold' => project_limit_date(
+                    $users_today,
+                    $user_threshold * 0.9,
+                    calculate_growth_rate('users')
+                )
             )
         );
         
@@ -440,22 +491,31 @@ class report_usage_monitor_external extends external_api {
             array(
                 'disk_usage' => new external_single_structure(
                     array(
-                        'current' => new external_value(PARAM_INT, get_string('usage_disk_current', 'report_usage_monitor')),
-                        'current_readable' => new external_value(PARAM_TEXT, get_string('usage_disk_current_readable', 'report_usage_monitor')),
-                        'threshold' => new external_value(PARAM_INT, get_string('usage_disk_threshold', 'report_usage_monitor')),
-                        'threshold_readable' => new external_value(PARAM_TEXT, get_string('usage_disk_threshold_readable', 'report_usage_monitor')),
-                        'percentage' => new external_value(PARAM_FLOAT, get_string('usage_disk_percentage', 'report_usage_monitor')),
-                        'last_calculated' => new external_value(PARAM_INT, get_string('usage_disk_last_calculated', 'report_usage_monitor'))
+                        'current' => new external_value(PARAM_INT, 'Uso actual de disco en bytes'),
+                        'current_readable' => new external_value(PARAM_TEXT, 'Uso actual de disco en formato legible'),
+                        'threshold' => new external_value(PARAM_INT, 'Umbral de disco en bytes'),
+                        'threshold_readable' => new external_value(PARAM_TEXT, 'Umbral de disco en formato legible'),
+                        'percentage' => new external_value(PARAM_FLOAT, 'Porcentaje de uso de disco'),
+                        'last_calculated' => new external_value(PARAM_INT, 'Timestamp del último cálculo de disco')
                     )
                 ),
                 'user_usage' => new external_single_structure(
                     array(
-                        'current' => new external_value(PARAM_INT, get_string('usage_user_current', 'report_usage_monitor')),
-                        'threshold' => new external_value(PARAM_INT, get_string('usage_user_threshold', 'report_usage_monitor')),
-                        'percentage' => new external_value(PARAM_FLOAT, get_string('usage_user_percentage', 'report_usage_monitor')),
-                        'last_calculated' => new external_value(PARAM_INT, get_string('usage_user_last_calculated', 'report_usage_monitor')),
-                        'max_90_days' => new external_value(PARAM_INT, get_string('usage_user_max_90_days', 'report_usage_monitor')),
-                        'max_90_days_date' => new external_value(PARAM_INT, get_string('usage_user_max_90_days_date', 'report_usage_monitor'))
+                        'current' => new external_value(PARAM_INT, 'Usuarios actuales'),
+                        'threshold' => new external_value(PARAM_INT, 'Umbral de usuarios'),
+                        'percentage' => new external_value(PARAM_FLOAT, 'Porcentaje de uso de usuarios'),
+                        'last_calculated' => new external_value(PARAM_INT, 'Timestamp del último cálculo de usuarios'),
+                        'max_90_days' => new external_value(PARAM_INT, 'Máximo de usuarios en los últimos 90 días'),
+                        'max_90_days_date' => new external_value(PARAM_INT, 'Timestamp de la fecha con máximo de usuarios')
+                    )
+                ),
+                // Nueva estructura para proyecciones
+                'projections' => new external_single_structure(
+                    array(
+                        'disk_growth_rate' => new external_value(PARAM_FLOAT, 'Tasa de crecimiento mensual de disco en porcentaje'),
+                        'users_growth_rate' => new external_value(PARAM_FLOAT, 'Tasa de crecimiento mensual de usuarios en porcentaje'),
+                        'days_to_disk_threshold' => new external_value(PARAM_INT, 'Días proyectados para alcanzar el umbral de advertencia de disco'),
+                        'days_to_users_threshold' => new external_value(PARAM_INT, 'Días proyectados para alcanzar el umbral de advertencia de usuarios')
                     )
                 )
             )
@@ -472,10 +532,10 @@ class report_usage_monitor_external extends external_api {
         return new external_function_parameters(
             array(
                 'user_threshold' => new external_value(PARAM_INT, 
-                    get_string('param_user_threshold', 'report_usage_monitor'), 
+                    'Nuevo umbral para usuarios diarios', 
                     VALUE_DEFAULT, null),
                 'disk_threshold' => new external_value(PARAM_INT, 
-                    get_string('param_disk_threshold', 'report_usage_monitor'), 
+                    'Nuevo umbral para espacio en disco en GB', 
                     VALUE_DEFAULT, null)
             )
         );
@@ -515,6 +575,15 @@ class report_usage_monitor_external extends external_api {
                 set_config('max_daily_users_threshold', $params['user_threshold'], 'report_usage_monitor');
                 $result['user_threshold_updated'] = true;
                 $result['messages'][] = get_string('user_threshold_updated', 'report_usage_monitor');
+                
+                // Actualizar valores precalculados para que reflejen el nuevo umbral
+                $reportconfig = get_config('report_usage_monitor');
+                $users_today = !empty($reportconfig->totalusersdaily) ? ($reportconfig->totalusersdaily) : 0;
+                $users_percent = calculate_threshold_percentage($users_today, $params['user_threshold']);
+                $users_warning_class = ($users_percent < 70) ? 'bg-success' : (($users_percent < 90) ? 'bg-warning' : 'bg-danger');
+                
+                set_config('users_percent', $users_percent, 'report_usage_monitor');
+                set_config('users_warning_class', $users_warning_class, 'report_usage_monitor');
             } else {
                 $result['success'] = false;
                 $result['messages'][] = get_string('error_user_threshold_negative', 'report_usage_monitor');
@@ -527,6 +596,17 @@ class report_usage_monitor_external extends external_api {
                 set_config('disk_quota', $params['disk_threshold'], 'report_usage_monitor');
                 $result['disk_threshold_updated'] = true;
                 $result['messages'][] = get_string('disk_threshold_updated', 'report_usage_monitor');
+                
+                // Actualizar valores precalculados para que reflejen el nuevo umbral
+                $reportconfig = get_config('report_usage_monitor');
+                $disk_usage = ((int) $reportconfig->totalusagereadable + (int) $reportconfig->totalusagereadabledb) ?: 0;
+                $quotadisk_bytes = ((int) $params['disk_threshold'] * 1024) * 1024 * 1024;
+                $disk_percent = calculate_threshold_percentage($disk_usage, $quotadisk_bytes);
+                $disk_warning_class = ($disk_percent < 70) ? 'bg-success' : (($disk_percent < 90) ? 'bg-warning' : 'bg-danger');
+                
+                set_config('disk_percent', $disk_percent, 'report_usage_monitor');
+                set_config('disk_warning_class', $disk_warning_class, 'report_usage_monitor');
+                set_config('quotadisk_gb', display_size_in_gb($quotadisk_bytes, 2), 'report_usage_monitor');
             } else {
                 $result['success'] = false;
                 $result['messages'][] = get_string('error_disk_threshold_negative', 'report_usage_monitor');
@@ -550,11 +630,11 @@ class report_usage_monitor_external extends external_api {
     public static function set_usage_thresholds_returns() {
         return new external_single_structure(
             array(
-                'success' => new external_value(PARAM_BOOL, get_string('threshold_success', 'report_usage_monitor')),
-                'user_threshold_updated' => new external_value(PARAM_BOOL, get_string('user_threshold_updated_status', 'report_usage_monitor')),
-                'disk_threshold_updated' => new external_value(PARAM_BOOL, get_string('disk_threshold_updated_status', 'report_usage_monitor')),
+                'success' => new external_value(PARAM_BOOL, 'Indica si la operación fue exitosa en general'),
+                'user_threshold_updated' => new external_value(PARAM_BOOL, 'Indica si se actualizó el umbral de usuarios'),
+                'disk_threshold_updated' => new external_value(PARAM_BOOL, 'Indica si se actualizó el umbral de disco'),
                 'messages' => new external_multiple_structure(
-                    new external_value(PARAM_TEXT, get_string('threshold_message', 'report_usage_monitor'))
+                    new external_value(PARAM_TEXT, 'Mensaje informativo o de error')
                 )
             )
         );
