@@ -33,7 +33,7 @@ A comprehensive monitoring solution for Moodle administrators to track disk usag
 ### Smart Notifications
 - Customizable email alerts for disk and user thresholds
 - Professional HTML email templates with detailed analytics
-- Dynamic notification frequency based on severity
+- **Adaptive notification frequency** based on threshold severity
 - Actionable recommendations for administrators
 - Historical notification log
 
@@ -48,6 +48,12 @@ A comprehensive monitoring solution for Moodle administrators to track disk usag
 - Threshold projection to estimate when limits will be reached
 - Intelligent recommendations for resource optimization
 - Impact analysis for administrative decisions
+
+### Integrated Threshold System
+- **Configurable warning thresholds** for disk usage and user limits
+- **Adaptive notification intervals** based on threshold levels
+- **Dynamic visualization colors** tied to configured thresholds
+- **Comprehensive explanation** of threshold effects throughout the system
 
 ## 📊 Dashboard Preview
 
@@ -90,10 +96,9 @@ Access the full API documentation at `{your-moodle-url}/report/usage_monitor/api
 3. Search for "Usage Monitor" and install the plugin
 
 ### Manual Installation
-1. Download the plugin from [GitHub](https://github.com/yourusername/moodle-report_usage_monitor)
-2. Extract the folder and rename it to `usage_monitor`
-3. Place the folder in your Moodle installation under `report/`
-4. Visit the notifications page on your Moodle site to complete the installation
+1. Extract the folder and rename it to `usage_monitor`
+2. Place the folder in your Moodle installation under `report/`
+3. Visit the notifications page on your Moodle site to complete the installation
 
 ## ⚙️ Configuration
 
@@ -102,10 +107,24 @@ Access the full API documentation at `{your-moodle-url}/report/usage_monitor/api
    - **Disk quota**: Set your total disk space allocation in GB
    - **User threshold**: Maximum daily active users allowed
    - **Email notifications**: Email address for alerts
-   - **Warning thresholds**: Customize when notifications are triggered
+   - **Warning thresholds**: Customize when alerts are triggered and their frequency
    - **API access**: Enable/disable API functionality
 3. For optimal disk usage monitoring on Linux systems:
    - Configure the path to `du` command in Site administration > Server > System paths
+
+### Understanding Warning Thresholds
+
+The configurable warning thresholds affect several aspects of the system:
+
+- **Notification triggers**: Determines when email alerts are first sent
+- **Notification frequency**: Higher severity = more frequent notifications
+  - At threshold level: Notifications every 5 days (disk) or 3 days (users)
+  - Moderately above threshold: Notifications every 1 day
+  - Critically above threshold: Notifications every 12 hours (disk) or 1 day (users)
+- **Dashboard colors**: Visual indicators adapt to configured thresholds
+  - Green: Below caution level (threshold - 20%)
+  - Yellow: Between caution and warning level
+  - Red: Above warning level
 
 ## 🚀 Usage
 
@@ -141,6 +160,12 @@ $days_to_threshold = project_limit_date($current_disk_usage, $threshold_value, $
 
 // Get largest courses
 $largest_courses = get_largest_courses(5);
+
+// Get threshold-based warning class
+$disk_warning_level = !empty($reportconfig->disk_warning_level) ? (float)$reportconfig->disk_warning_level : 90;
+$disk_caution_level = max(70, $disk_warning_level - 20);
+$warning_class = ($percent < $disk_caution_level) ? 'bg-success' : 
+                 (($percent < $disk_warning_level) ? 'bg-warning' : 'bg-danger');
 ```
 
 ## 📝 FAQ
@@ -152,7 +177,10 @@ A: The plugin uses scheduled tasks to perform calculations during off-peak hours
 A: On Linux systems with the `du` command properly configured, calculations are highly accurate. Without `du`, the plugin falls back to PHP's directory calculation methods, which may be less precise.
 
 **Q: Can I customize notification thresholds?**
-A: Yes, you can configure separate warning thresholds for disk usage and user limits in the plugin settings.
+A: Yes, you can configure separate warning thresholds for disk usage and user limits in the plugin settings. These thresholds determine not only when notifications are sent but also their frequency and dashboard visualization colors.
+
+**Q: How do the notification frequencies work?**
+A: The system automatically adjusts notification frequency based on severity. More critical situations trigger more frequent alerts, allowing administrators to respond appropriately to the level of urgency.
 
 **Q: Does this plugin work with cloud storage?**
 A: The plugin calculates disk usage for files stored in the local filesystem. Cloud storage systems like S3 would require custom adaptations.
