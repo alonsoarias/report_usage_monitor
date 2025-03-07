@@ -208,6 +208,17 @@ $string['days_to_threshold_disk_desc'] = 'Días proyectados hasta alcanzar el um
 $string['days_to_threshold_users'] = 'Días hasta umbral de usuarios';
 $string['days_to_threshold_users_desc'] = 'Días proyectados hasta alcanzar el umbral de advertencia de usuarios';
 
+// Thresholds explanation strings added with our modifications
+$string['thresholds_explanation_title'] = 'Cómo funcionan los umbrales';
+$string['thresholds_explanation_desc'] = 'Los umbrales de advertencia configurados arriba determinan:
+<ul>
+<li>Cuándo comienza a enviarse notificaciones (cuando se supera el umbral)</li>
+<li>La frecuencia con que se envían las notificaciones (más frecuentes cuanto más se excede el umbral)</li>
+<li>Los colores de visualización en el panel (verde, amarillo, rojo)</li>
+</ul>
+<p>Ejemplo: Con un umbral de disco de 90%, las notificaciones se enviarán cada 5 días si se supera el 90%, 
+cada día si se supera el 94%, y cada 12 horas si supera el 98%.</p>';
+
 // Email templates
 $string['messagehtml_userlimit'] = '<!DOCTYPE html>
 <html lang="es">
