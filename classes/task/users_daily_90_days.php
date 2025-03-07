@@ -81,7 +81,7 @@ class users_daily_90_days extends \core\task\scheduled_task
                 // Verificar si ya existe un registro para esta fecha
                 $existing = $DB->get_record_sql(
                     "SELECT id FROM {report_usage_monitor_history}
-                    WHERE type = 'users_90_days' AND timecreated = ?",
+                    WHERE type = 'users90d' AND timecreated = ?",
                     [$max_date]
                 );
 
@@ -91,7 +91,8 @@ class users_daily_90_days extends \core\task\scheduled_task
                     $threshold = $reportconfig->max_daily_users_threshold ?? 100;
 
                     $record = new \stdClass();
-                    $record->type = 'users_90_days';
+                    // Cambiado 'users_90_days' a 'users90d' para cumplir con la limitación de 10 caracteres
+                    $record->type = 'users90d';
                     $record->percentage = calculate_threshold_percentage($max_users, $threshold);
                     $record->value = $max_users;
                     $record->threshold = $threshold;
