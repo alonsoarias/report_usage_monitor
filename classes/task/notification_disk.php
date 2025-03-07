@@ -173,6 +173,7 @@ class notification_disk extends \core\task\scheduled_task
 
     /**
      * Obtiene el conteo total de accesos de usuarios.
+     * REFACTORIZADO para usar SQL más eficiente y consistente.
      * 
      * @return int Conteo de usuarios únicos del último día.
      */
