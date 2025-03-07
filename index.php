@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
+// This file is part of Moodle - https://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -12,46 +12,36 @@
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-/**
- * Usage Monitor Report (Chart.js, disclaimers, tabs)
- *
- * @package    report_usage_monitor
- * @copyright  2023 Soporte IngeWeb
- * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- */
+ /**
+  * Usage Monitor Report main dashboard
+  *
+  * @package    report_usage_monitor
+  * @copyright  2023 Soporte IngeWeb <soporte@ingeweb.co>
+  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+  */
 
 require_once('../../config.php');
 require_once($CFG->libdir . '/adminlib.php');
 require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
 
-// Solo admins
 admin_externalpage_setup('report_usage_monitor', '', null, '', ['pagelayout' => 'admin']);
 
-// Config plugin
 $reportconfig = get_config('report_usage_monitor');
 
-// -------------------------------------------------------------------------
-// 1. Obtener datos precomputados (en lugar de realizar cálculos en tiempo real)
-// -------------------------------------------------------------------------
-
-// Uso de disco (en bytes) - usando valores precomputados
 $disk_usage_bytes = (int)($reportconfig->totalusagereadable ?? 0)
     + (int)($reportconfig->totalusagereadabledb ?? 0);
 $quotadisk_bytes  = ((int)($reportconfig->disk_quota ?? 0)) * 1024 * 1024 * 1024;
 
-// Tamaño en GB para el dashboard (desde valores precomputados o calcular si no existen)
 $disk_usage_gb = !empty($reportconfig->disk_usage_gb) ? $reportconfig->disk_usage_gb : display_size_in_gb($disk_usage_bytes, 2);
 $quotadisk_gb = !empty($reportconfig->quotadisk_gb) ? $reportconfig->quotadisk_gb : display_size_in_gb($quotadisk_bytes, 2);
 
-// Porcentaje y clase de advertencia para disco (usar valores precomputados)
 $disk_percent = !empty($reportconfig->disk_percent) ? (float)$reportconfig->disk_percent : 
     (($quotadisk_bytes > 0) ? ($disk_usage_bytes / $quotadisk_bytes * 100) : 0);
 $disk_warning_class = !empty($reportconfig->disk_warning_class) ? $reportconfig->disk_warning_class : 
     (($disk_percent < 70) ? 'bg-success' : (($disk_percent < 90) ? 'bg-warning' : 'bg-danger'));
 
-// Usuarios diarios (usar valores precomputados)
 $users_today = (int)($reportconfig->totalusersdaily ?? 0);
 $max_users_threshold = (int)($reportconfig->max_daily_users_threshold ?? 100);
 $users_percent = !empty($reportconfig->users_percent) ? (float)$reportconfig->users_percent : 
@@ -59,9 +49,7 @@ $users_percent = !empty($reportconfig->users_percent) ? (float)$reportconfig->us
 $users_warning_class = !empty($reportconfig->users_warning_class) ? $reportconfig->users_warning_class : 
     (($users_percent < 70) ? 'bg-success' : (($users_percent < 90) ? 'bg-warning' : 'bg-danger'));
 
-// Fechas de última ejecución
 $lastexec_disk_ts = !empty($reportconfig->lastexecutioncalculate) ? $reportconfig->lastexecutioncalculate : 0;
-// Validar timestamp
 if (!is_numeric($lastexec_disk_ts) || $lastexec_disk_ts <= 0) {
     $lastexec_disk = get_string('notcalculatedyet', 'report_usage_monitor');
 } else {
@@ -69,29 +57,31 @@ if (!is_numeric($lastexec_disk_ts) || $lastexec_disk_ts <= 0) {
 }
 
 $lastexec_users_ts = !empty($reportconfig->lastexecution) ? $reportconfig->lastexecution : 0;
-// Validar timestamp
 if (!is_numeric($lastexec_users_ts) || $lastexec_users_ts <= 0) {
     $lastexec_users = get_string('notcalculatedyet', 'report_usage_monitor');
 } else {
     $lastexec_users = date('d/m/Y H:i', (int)$lastexec_users_ts);
 }
     
-// Máximo usuarios 90 días
 $max_90_days_users   = $reportconfig->max_userdaily_for_90_days_users ?? get_string('notcalculatedyet', 'report_usage_monitor');
 $max_90_days_date_ts = $reportconfig->max_userdaily_for_90_days_date  ?? 0;
+$last_calc_90days_ts = $reportconfig->lastexecutioncalculateusers90days ?? 0;
 
-// Validar que el timestamp sea válido
 if (!is_numeric($max_90_days_date_ts) || $max_90_days_date_ts <= 0) {
     $max_90_days_date = get_string('notcalculatedyet', 'report_usage_monitor');
 } else {
     $max_90_days_date = date('d/m/Y', (int)$max_90_days_date_ts);
 }
 
-// Análisis de disco por directorios (obtener desde configuración)
+if (!is_numeric($last_calc_90days_ts) || $last_calc_90days_ts <= 0) {
+    $last_calc_90days = get_string('notcalculatedyet', 'report_usage_monitor');
+} else {
+    $last_calc_90days = date('d/m/Y H:i', (int)$last_calc_90days_ts);
+}
+
 $dir_analysis_json = $reportconfig->dir_analysis ?? '{}';
 $dir_analysis = json_decode($dir_analysis_json, true);
 
-// Si no hay datos almacenados, utilizar un array vacío con estructura predefinida
 if (empty($dir_analysis) || !is_array($dir_analysis)) {
     $dir_analysis = [
         'database' => 0,
@@ -101,71 +91,58 @@ if (empty($dir_analysis) || !is_array($dir_analysis)) {
     ];
 }
 
-// Convertir cada parte a GB para la gráfica
 $database_gb = display_size_in_gb($dir_analysis['database'] ?? 0, 2);
 $filedir_gb  = display_size_in_gb($dir_analysis['filedir']  ?? 0, 2);
 $cache_gb    = display_size_in_gb($dir_analysis['cache']    ?? 0, 2);
 $others_gb   = display_size_in_gb($dir_analysis['others']   ?? 0, 2);
 
-// Cursos más grandes (obtener desde configuración)
 $largest_courses_json = $reportconfig->largest_courses ?? '[]';
 $largest_courses = json_decode($largest_courses_json);
 
-// Si hay problemas con los datos JSON, usar la función directamente
 if (empty($largest_courses)) {
     $largest_courses = get_largest_courses(5);
 }
 
-// Usuarios últimos 10 días - REFACTORIZADO
 $userdaily_sql = report_user_daily_sql();
 $userdaily_records = $DB->get_records_sql($userdaily_sql);
 
-// Formatear los registros con timestamps para visualización
 $formatted_userdaily_records = array();
 foreach ($userdaily_records as $record) {
-    // Crear una copia del objeto para evitar modificar el original
     $new_record = new stdClass();
     $new_record->conteo_accesos_unicos = $record->conteo_accesos_unicos;
     
-    // Formatear la fecha usando date() y convertir explícitamente a integer
     if (is_numeric($record->timestamp_fecha)) {
         $new_record->fecha_formateada = date('d/m/Y', (int)$record->timestamp_fecha);
     } else {
-        $new_record->fecha_formateada = date('d/m/Y'); // Fecha actual como fallback
+        $new_record->fecha_formateada = date('d/m/Y');
     }
     
     $formatted_userdaily_records[] = $new_record;
 }
 
-// Top 10 usuarios diarios - REFACTORIZADO
 $userdailytop_sql = report_user_daily_top_sql();
 $userdaily_recordstop = $DB->get_records_sql($userdailytop_sql);
 
-// Formatear los registros con timestamps para visualización
 $formatted_userdaily_recordstop = array();
 foreach ($userdaily_recordstop as $record) {
-    // Crear una copia del objeto para evitar modificar el original
     $new_record = new stdClass();
     $new_record->cantidad_usuarios = $record->cantidad_usuarios;
     
-    // Formatear la fecha usando date() y convertir explícitamente a integer
     if (is_numeric($record->timestamp_fecha)) {
         $new_record->fecha_formateada = date('d/m/Y', (int)$record->timestamp_fecha);
     } else {
-        $new_record->fecha_formateada = date('d/m/Y'); // Fecha actual como fallback
+        $new_record->fecha_formateada = date('d/m/Y');
     }
     
     $formatted_userdaily_recordstop[] = $new_record;
 }
 
-// Info del sistema
 $totalcourses    = $DB->count_records('course');
-$activeusers = $DB->count_records('user', ['deleted' => 0, 'suspended' => 0]) - 1; // -1 para guest
+$activeusers = $DB->count_records('user', ['deleted' => 0, 'suspended' => 0]) - 1;
 $suspendedusers = $DB->count_records('user', ['deleted' => 0, 'suspended' => 1]);
 $registeredusers = $activeusers + $suspendedusers;
 $backup_max_kept = get_config('backup', 'backup_auto_max_kept') ?? 0;
 
-// Datos para gráfica de historial de uso de disco
 $month_ago = time() - (30 * 24 * 60 * 60);
 $sql = "SELECT timecreated, value, percentage 
         FROM {report_usage_monitor_history} 
@@ -173,23 +150,54 @@ $sql = "SELECT timecreated, value, percentage
         ORDER BY timecreated ASC";
 $disk_history = $DB->get_records_sql($sql, [$month_ago]);
 
-// Formatear datos para Chart.js
 $disk_history_labels = [];
 $disk_history_data = [];
+
+$daily_data = [];
+
 foreach ($disk_history as $record) {
-    // Validar que timecreated sea un timestamp válido
-    if (is_numeric($record->timecreated)) {
-        // Usar date() en lugar de userdate() y convertir explícitamente a integer
-        $disk_history_labels[] = date('d/m/Y', (int)$record->timecreated);
-        $disk_history_data[] = round($record->percentage, 1);
+    if (is_numeric($record->timecreated) && $record->timecreated > 0) {
+        $date_key = date('Y-m-d', (int)$record->timecreated);
+        
+        $daily_data[$date_key] = [
+            'label' => date('d/m/Y', (int)$record->timecreated),
+            'percentage' => round($record->percentage, 1)
+        ];
     }
 }
 
-// -------------------------------------------------------------------------
-// 2. Preparar datos Chart.js (ya en GB numérico)
-// -------------------------------------------------------------------------
+if (count($daily_data) < 30) {
+    $all_dates = [];
+    for ($i = 29; $i >= 0; $i--) {
+        $date = time() - ($i * 24 * 60 * 60);
+        $date_key = date('Y-m-d', $date);
+        $all_dates[$date_key] = date('d/m/Y', $date);
+    }
+    
+    $combined_data = [];
+    $last_value = null;
+    
+    foreach ($all_dates as $date_key => $formatted_date) {
+        if (isset($daily_data[$date_key])) {
+            $last_value = $daily_data[$date_key]['percentage'];
+            $combined_data[$date_key] = $daily_data[$date_key];
+        } else {
+            $combined_data[$date_key] = [
+                'label' => $formatted_date,
+                'percentage' => $last_value
+            ];
+        }
+    }
+    
+    ksort($combined_data);
+    $daily_data = $combined_data;
+}
 
-// A) Para la gráfica "doughnut" de disco
+foreach ($daily_data as $data) {
+    $disk_history_labels[] = $data['label'];
+    $disk_history_data[] = $data['percentage'];
+}
+
 $doughnutLabels = [
     get_string('database', 'report_usage_monitor'),
     get_string('files_dir', 'report_usage_monitor'),
@@ -203,30 +211,21 @@ $doughnutData = [
     $others_gb,
 ];
 
-// B) Para la gráfica lineal de "usuarios últimos 10 días"
 $last10daysLabels = [];
 $last10daysData   = [];
 if (!empty($formatted_userdaily_records)) {
-    // Ya no necesitamos ordenar aquí porque la SQL ya ordena correctamente
     foreach ($formatted_userdaily_records as $day) {
         $last10daysLabels[] = $day->fecha_formateada;
         $last10daysData[] = (int)$day->conteo_accesos_unicos;
     }
 }
 
-// -------------------------------------------------------------------------
-// 3. Renderización (HTML + Bootstrap + Chart.js)
-// -------------------------------------------------------------------------
 echo $OUTPUT->header();
 
-// -------------------------------------------------------------------------
-// Disclaimer debajo del header
-// -------------------------------------------------------------------------
 echo '<div class="alert alert-info mb-2 text-center small">';
 echo (get_string('exclusivedisclaimer', 'report_usage_monitor'));
 echo '</div>';
 
-// Título principal
 echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
 ?>
 
@@ -312,6 +311,12 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                     <h2 class="display-5">
                     <?php echo $max_90_days_users; ?> / <?php echo $max_users_threshold; ?>
                     </h2>
+                    <p class="text-muted mt-2">
+                        <?php if ($max_90_days_date != get_string('notcalculatedyet', 'report_usage_monitor')): ?>
+                            <?php echo get_string('date', 'report_usage_monitor'); ?>: <?php echo $max_90_days_date; ?><br>
+                        <?php endif; ?>
+                        <?php echo get_string('last_calculation', 'report_usage_monitor'); ?>: <?php echo $last_calc_90days; ?>
+                    </p>
                 </div>
             </div>
         </div>
@@ -738,20 +743,46 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
             });
         }
 
-        // ========== Gráfico Line (últimos 10 días) ==========
+        // ========== Gráfico Line (últimos 10 días - Usuarios) ==========
         var last10Ctx = document.getElementById("chartjs-last10days");
         if (last10Ctx) {
             new Chart(last10Ctx, {
                 type: "line",
                 data: {
                     labels: <?php echo json_encode($last10daysLabels); ?>,
-                    datasets: [{
-                        label: "<?php echo get_string('usersquantity', 'report_usage_monitor'); ?>",
-                        fill: true,
-                        backgroundColor: "rgba(0, 123, 255, 0.1)",
-                        borderColor: "#007bff",
-                        data: <?php echo json_encode($last10daysData); ?>
-                    }]
+                    datasets: [
+                        {
+                            label: "<?php echo get_string('usersquantity', 'report_usage_monitor'); ?>",
+                            fill: true,
+                            backgroundColor: "rgba(0, 123, 255, 0.1)",
+                            borderColor: "#007bff",
+                            data: <?php echo json_encode($last10daysData); ?>
+                        },
+                        {
+                            label: "<?php echo get_string('warning70', 'report_usage_monitor'); ?>",
+                            fill: false,
+                            borderColor: "#ffc107",
+                            borderDash: [5, 5],
+                            pointRadius: 0,
+                            data: Array(<?php echo json_encode($last10daysLabels); ?>.length).fill(<?php echo $max_users_threshold * 0.7; ?>)
+                        },
+                        {
+                            label: "<?php echo get_string('critical90', 'report_usage_monitor'); ?>",
+                            fill: false,
+                            borderColor: "#dc3545",
+                            borderDash: [5, 5],
+                            pointRadius: 0,
+                            data: Array(<?php echo json_encode($last10daysLabels); ?>.length).fill(<?php echo $max_users_threshold * 0.9; ?>)
+                        },
+                        {
+                            label: "<?php echo get_string('limit100', 'report_usage_monitor'); ?>",
+                            fill: false,
+                            borderColor: "#6c757d",
+                            borderDash: [2, 2],
+                            pointRadius: 0,
+                            data: Array(<?php echo json_encode($last10daysLabels); ?>.length).fill(<?php echo $max_users_threshold; ?>)
+                        }
+                    ]
                 },
                 options: {
                     maintainAspectRatio: false,
@@ -762,38 +793,14 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                             }
                         },
                         y: {
+                            beginAtZero: true,
+                            max: 100,
                             grid: {
                                 color: "rgba(0,0,0,0.05)"
                             },
-                            // Añadimos una línea de umbral
                             ticks: {
                                 callback: function(value) {
-                                    return value;
-                                }
-                            },
-                            // NUEVA CARACTERÍSTICA: Añadir línea de umbral
-                            afterDraw: function(scale) {
-                                var yScale = scale;
-                                var ctx = yScale.chart.ctx;
-                                var threshold = <?php echo json_encode($max_users_threshold); ?>;
-                                var index = yScale.getPixelForValue(threshold);
-                                
-                                // Solo dibujamos si el umbral está dentro del rango visible
-                                if (index >= scale.top && index <= scale.bottom) {
-                                    ctx.save();
-                                    ctx.beginPath();
-                                    ctx.moveTo(scale.left, index);
-                                    ctx.lineTo(scale.right, index);
-                                    ctx.lineWidth = 2;
-                                    ctx.strokeStyle = '#dc3545'; // Color rojo para umbral
-                                    ctx.setLineDash([5, 5]); // Línea discontinua
-                                    ctx.stroke();
-                                    
-                                    // Añadir etiqueta al umbral
-                                    ctx.fillStyle = '#dc3545';
-                                    ctx.textAlign = 'right';
-                                    ctx.fillText('Umbral: ' + threshold, scale.right - 5, index - 5);
-                                    ctx.restore();
+                                    return value + "%";
                                 }
                             }
                         }
@@ -802,10 +809,13 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                         tooltip: {
                             callbacks: {
                                 afterLabel: function(context) {
-                                    var threshold = <?php echo json_encode($max_users_threshold); ?>;
-                                    var value = context.parsed.y;
-                                    var percent = ((value / threshold) * 100).toFixed(1);
-                                    return percent + '% del umbral';
+                                    if (context.dataset.label === "<?php echo get_string('usersquantity', 'report_usage_monitor'); ?>") {
+                                        var threshold = <?php echo $max_users_threshold; ?>;
+                                        var value = context.parsed.y;
+                                        var percent = ((value / threshold) * 100).toFixed(1);
+                                        return percent + '% del umbral';
+                                    }
+                                    return "";
                                 }
                             }
                         }
@@ -826,53 +836,56 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                         fill: true,
                         backgroundColor: "rgba(0, 123, 255, 0.1)",
                         borderColor: "#007bff",
-                        data: <?php echo json_encode($disk_history_data); ?>
+                        data: <?php echo json_encode($disk_history_data); ?>,
+                        spanGaps: true,
+                        tension: 0.2
+                    },
+                    {
+                        label: "<?php echo get_string('warning70', 'report_usage_monitor'); ?>",
+                        fill: false,
+                        borderColor: "#ffc107",
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        data: Array(<?php echo json_encode($disk_history_labels); ?>.length).fill(70)
+                    },
+                    {
+                        label: "<?php echo get_string('critical90', 'report_usage_monitor'); ?>",
+                        fill: false,
+                        borderColor: "#dc3545",
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        data: Array(<?php echo json_encode($disk_history_labels); ?>.length).fill(90)
+                    },
+                    {
+                        label: "<?php echo get_string('limit100', 'report_usage_monitor'); ?>",
+                        fill: false,
+                        borderColor: "#6c757d",
+                        borderDash: [2, 2],
+                        pointRadius: 0,
+                        data: Array(<?php echo json_encode($disk_history_labels); ?>.length).fill(100)
                     }]
                 },
                 options: {
                     maintainAspectRatio: false,
+                    responsive: true,
                     scales: {
+                        x: {
+                            grid: {
+                                color: "rgba(0,0,0,0.05)"
+                            },
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 45
+                            }
+                        },
                         y: {
                             beginAtZero: true,
+                            max: 100,
+                            grid: {
+                                color: "rgba(0,0,0,0.05)"
+                            },
                             ticks: {
                                 callback: function(value) { return value + "%"; }
-                            },
-                            // NUEVA CARACTERÍSTICA: Añadir líneas de umbral para advertencias
-                            afterDraw: function(scale) {
-                                var yScale = scale;
-                                var ctx = yScale.chart.ctx;
-                                
-                                // Umbrales de advertencia y crítico
-                                var warningLevel = 70;
-                                var criticalLevel = 90;
-                                
-                                // Dibujar línea de advertencia (70%)
-                                var warningIndex = yScale.getPixelForValue(warningLevel);
-                                ctx.save();
-                                ctx.beginPath();
-                                ctx.moveTo(scale.left, warningIndex);
-                                ctx.lineTo(scale.right, warningIndex);
-                                ctx.lineWidth = 2;
-                                ctx.strokeStyle = '#ffc107'; // Amarillo
-                                ctx.setLineDash([5, 5]);
-                                ctx.stroke();
-                                ctx.fillStyle = '#ffc107';
-                                ctx.textAlign = 'right';
-                                ctx.fillText('Advertencia: ' + warningLevel + '%', scale.right - 5, warningIndex - 5);
-                                
-                                // Dibujar línea crítica (90%)
-                                var criticalIndex = yScale.getPixelForValue(criticalLevel);
-                                ctx.beginPath();
-                                ctx.moveTo(scale.left, criticalIndex);
-                                ctx.lineTo(scale.right, criticalIndex);
-                                ctx.lineWidth = 2;
-                                ctx.strokeStyle = '#dc3545'; // Rojo
-                                ctx.setLineDash([5, 5]);
-                                ctx.stroke();
-                                ctx.fillStyle = '#dc3545';
-                                ctx.textAlign = 'right';
-                                ctx.fillText('Crítico: ' + criticalLevel + '%', scale.right - 5, criticalIndex - 5);
-                                ctx.restore();
                             }
                         }
                     },
@@ -880,9 +893,15 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
-                                    return context.parsed.y + '%';
+                                    if (context.dataset.label === "<?php echo get_string('percentage_used', 'report_usage_monitor'); ?>") {
+                                        return context.parsed.y + '%';
+                                    }
+                                    return context.dataset.label;
                                 }
                             }
+                        },
+                        legend: {
+                            position: 'top'
                         }
                     }
                 }
@@ -897,5 +916,5 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
     }
 </style>
 <?php
-// Footer Moodle
 echo $OUTPUT->footer();
+?>
