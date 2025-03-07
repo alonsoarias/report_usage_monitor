@@ -63,6 +63,7 @@ class notification_disk extends \core\task\scheduled_task
 
     /**
      * Calcula el intervalo de notificación basado en el porcentaje de uso del disco.
+     * Versión mejorada que utiliza el setting configurable como base.
      * 
      * @param float $disk_percent Porcentaje de uso del disco.
      * @return int Intervalo en segundos entre notificaciones.
@@ -75,12 +76,30 @@ class notification_disk extends \core\task\scheduled_task
             return PHP_INT_MAX; // No notificar en caso de error
         }
 
-        // Thresholds definidos para el intervalo de notificación según la severidad
+        // Obtenemos el umbral configurable
+        $reportconfig = get_config('report_usage_monitor');
+        $warning_level = !empty($reportconfig->disk_warning_level) ? (float)$reportconfig->disk_warning_level : 90;
+        
+        // Calculamos los thresholds relativos basados en el umbral configurable
+        // Esto mantiene la lógica de 3 niveles pero los deriva del setting
+        $critical_threshold = min(99.9, $warning_level + 8);   // +8% del umbral (o máximo 99.9%)
+        $high_threshold = min(98.5, $warning_level + 4);       // +4% del umbral (o máximo 98.5%)
+        $base_threshold = $warning_level;                      // umbral base configurable
+        
+        // Thresholds y sus intervalos
         $thresholds = [
-            99.9 => 12 * 60 * 60,   // 12 horas para uso crítico (>99.9%)
-            98.5 => 24 * 60 * 60,   // 1 día para uso muy alto (>98.5%)
-            90 => 5 * 24 * 60 * 60, // 5 días para uso alto (>90%)
+            $critical_threshold => 12 * 60 * 60,    // 12 horas para uso crítico
+            $high_threshold => 24 * 60 * 60,        // 1 día para uso muy alto
+            $base_threshold => 5 * 24 * 60 * 60,    // 5 días para umbral base
         ];
+
+        // Logging para debug si está habilitado
+        if (debugging('', DEBUG_DEVELOPER)) {
+            mtrace("Umbrales de notificación de disco calculados basados en setting " . $warning_level . "%:");
+            mtrace("- Crítico (" . $critical_threshold . "%): cada 12 horas");
+            mtrace("- Alto (" . $high_threshold . "%): cada 24 horas");
+            mtrace("- Base (" . $base_threshold . "%): cada 5 días");
+        }
 
         // Determinar el intervalo apropiado
         foreach ($thresholds as $threshold => $interval) {
