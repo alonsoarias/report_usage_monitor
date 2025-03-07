@@ -79,19 +79,35 @@ function update_min_top_sql($fecha, $usuarios, $min)
 {
     global $DB;
     
-    // Obtener el registro con la menor cantidad de usuarios
-    $sql = "SELECT fecha FROM {report_usage_monitor} 
-            WHERE cantidad_usuarios = ? 
-            ORDER BY fecha ASC LIMIT 1";
-    $oldest_min_record = $DB->get_field_sql($sql, [$min]);
+    // Validar que el timestamp sea válido
+    if (!is_numeric($fecha) || $fecha <= 0) {
+        debugging('update_min_top_sql: Timestamp inválido proporcionado: ' . var_export($fecha, true), DEBUG_DEVELOPER);
+        return;
+    }
     
-    if ($oldest_min_record) {
-        $DB->execute(
-            "UPDATE {report_usage_monitor} 
-             SET fecha = ?, cantidad_usuarios = ? 
-             WHERE fecha = ?",
-            [$fecha, $usuarios, $oldest_min_record]
-        );
+    // Iniciar transacción para evitar race conditions
+    $transaction = $DB->start_delegated_transaction();
+    
+    try {
+        // Obtener el registro con la menor cantidad de usuarios
+        $sql = "SELECT fecha FROM {report_usage_monitor} 
+                WHERE cantidad_usuarios = ? 
+                ORDER BY fecha ASC LIMIT 1";
+        $oldest_min_record = $DB->get_field_sql($sql, [$min]);
+        
+        if ($oldest_min_record) {
+            $DB->execute(
+                "UPDATE {report_usage_monitor} 
+                 SET fecha = ?, cantidad_usuarios = ? 
+                 WHERE fecha = ?",
+                [$fecha, $usuarios, $oldest_min_record]
+            );
+        }
+        
+        $transaction->allow_commit();
+    } catch (Exception $e) {
+        $transaction->rollback($e);
+        debugging('update_min_top_sql: Error al actualizar registro: ' . $e->getMessage(), DEBUG_DEVELOPER);
     }
 }
 
@@ -107,29 +123,45 @@ function insert_top_sql($fecha, $cantidad_usuarios)
 {
     global $DB;
     
-    // Insert the new record
-    $DB->execute(
-        "INSERT INTO {report_usage_monitor} (fecha, cantidad_usuarios) 
-         VALUES (?, ?)",
-        [$fecha, $cantidad_usuarios]
-    );
+    // Validar que el timestamp sea válido
+    if (!is_numeric($fecha) || $fecha <= 0) {
+        debugging('insert_top_sql: Timestamp inválido proporcionado: ' . var_export($fecha, true), DEBUG_DEVELOPER);
+        return;
+    }
     
-    // Count records and remove excess
-    $count = $DB->count_records('report_usage_monitor');
-    if ($count > 10) {
-        // Get the IDs of the oldest records based on fecha column
-        $sql = "SELECT id FROM {report_usage_monitor} ORDER BY fecha ASC LIMIT " . ($count - 10);
-        $records = $DB->get_records_sql($sql);
+    // Iniciar transacción para asegurar consistencia
+    $transaction = $DB->start_delegated_transaction();
+    
+    try {
+        // Insert the new record
+        $DB->execute(
+            "INSERT INTO {report_usage_monitor} (fecha, cantidad_usuarios) 
+             VALUES (?, ?)",
+            [$fecha, $cantidad_usuarios]
+        );
         
-        if (!empty($records)) {
-            $ids = array_keys($records);
-            // Delete the oldest records
-            $DB->delete_records_list('report_usage_monitor', 'id', $ids);
+        // Count records and remove excess
+        $count = $DB->count_records('report_usage_monitor');
+        if ($count > 10) {
+            // Get the IDs of the oldest records based on fecha column
+            $sql = "SELECT id FROM {report_usage_monitor} ORDER BY fecha ASC LIMIT " . ($count - 10);
+            $records = $DB->get_records_sql($sql);
             
-            if (debugging('', DEBUG_DEVELOPER)) {
-                mtrace("Removed " . count($ids) . " old records to maintain 10 record limit.");
+            if (!empty($records)) {
+                $ids = array_keys($records);
+                // Delete the oldest records
+                $DB->delete_records_list('report_usage_monitor', 'id', $ids);
+                
+                if (debugging('', DEBUG_DEVELOPER)) {
+                    mtrace("Removed " . count($ids) . " old records to maintain 10 record limit.");
+                }
             }
         }
+        
+        $transaction->allow_commit();
+    } catch (Exception $e) {
+        $transaction->rollback($e);
+        debugging('insert_top_sql: Error al insertar registro: ' . $e->getMessage(), DEBUG_DEVELOPER);
     }
 }
 
@@ -481,17 +513,34 @@ function display_size_in_gb($sizeInBytes, $precision = 2)
 
 /**
  * Función mejorada para formatear una fecha timestamp UNIX a un formato legible.
- * Reemplaza la función compararFechas que ya no es necesaria.
+ * Incluye validación robusta del timestamp.
  *
  * @param int $timestamp Timestamp UNIX a formatear
  * @param string $format Formato de fecha (opcional, usa dateformat del plugin por defecto)
  * @return string Fecha formateada
  */
 function format_timestamp_date($timestamp, $format = null) {
+    // Validación estricta del timestamp
+    if (!is_numeric($timestamp)) {
+        debugging('format_timestamp_date: Se esperaba un timestamp numérico, recibido: ' . var_export($timestamp, true), DEBUG_DEVELOPER);
+        return get_string('unknowndate', 'report_usage_monitor');
+    }
+    
+    if ($timestamp <= 0) {
+        debugging('format_timestamp_date: Timestamp inválido: ' . $timestamp, DEBUG_DEVELOPER);
+        return get_string('unknowndate', 'report_usage_monitor');
+    }
+    
     if (empty($format)) {
         $format = get_string('dateformat', 'report_usage_monitor');
     }
-    return userdate($timestamp, $format);
+    
+    try {
+        return userdate($timestamp, $format);
+    } catch (Exception $e) {
+        debugging('format_timestamp_date: Error al formatear timestamp ' . $timestamp . ': ' . $e->getMessage(), DEBUG_DEVELOPER);
+        return get_string('unknowndate', 'report_usage_monitor');
+    }
 }
 
 /**
@@ -503,9 +552,17 @@ function format_timestamp_date($timestamp, $format = null) {
  */
 function calculate_threshold_percentage($current_value, $threshold)
 {
-    if ($threshold == 0) {
+    // Validación de parámetros
+    if (!is_numeric($current_value)) {
+        debugging('calculate_threshold_percentage: Valor actual no numérico: ' . var_export($current_value, true), DEBUG_DEVELOPER);
+        $current_value = 0;
+    }
+    
+    if (!is_numeric($threshold) || $threshold <= 0) {
+        debugging('calculate_threshold_percentage: Umbral inválido: ' . var_export($threshold, true), DEBUG_DEVELOPER);
         return 0;
     }
+    
     return ($current_value / $threshold) * 100;
 }
 
@@ -518,6 +575,17 @@ function calculate_threshold_percentage($current_value, $threshold)
  */
 function calculate_growth_rate($type = 'users', $days = 30) {
     global $DB;
+    
+    // Validación de parámetros
+    if (!in_array($type, ['users', 'disk'])) {
+        debugging('calculate_growth_rate: Tipo inválido: ' . var_export($type, true), DEBUG_DEVELOPER);
+        return 0;
+    }
+    
+    if (!is_numeric($days) || $days <= 0) {
+        debugging('calculate_growth_rate: Días inválidos: ' . var_export($days, true), DEBUG_DEVELOPER);
+        $days = 30; // Valor por defecto
+    }
     
     if ($type === 'users') {
         // Consulta optimizada para rendimiento
@@ -542,8 +610,8 @@ function calculate_growth_rate($type = 'users', $days = 30) {
         ];
         
         $result = $DB->get_record_sql($sql, $params);
-        $first_day_users = $result->first_day_users;
-        $last_day_users = $result->last_day_users;
+        $first_day_users = $result ? $result->first_day_users : 0;
+        $last_day_users = $result ? $result->last_day_users : 0;
         
         // Evitamos división por cero
         if ($first_day_users == 0) {
@@ -554,7 +622,7 @@ function calculate_growth_rate($type = 'users', $days = 30) {
         $growth_rate = (($last_day_users - $first_day_users) / $first_day_users) * 100;
         
     } elseif ($type === 'disk') {
-        // Para el disco, calculamos el promedio de crecimiento diario
+        // Para el disco, calculamos el promedio de crecimiento diario usando historial
         $sql = "SELECT MIN(timecreated) AS oldest_time, MAX(timecreated) AS newest_time, 
                        MIN(value) AS oldest_size, MAX(value) AS newest_size
                 FROM {report_usage_monitor_history}
@@ -594,22 +662,66 @@ function calculate_growth_rate($type = 'users', $days = 30) {
  * @param int $current_value Valor actual
  * @param int $threshold_value Valor umbral a alcanzar
  * @param float $growth_rate Tasa de crecimiento porcentual
- * @return int Número estimado de días para alcanzar el umbral
+ * @return int Número estimado de días para alcanzar el umbral o código especial
  */
 function project_limit_date($current_value, $threshold_value, $growth_rate) {
-    // Si ya superamos el umbral o el crecimiento es cero o negativo
-    if ($current_value >= $threshold_value || $growth_rate <= 0) {
-        return 0;
+    // Validación detallada de parámetros
+    if (!is_numeric($current_value)) {
+        debugging('project_limit_date: Valor actual no numérico: ' . var_export($current_value, true), DEBUG_DEVELOPER);
+        return null;
+    }
+    
+    if (!is_numeric($threshold_value)) {
+        debugging('project_limit_date: Umbral no numérico: ' . var_export($threshold_value, true), DEBUG_DEVELOPER);
+        return null;
+    }
+    
+    if (!is_numeric($growth_rate)) {
+        debugging('project_limit_date: Tasa de crecimiento no numérica: ' . var_export($growth_rate, true), DEBUG_DEVELOPER);
+        return null;
+    }
+    
+    // Códigos especiales con semántica clara
+    if ($current_value >= $threshold_value) {
+        return -1; // Código de "ya superado"
+    }
+    
+    if ($growth_rate <= 0) {
+        return PHP_INT_MAX; // "Nunca se alcanzará" con tasa actual
     }
     
     // Convertimos la tasa de porcentaje a decimal diario
     $daily_growth_rate = ($growth_rate / 100) / 30; // Asumiendo que la tasa es mensual
     
-    // Calculamos cuántos días tomaría alcanzar el umbral
-    // Fórmula: log(threshold/current) / log(1 + daily_growth_rate)
-    $days = log($threshold_value / $current_value) / log(1 + $daily_growth_rate);
+    // Protección contra valores extremos
+    if ($daily_growth_rate < 0.000001) {
+        return PHP_INT_MAX; // Prácticamente nunca se alcanzará
+    }
     
-    return max(1, ceil($days));
+    // Cálculo logarítmico mejorado con protección contra errores
+    try {
+        // Calculamos cuántos días tomaría alcanzar el umbral
+        // Fórmula: log(threshold/current) / log(1 + daily_growth_rate)
+        $ratio = $threshold_value / $current_value;
+        $log_ratio = log($ratio);
+        $log_growth = log(1 + $daily_growth_rate);
+        
+        if ($log_growth == 0) {
+            return PHP_INT_MAX; // Evitar división por cero
+        }
+        
+        $days = $log_ratio / $log_growth;
+        
+        // Validación del resultado
+        if (!is_finite($days)) {
+            return PHP_INT_MAX; // Protección contra NaN o infinitos
+        }
+        
+        return max(1, ceil($days));
+    } catch (Exception $e) {
+        debugging('project_limit_date: Error en cálculo: ' . $e->getMessage(), DEBUG_DEVELOPER);
+        return PHP_INT_MAX;
+    }
 }
 
 /**
@@ -637,6 +749,11 @@ function generate_historical_data_html($limit = 10, $max_threshold = 100) {
     $records = $DB->get_records_sql($sql, ['limit' => $limit]);
     
     foreach ($records as $record) {
+        // Validar que la fecha sea un timestamp válido
+        if (!is_numeric($record->fecha) || $record->fecha <= 0) {
+            continue; // Saltar registros con fechas inválidas
+        }
+        
         $percent = round(($record->usuarios / $max_threshold) * 100, 1);
         $class = $percent < 70 ? '' : ($percent < 90 ? 'text-warning' : 'text-danger');
         $formatted_date = format_timestamp_date($record->fecha);
@@ -685,6 +802,12 @@ function email_notify_user_limit($numberofusers, $fecha, $percentage)
 {
     global $CFG, $DB;
 
+    // Validar el timestamp
+    if (!is_numeric($fecha)) {
+        debugging('email_notify_user_limit: Timestamp inválido proporcionado: ' . var_export($fecha, true), DEBUG_DEVELOPER);
+        $fecha = time(); // Usar tiempo actual como fallback
+    }
+
     $site = get_site();
     $reportconfig = get_config('report_usage_monitor');
 
@@ -693,7 +816,7 @@ function email_notify_user_limit($numberofusers, $fecha, $percentage)
     $a->sitename = format_string($site->fullname);
     $a->threshold = $reportconfig->max_daily_users_threshold;
     $a->numberofusers = $numberofusers;
-    $a->lastday = is_numeric($fecha) ? format_timestamp_date($fecha) : $fecha;
+    $a->lastday = format_timestamp_date($fecha);
     $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php';
     $a->siteurl = $CFG->wwwroot;
     $a->percentaje = round($percentage, 2);
