@@ -17,8 +17,8 @@
             <FIELDS>
                 <!-- Unique identifier for each record -->
                 <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
-                <!-- Date of the record -->
-                <FIELD NAME="fecha" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" />
+                <!-- Date of the record - Changed to INTEGER for proper timestamp storage -->
+                <FIELD NAME="fecha" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" />
                 <!-- Number of users connected for the given date -->
                 <FIELD NAME="cantidad_usuarios" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" />
             </FIELDS>
