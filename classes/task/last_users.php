@@ -47,31 +47,69 @@ class last_users extends \core\task\scheduled_task
             mtrace("Iniciando tarea de cálculo de usuarios conectados recientemente...");
         }
 
-        // Recuperar los usuarios conectados recientemente para hoy.
-        $users = $DB->get_records_sql(users_today());
-        foreach ($users as $log) {
-            $users_today = $log->conteo_accesos_unicos;
-            set_config('totalusersdaily', $users_today, 'report_usage_monitor');
-        }
+        // Iniciar transacción para garantizar consistencia de datos
+        $transaction = $DB->start_delegated_transaction();
+        
+        try {
+            // Recuperar los usuarios conectados recientemente para hoy.
+            $users = $DB->get_records_sql(users_today());
+            $users_today = 0;
+            
+            foreach ($users as $log) {
+                // Verificar que el timestamp es válido
+                if (!isset($log->timestamp_fecha) || !is_numeric($log->timestamp_fecha) || $log->timestamp_fecha <= 0) {
+                    debugging('last_users: Timestamp inválido en resultado de users_today(): ' . var_export($log, true), DEBUG_DEVELOPER);
+                    continue;
+                }
+                
+                if (!isset($log->conteo_accesos_unicos) || !is_numeric($log->conteo_accesos_unicos)) {
+                    debugging('last_users: Conteo de usuarios inválido: ' . var_export($log, true), DEBUG_DEVELOPER);
+                    continue;
+                }
+                
+                $users_today = $log->conteo_accesos_unicos;
+                set_config('totalusersdaily', $users_today, 'report_usage_monitor');
+                
+                if (debugging('', DEBUG_DEVELOPER)) {
+                    mtrace("Usuarios conectados hoy: $users_today para la fecha " . userdate($log->timestamp_fecha));
+                }
+            }
 
-        // Precomputar porcentajes para el dashboard
-        $reportconfig = get_config('report_usage_monitor');
-        $max_users_threshold = (int)($reportconfig->max_daily_users_threshold ?? 100);
-        $users_percent = calculate_threshold_percentage($users_today, $max_users_threshold);
-        $users_warning_class = ($users_percent < 70) ? 'bg-success' : (($users_percent < 90) ? 'bg-warning' : 'bg-danger');
+            // Precomputar porcentajes para el dashboard
+            $reportconfig = get_config('report_usage_monitor');
+            $max_users_threshold = (int)($reportconfig->max_daily_users_threshold ?? 100);
+            $users_percent = calculate_threshold_percentage($users_today, $max_users_threshold);
+            $users_warning_class = ($users_percent < 70) ? 'bg-success' : (($users_percent < 90) ? 'bg-warning' : 'bg-danger');
 
-        // Guardar valores precomputados
-        set_config('users_percent', $users_percent, 'report_usage_monitor');
-        set_config('users_warning_class', $users_warning_class, 'report_usage_monitor');
+            // Guardar valores precomputados
+            set_config('users_percent', $users_percent, 'report_usage_monitor');
+            set_config('users_warning_class', $users_warning_class, 'report_usage_monitor');
 
-        if (debugging('', DEBUG_DEVELOPER)) {
-            mtrace("Usuarios conectados recientemente: $users_today.");
-            // mtrace("Tarea de cálculo de usuarios conectados recientemente completada.");
-        }
-        $execution_time = time();
-        set_config('lastexecution', $execution_time, 'report_usage_monitor');
-        if (debugging('', DEBUG_DEVELOPER)) {
-            mtrace("Tarea completada.");
+            // Guardar timestamp de última ejecución
+            $execution_time = time();
+            set_config('lastexecution', $execution_time, 'report_usage_monitor');
+            
+            // Permitir commit si todo ha ido bien
+            $transaction->allow_commit();
+            
+            if (debugging('', DEBUG_DEVELOPER)) {
+                mtrace("Usuarios conectados recientemente: $users_today.");
+                mtrace("Porcentaje del umbral: $users_percent%");
+                mtrace("Tarea completada con éxito.");
+            }
+        } catch (Exception $e) {
+            // Revertir cambios en caso de error
+            $transaction->rollback($e);
+            
+            debugging('last_users: Error en tarea de cálculo de usuarios: ' . $e->getMessage(), DEBUG_DEVELOPER);
+            
+            if (debugging('', DEBUG_DEVELOPER)) {
+                mtrace("Error durante el cálculo de usuarios: " . $e->getMessage());
+                mtrace("Se ha revertido cualquier cambio parcial.");
+            }
+            
+            // Permitir que la excepción se propague para registrar el fallo de la tarea
+            throw $e;
         }
 
         return true;
