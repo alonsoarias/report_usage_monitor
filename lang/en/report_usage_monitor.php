@@ -76,6 +76,7 @@ $string['recommendations'] = 'Recommendations';
 $string['warning70'] = 'Warning (70%)';
 $string['critical90'] = 'Critical (90%)';
 $string['limit100'] = 'Limit (100%)';
+$string['percent_of_threshold'] = '% of threshold';
 
 // Recommendation tips
 $string['space_saving_tips'] = 'Tips to save disk space:';
