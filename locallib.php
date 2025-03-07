@@ -524,40 +524,6 @@ function display_size_in_gb($sizeInBytes, $precision = 2)
 }
 
 /**
- * Función mejorada para formatear una fecha timestamp UNIX a un formato legible.
- * Incluye validación robusta del timestamp.
- *
- * @param int $timestamp Timestamp UNIX a formatear
- * @param string $format Formato de fecha (opcional, usa dateformat del plugin por defecto)
- * @return string Fecha formateada
- */
-function format_timestamp_date($timestamp, $format = null) {
-    // Validación estricta del timestamp
-    if (!is_numeric($timestamp)) {
-        debugging('format_timestamp_date: Se esperaba un timestamp numérico, recibido: ' . var_export($timestamp, true), DEBUG_DEVELOPER);
-        return date('d/m/Y'); // Fecha actual como fallback
-    }
-    
-    if ($timestamp <= 0) {
-        debugging('format_timestamp_date: Timestamp inválido: ' . $timestamp, DEBUG_DEVELOPER);
-        return date('d/m/Y'); // Fecha actual como fallback
-    }
-    
-    // NO USAR get_string() AQUÍ - Usar un formato explícito
-    if (empty($format)) {
-        // En lugar de obtener el formato de las cadenas de idioma, usarlo directamente
-        $format = 'd/m/Y';
-    }
-    
-    try {
-        return userdate($timestamp, $format);
-    } catch (Exception $e) {
-        debugging('format_timestamp_date: Error al formatear timestamp ' . $timestamp . ': ' . $e->getMessage(), DEBUG_DEVELOPER);
-        return date('d/m/Y'); // Fecha actual como fallback
-    }
-}
-
-/**
  * Calcula el porcentaje de uso en relación con un umbral.
  *
  * @param int $current_value El valor actual (número de usuarios, uso del disco, etc.).
@@ -773,7 +739,9 @@ function generate_historical_data_html($limit = 10, $max_threshold = 100) {
         
         $percent = round(($record->usuarios / $max_threshold) * 100, 1);
         $class = $percent < 70 ? '' : ($percent < 90 ? 'text-warning' : 'text-danger');
-        $formatted_date = format_timestamp_date($record->fecha);
+        $formatted_date = is_numeric($record->fecha) && $record->fecha > 0 ? 
+                         date('d/m/Y', (int)$record->fecha) : 
+                         date('d/m/Y'); // Fecha actual como fallback
         
         $html .= '<tr>';
         $html .= '<td>' . $formatted_date . '</td>';
@@ -833,7 +801,9 @@ function email_notify_user_limit($numberofusers, $fecha, $percentage)
     $a->sitename = format_string($site->fullname);
     $a->threshold = $reportconfig->max_daily_users_threshold;
     $a->numberofusers = $numberofusers;
-    $a->lastday = format_timestamp_date($fecha);
+    $a->lastday = is_numeric($fecha) && $fecha > 0 ? 
+                 date('d/m/Y', (int)$fecha) : 
+                 date('d/m/Y'); // Fecha actual como fallback
     $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php';
     $a->siteurl = $CFG->wwwroot;
     $a->percentaje = round($percentage, 2);
@@ -917,7 +887,7 @@ function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAc
     $a->numberofusers = $userAccessCount;
     $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php';
     $a->siteurl = $CFG->wwwroot;
-    $a->lastday = format_timestamp_date(time());
+    $a->lastday = date('d/m/Y', time());
     $a->coursescount = $DB->count_records('course');
     $a->user_percent = round(calculate_threshold_percentage($userAccessCount, $a->threshold), 2);
     $a->moodle_version = $CFG->version;
