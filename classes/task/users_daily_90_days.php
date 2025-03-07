@@ -49,54 +49,66 @@ class users_daily_90_days extends \core\task\scheduled_task
 
         // REFACTORIZADO: Usamos la consulta SQL sin necesidad de pasar un formato de fecha
         $sql = max_userdaily_for_90_days();
-        $users_90_days_records = $DB->get_records_sql($sql);
-
+        
         $max_users = 0;
         $max_date = 0;
+        
+        // Iniciar transacción para asegurar consistencia de datos
+        $transaction = $DB->start_delegated_transaction();
+        
+        try {
+            $users_90_days_records = $DB->get_records_sql($sql);
 
-        foreach ($users_90_days_records as $record) {
-            // La consulta ahora devuelve campos estandarizados
-            if (isset($record->usuarios)) {
-                $max_users = $record->usuarios;
-                $max_date = $record->fecha;
+            foreach ($users_90_days_records as $record) {
+                // Validar que la fecha sea un timestamp válido
+                if (!is_numeric($record->fecha) || $record->fecha <= 0) {
+                    debugging('users_daily_90_days: Timestamp inválido encontrado: ' . var_export($record->fecha, true), DEBUG_DEVELOPER);
+                    continue;
+                }
+                
+                // La consulta ahora devuelve campos estandarizados
+                if (isset($record->usuarios)) {
+                    $max_users = $record->usuarios;
+                    $max_date = $record->fecha;
 
-                set_config('max_userdaily_for_90_days_date', $record->fecha, 'report_usage_monitor');
-                set_config('max_userdaily_for_90_days_users', $record->usuarios, 'report_usage_monitor');
+                    set_config('max_userdaily_for_90_days_date', $record->fecha, 'report_usage_monitor');
+                    set_config('max_userdaily_for_90_days_users', $record->usuarios, 'report_usage_monitor');
+                }
             }
-        }
 
-        // Registrar el valor máximo en el historial para trazabilidad
-        if ($max_users > 0 && $DB->get_manager()->table_exists('report_usage_monitor_history')) {
-            // Verificar si ya existe un registro para esta fecha
-            $existing = $DB->get_record_sql(
-                "SELECT id FROM {report_usage_monitor_history}
-                  WHERE type = 'users_90_days' AND timecreated = ?",
-                [$max_date]
-            );
+            // Registrar el valor máximo en el historial para trazabilidad
+            if ($max_users > 0 && $max_date > 0 && $DB->get_manager()->table_exists('report_usage_monitor_history')) {
+                // Verificar si ya existe un registro para esta fecha
+                $existing = $DB->get_record_sql(
+                    "SELECT id FROM {report_usage_monitor_history}
+                    WHERE type = 'users_90_days' AND timecreated = ?",
+                    [$max_date]
+                );
 
-            if (!$existing) {
-                // Crear el registro histórico
-                $reportconfig = get_config('report_usage_monitor');
-                $threshold = $reportconfig->max_daily_users_threshold ?? 100;
+                if (!$existing) {
+                    // Crear el registro histórico
+                    $reportconfig = get_config('report_usage_monitor');
+                    $threshold = $reportconfig->max_daily_users_threshold ?? 100;
 
-                $record = new \stdClass();
-                $record->type = 'users_90_days';
-                $record->percentage = calculate_threshold_percentage($max_users, $threshold);
-                $record->value = $max_users;
-                $record->threshold = $threshold;
-                $record->timecreated = $max_date;
+                    $record = new \stdClass();
+                    $record->type = 'users_90_days';
+                    $record->percentage = calculate_threshold_percentage($max_users, $threshold);
+                    $record->value = $max_users;
+                    $record->threshold = $threshold;
+                    $record->timecreated = $max_date;
 
-                try {
                     $DB->insert_record('report_usage_monitor_history', $record);
                     if (debugging('', DEBUG_DEVELOPER)) {
                         mtrace("Máximo de usuarios 90 días registrado en el historial.");
                     }
-                } catch (\Exception $e) {
-                    if (debugging('', DEBUG_DEVELOPER)) {
-                        mtrace("Error al registrar el máximo de usuarios 90 días: " . $e->getMessage());
-                    }
                 }
             }
+            
+            $transaction->allow_commit();
+            
+        } catch (Exception $e) {
+            $transaction->rollback($e);
+            debugging('users_daily_90_days: Error en procesamiento: ' . $e->getMessage(), DEBUG_DEVELOPER);
         }
 
         if (debugging('', DEBUG_DEVELOPER)) {
