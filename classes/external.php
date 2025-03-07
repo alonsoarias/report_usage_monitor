@@ -393,8 +393,7 @@ class report_usage_monitor_external extends external_api {
                 'threshold' => $record->type === 'disk' ? display_size($record->threshold) : $record->threshold,
                 'threshold_raw' => $record->threshold,
                 'timecreated' => $record->timecreated,
-                'timereadable' => format_timestamp_date($record->timecreated, get_string('datetimeformat', 'report_usage_monitor'))
-            );
+                'timereadable' => is_numeric($record->timecreated) && $record->timecreated > 0 ? date('M d, Y H:i', (int)$record->timecreated) : date('M d, Y H:i'));
         }
         
         return array(
