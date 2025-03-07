@@ -84,16 +84,18 @@ class notification_userlimit extends \core\task\scheduled_task
             mtrace("Nivel de advertencia: $warning_level%");
         }
 
-        // Consulta optimizada para obtener usuarios activos del último día
+        // REFACTORIZADO: Consulta optimizada para obtener usuarios activos del último día
+        // Utilizamos la función refactorizada que trabaja directamente con timestamps
         $sql = "SELECT COUNT(DISTINCT userid) AS conteo_accesos_unicos, 
-                       FROM_UNIXTIME(MIN(timecreated), :dateformat) AS fecha
+                       UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(timecreated))) AS timestamp_fecha
                 FROM {logstore_standard_log}
                 WHERE action = 'loggedin'
                   AND timecreated > :start_time
-                GROUP BY DATE(FROM_UNIXTIME(timecreated))";
+                GROUP BY timestamp_fecha
+                ORDER BY timestamp_fecha DESC
+                LIMIT 1";
                 
         $params = [
-            'dateformat' => get_string('dateformatsql', 'report_usage_monitor'),
             'start_time' => strtotime('-1 day')
         ];
         
@@ -110,9 +112,10 @@ class notification_userlimit extends \core\task\scheduled_task
         // Calcular porcentaje de uso
         $users_count = (int)$lastday_users_record->conteo_accesos_unicos;
         $users_percent = calculate_threshold_percentage($users_count, $user_threshold);
+        $fecha_timestamp = $lastday_users_record->timestamp_fecha;
         
         if (debugging('', DEBUG_DEVELOPER)) {
-            mtrace("Usuarios únicos: $users_count, Porcentaje: $users_percent%");
+            mtrace("Usuarios únicos: $users_count, Porcentaje: $users_percent%, Fecha: " . format_timestamp_date($fecha_timestamp));
         }
         
         // Verificar si el porcentaje supera el nivel de advertencia configurado
@@ -149,8 +152,9 @@ class notification_userlimit extends \core\task\scheduled_task
             mtrace("Enviando notificación de límite de usuarios...");
         }
         
-        // Enviar email de notificación
-        $result = email_notify_user_limit($users_count, $lastday_users_record->fecha, $users_percent);
+        // REFACTORIZADO: Ahora pasamos el timestamp directamente, 
+        // la función email_notify_user_limit se encargará de formatearlo
+        $result = email_notify_user_limit($users_count, $fecha_timestamp, $users_percent);
         
         // Actualizar tiempo de última notificación
         if ($result) {
