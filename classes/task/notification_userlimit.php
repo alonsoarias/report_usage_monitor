@@ -184,6 +184,7 @@ class notification_userlimit extends \core\task\scheduled_task
 
     /**
      * Calcula el intervalo de notificación basado en el porcentaje de uso de usuarios.
+     * Versión mejorada que utiliza el setting configurable como base.
      * 
      * @param float $users_percent Porcentaje de uso de usuarios.
      * @return int Intervalo en segundos entre notificaciones.
@@ -196,19 +197,39 @@ class notification_userlimit extends \core\task\scheduled_task
             return PHP_INT_MAX; // No notificar en caso de error
         }
 
+        // Obtenemos el umbral configurable
+        $reportconfig = get_config('report_usage_monitor');
+        $warning_level = !empty($reportconfig->users_warning_level) ? (float)$reportconfig->users_warning_level : 90;
+        
+        // Calculamos los thresholds relativos basados en el umbral configurable
+        $critical_threshold = min(100, $warning_level + 10);    // +10% del umbral (o máximo 100%)
+        $high_threshold = $warning_level;                       // umbral base configurable
+        $low_threshold = max(70, $warning_level - 10);          // -10% del umbral (o mínimo 70%)
+        
+        // Definimos los intervalos para cada nivel
         $thresholds = [
-            100 => 24 * 60 * 60,     // 1 día cuando se supera el 100%
-            90 => 3 * 24 * 60 * 60,  // 3 días cuando se supera el 90%
-            80 => 7 * 24 * 60 * 60   // 1 semana cuando se supera el 80%
+            $critical_threshold => 24 * 60 * 60,     // 1 día para nivel crítico 
+            $high_threshold => 3 * 24 * 60 * 60,     // 3 días para umbral base
+            $low_threshold => 7 * 24 * 60 * 60       // 1 semana para nivel bajo
         ];
 
+        // Logging para debug si está habilitado
+        if (debugging('', DEBUG_DEVELOPER)) {
+            mtrace("Umbrales de notificación de usuarios calculados basados en setting " . $warning_level . "%:");
+            mtrace("- Crítico (" . $critical_threshold . "%): cada 1 día");
+            mtrace("- Base (" . $high_threshold . "%): cada 3 días");
+            mtrace("- Bajo (" . $low_threshold . "%): cada 7 días");
+        }
+
+        // Determinar el intervalo apropiado
         foreach ($thresholds as $threshold => $interval) {
             if ($users_percent >= $threshold) {
                 return $interval;
             }
         }
 
-        return PHP_INT_MAX; // No notification if under lowest threshold
+        // Si está por debajo de todos los umbrales, no enviar notificación
+        return PHP_INT_MAX;
     }
     
     /**
