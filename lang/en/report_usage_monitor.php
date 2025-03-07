@@ -873,3 +873,7 @@ $string['api_monthly_growth_rate'] = 'Monthly growth rate';
 $string['api_projection_days'] = 'Days to reach threshold';
 
 $string['unknowndate'] = 'Unknown date';
+
+$string['warning70'] = 'Warning (70%)';
+$string['critical90'] = 'Critical (90%)';
+$string['limit100'] = 'Limit (100%)';
