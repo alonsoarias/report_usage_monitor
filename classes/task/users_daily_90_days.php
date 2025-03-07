@@ -104,6 +104,10 @@ class users_daily_90_days extends \core\task\scheduled_task
                 }
             }
             
+            // Guardar timestamp de última ejecución
+            $execution_time = time();
+            set_config('lastexecutioncalculateusers90days', $execution_time, 'report_usage_monitor');
+            
             $transaction->allow_commit();
             
         } catch (Exception $e) {
@@ -112,7 +116,7 @@ class users_daily_90_days extends \core\task\scheduled_task
         }
 
         if (debugging('', DEBUG_DEVELOPER)) {
-            $formatted_date = $max_date ? format_timestamp_date($max_date) : 'N/A';
+            $formatted_date = ($max_date && is_numeric($max_date) && $max_date > 0) ? date('d/m/Y', (int)$max_date) : 'N/A';
             mtrace("Usuarios principales en los últimos 90 días calculados: " . $max_users . " en fecha " . $formatted_date);
             mtrace("Tarea de cálculo de usuarios principales en los últimos 90 días completada.");
         }
