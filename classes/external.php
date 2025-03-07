@@ -22,7 +22,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die;
+defined('MOODLE_INTERNAL') || die();
 
 require_once($CFG->libdir . '/externallib.php');
 require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
@@ -80,6 +80,29 @@ class report_usage_monitor_external extends external_api {
         if (empty($largest_courses)) {
             $largest_courses = get_largest_courses(5);
         }
+
+        // Validar timestamps para info de últimos cálculos
+        $last_disk_calc = !empty($reportconfig->lastexecutioncalculate) ? $reportconfig->lastexecutioncalculate : 0;
+        $last_users_calc = !empty($reportconfig->lastexecution) ? $reportconfig->lastexecution : 0;
+        
+        // Validar que los timestamps sean valores numéricos válidos
+        if (!is_numeric($last_disk_calc) || $last_disk_calc <= 0) {
+            $last_disk_calc = time();
+            debugging('get_monitor_stats: Timestamp inválido para lastexecutioncalculate: ' . var_export($reportconfig->lastexecutioncalculate, true), DEBUG_DEVELOPER);
+        }
+        
+        if (!is_numeric($last_users_calc) || $last_users_calc <= 0) {
+            $last_users_calc = time();
+            debugging('get_monitor_stats: Timestamp inválido para lastexecution: ' . var_export($reportconfig->lastexecution, true), DEBUG_DEVELOPER);
+        }
+        
+        // Validar timestamp para max_userdaily_for_90_days_date
+        $max_90_days_date = !empty($reportconfig->max_userdaily_for_90_days_date) ? 
+                          $reportconfig->max_userdaily_for_90_days_date : null;
+        if (!is_numeric($max_90_days_date) || $max_90_days_date <= 0) {
+            $max_90_days_date = null;
+            debugging('get_monitor_stats: Timestamp inválido para max_userdaily_for_90_days_date: ' . var_export($reportconfig->max_userdaily_for_90_days_date, true), DEBUG_DEVELOPER);
+        }
         
         // Crear estructura de respuesta
         $response = array(
@@ -132,17 +155,15 @@ class report_usage_monitor_external extends external_api {
                 'percentage' => round($users_percent, 2),
                 'max_90_days' => !empty($reportconfig->max_userdaily_for_90_days_users) ? 
                                 $reportconfig->max_userdaily_for_90_days_users : 0,
-                'max_90_days_date' => !empty($reportconfig->max_userdaily_for_90_days_date) ? 
-                                date('Y-m-d', $reportconfig->max_userdaily_for_90_days_date) : null
+                'max_90_days_date' => $max_90_days_date ? 
+                                date('Y-m-d', $max_90_days_date) : null
             ),
             'largest_courses' => array(),
             'timestamps' => array(
-                'disk_calculation' => !empty($reportconfig->lastexecutioncalculate) ? 
-                               $reportconfig->lastexecutioncalculate : 0,
-                'users_calculation' => !empty($reportconfig->lastexecution) ? 
-                                $reportconfig->lastexecution : 0
+                'disk_calculation' => $last_disk_calc,
+                'users_calculation' => $last_users_calc
             ),
-            // NUEVOS CAMPOS: Tasas de crecimiento y proyecciones
+            // Tasas de crecimiento y proyecciones
             'growth_rates' => array(
                 'disk' => array(
                     'monthly_percent' => calculate_growth_rate('disk'),
@@ -165,6 +186,12 @@ class report_usage_monitor_external extends external_api {
         
         // Formatear datos de cursos más grandes
         foreach ($largest_courses as $course) {
+            // Asegurarse de que los datos del curso son válidos
+            if (!isset($course->id) || !isset($course->fullname) || !isset($course->shortname)) {
+                debugging('get_monitor_stats: Datos de curso incompletos: ' . var_export($course, true), DEBUG_DEVELOPER);
+                continue;
+            }
+            
             $response['largest_courses'][] = array(
                 'id' => $course->id,
                 'fullname' => format_string($course->fullname),
@@ -351,6 +378,12 @@ class report_usage_monitor_external extends external_api {
         // Formatear resultados
         $results = array();
         foreach ($records as $record) {
+            // Validar que timecreated sea un timestamp válido
+            if (!is_numeric($record->timecreated) || $record->timecreated <= 0) {
+                debugging('get_notification_history: Timestamp inválido: ' . var_export($record->timecreated, true), DEBUG_DEVELOPER);
+                $record->timecreated = time(); // Usar tiempo actual como fallback
+            }
+            
             $results[] = array(
                 'id' => $record->id,
                 'type' => $record->type,
@@ -439,6 +472,27 @@ class report_usage_monitor_external extends external_api {
         $user_threshold = $reportconfig->max_daily_users_threshold;
         $users_percent = calculate_threshold_percentage($users_today, $user_threshold);
         
+        // Validación de timestamps para datos de usuarios
+        $last_disk_calc = !empty($reportconfig->lastexecutioncalculate) ? $reportconfig->lastexecutioncalculate : 0;
+        $last_users_calc = !empty($reportconfig->lastexecution) ? $reportconfig->lastexecution : 0;
+        $max_90_days_date = !empty($reportconfig->max_userdaily_for_90_days_date) ? $reportconfig->max_userdaily_for_90_days_date : 0;
+        
+        // Validar cada timestamp
+        if (!is_numeric($last_disk_calc) || $last_disk_calc <= 0) {
+            debugging('get_usage_data: Timestamp inválido para lastexecutioncalculate: ' . var_export($reportconfig->lastexecutioncalculate, true), DEBUG_DEVELOPER);
+            $last_disk_calc = time();
+        }
+        
+        if (!is_numeric($last_users_calc) || $last_users_calc <= 0) {
+            debugging('get_usage_data: Timestamp inválido para lastexecution: ' . var_export($reportconfig->lastexecution, true), DEBUG_DEVELOPER);
+            $last_users_calc = time();
+        }
+        
+        if (!is_numeric($max_90_days_date) || $max_90_days_date <= 0) {
+            debugging('get_usage_data: Timestamp inválido para max_userdaily_for_90_days_date: ' . var_export($reportconfig->max_userdaily_for_90_days_date, true), DEBUG_DEVELOPER);
+            $max_90_days_date = time();
+        }
+        
         // Preparar respuesta
         $response = array(
             'disk_usage' => array(
@@ -447,19 +501,16 @@ class report_usage_monitor_external extends external_api {
                 'threshold' => $quotadisk,
                 'threshold_readable' => display_size($quotadisk),
                 'percentage' => round($disk_percent, 2),
-                'last_calculated' => !empty($reportconfig->lastexecutioncalculate) ? 
-                                   $reportconfig->lastexecutioncalculate : 0
+                'last_calculated' => $last_disk_calc
             ),
             'user_usage' => array(
                 'current' => $users_today,
                 'threshold' => $user_threshold,
                 'percentage' => round($users_percent, 2),
-                'last_calculated' => !empty($reportconfig->lastexecution) ? 
-                                   $reportconfig->lastexecution : 0,
+                'last_calculated' => $last_users_calc,
                 'max_90_days' => !empty($reportconfig->max_userdaily_for_90_days_users) ? 
                                 $reportconfig->max_userdaily_for_90_days_users : 0,
-                'max_90_days_date' => !empty($reportconfig->max_userdaily_for_90_days_date) ? 
-                                    $reportconfig->max_userdaily_for_90_days_date : 0
+                'max_90_days_date' => $max_90_days_date
             ),
             // NUEVOS CAMPOS para proyecciones
             'projections' => array(
@@ -569,54 +620,70 @@ class report_usage_monitor_external extends external_api {
             'messages' => array()
         );
         
-        // Actualizar umbral de usuarios si se proporciona
-        if ($params['user_threshold'] !== null) {
-            if ($params['user_threshold'] > 0) {
-                set_config('max_daily_users_threshold', $params['user_threshold'], 'report_usage_monitor');
-                $result['user_threshold_updated'] = true;
-                $result['messages'][] = get_string('user_threshold_updated', 'report_usage_monitor');
-                
-                // Actualizar valores precalculados para que reflejen el nuevo umbral
-                $reportconfig = get_config('report_usage_monitor');
-                $users_today = !empty($reportconfig->totalusersdaily) ? ($reportconfig->totalusersdaily) : 0;
-                $users_percent = calculate_threshold_percentage($users_today, $params['user_threshold']);
-                $users_warning_class = ($users_percent < 70) ? 'bg-success' : (($users_percent < 90) ? 'bg-warning' : 'bg-danger');
-                
-                set_config('users_percent', $users_percent, 'report_usage_monitor');
-                set_config('users_warning_class', $users_warning_class, 'report_usage_monitor');
-            } else {
-                $result['success'] = false;
-                $result['messages'][] = get_string('error_user_threshold_negative', 'report_usage_monitor');
-            }
-        }
+        // Iniciar transacción para garantizar consistencia
+        $transaction = $DB->start_delegated_transaction();
         
-        // Actualizar umbral de disco si se proporciona
-        if ($params['disk_threshold'] !== null) {
-            if ($params['disk_threshold'] > 0) {
-                set_config('disk_quota', $params['disk_threshold'], 'report_usage_monitor');
-                $result['disk_threshold_updated'] = true;
-                $result['messages'][] = get_string('disk_threshold_updated', 'report_usage_monitor');
-                
-                // Actualizar valores precalculados para que reflejen el nuevo umbral
-                $reportconfig = get_config('report_usage_monitor');
-                $disk_usage = ((int) $reportconfig->totalusagereadable + (int) $reportconfig->totalusagereadabledb) ?: 0;
-                $quotadisk_bytes = ((int) $params['disk_threshold'] * 1024) * 1024 * 1024;
-                $disk_percent = calculate_threshold_percentage($disk_usage, $quotadisk_bytes);
-                $disk_warning_class = ($disk_percent < 70) ? 'bg-success' : (($disk_percent < 90) ? 'bg-warning' : 'bg-danger');
-                
-                set_config('disk_percent', $disk_percent, 'report_usage_monitor');
-                set_config('disk_warning_class', $disk_warning_class, 'report_usage_monitor');
-                set_config('quotadisk_gb', display_size_in_gb($quotadisk_bytes, 2), 'report_usage_monitor');
-            } else {
-                $result['success'] = false;
-                $result['messages'][] = get_string('error_disk_threshold_negative', 'report_usage_monitor');
+        try {
+            // Actualizar umbral de usuarios si se proporciona
+            if ($params['user_threshold'] !== null) {
+                if ($params['user_threshold'] > 0) {
+                    set_config('max_daily_users_threshold', $params['user_threshold'], 'report_usage_monitor');
+                    $result['user_threshold_updated'] = true;
+                    $result['messages'][] = get_string('user_threshold_updated', 'report_usage_monitor');
+                    
+                    // Actualizar valores precalculados para que reflejen el nuevo umbral
+                    $reportconfig = get_config('report_usage_monitor');
+                    $users_today = !empty($reportconfig->totalusersdaily) ? ($reportconfig->totalusersdaily) : 0;
+                    $users_percent = calculate_threshold_percentage($users_today, $params['user_threshold']);
+                    $users_warning_class = ($users_percent < 70) ? 'bg-success' : (($users_percent < 90) ? 'bg-warning' : 'bg-danger');
+                    
+                    set_config('users_percent', $users_percent, 'report_usage_monitor');
+                    set_config('users_warning_class', $users_warning_class, 'report_usage_monitor');
+                } else {
+                    $result['success'] = false;
+                    $result['messages'][] = get_string('error_user_threshold_negative', 'report_usage_monitor');
+                }
             }
-        }
-        
-        // Si no se proporcionó ningún parámetro
-        if ($params['user_threshold'] === null && $params['disk_threshold'] === null) {
+            
+            // Actualizar umbral de disco si se proporciona
+            if ($params['disk_threshold'] !== null) {
+                if ($params['disk_threshold'] > 0) {
+                    set_config('disk_quota', $params['disk_threshold'], 'report_usage_monitor');
+                    $result['disk_threshold_updated'] = true;
+                    $result['messages'][] = get_string('disk_threshold_updated', 'report_usage_monitor');
+                    
+                    // Actualizar valores precalculados para que reflejen el nuevo umbral
+                    $reportconfig = get_config('report_usage_monitor');
+                    $disk_usage = ((int) $reportconfig->totalusagereadable + (int) $reportconfig->totalusagereadabledb) ?: 0;
+                    $quotadisk_bytes = ((int) $params['disk_threshold'] * 1024) * 1024 * 1024;
+                    $disk_percent = calculate_threshold_percentage($disk_usage, $quotadisk_bytes);
+                    $disk_warning_class = ($disk_percent < 70) ? 'bg-success' : (($disk_percent < 90) ? 'bg-warning' : 'bg-danger');
+                    
+                    set_config('disk_percent', $disk_percent, 'report_usage_monitor');
+                    set_config('disk_warning_class', $disk_warning_class, 'report_usage_monitor');
+                    set_config('quotadisk_gb', display_size_in_gb($quotadisk_bytes, 2), 'report_usage_monitor');
+                } else {
+                    $result['success'] = false;
+                    $result['messages'][] = get_string('error_disk_threshold_negative', 'report_usage_monitor');
+                }
+            }
+            
+            // Si no se proporcionó ningún parámetro
+            if ($params['user_threshold'] === null && $params['disk_threshold'] === null) {
+                $result['success'] = false;
+                $result['messages'][] = get_string('error_no_thresholds_provided', 'report_usage_monitor');
+            }
+            
+            // Permitir commit de la transacción si todo ha ido bien
+            if ($result['success']) {
+                $transaction->allow_commit();
+            } else {
+                $transaction->rollback(new moodle_exception('thresholds_update_failed', 'report_usage_monitor'));
+            }
+        } catch (Exception $e) {
+            $transaction->rollback($e);
             $result['success'] = false;
-            $result['messages'][] = get_string('error_no_thresholds_provided', 'report_usage_monitor');
+            $result['messages'][] = 'Error en actualización: ' . $e->getMessage();
         }
         
         return $result;
