@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Tarea programada para el uso del disco, para ejecutar los informes programados.
+ * Tarea programada para calcular los usuarios principales en los últimos 90 días.
  *
  * @package     report_usage_monitor
  * @category    admin
@@ -47,15 +47,15 @@ class users_daily_90_days extends \core\task\scheduled_task
             mtrace("Iniciando tarea de cálculo de usuarios diarios en los últimos 90 días...");
         }
 
-        // Asumiendo que la función max_userdaily_for_90_days devuelve una consulta SQL correcta.
-        $sql = max_userdaily_for_90_days(get_string('dateformatsql', 'report_usage_monitor'));
+        // REFACTORIZADO: Usamos la consulta SQL sin necesidad de pasar un formato de fecha
+        $sql = max_userdaily_for_90_days();
         $users_90_days_records = $DB->get_records_sql($sql);
 
         $max_users = 0;
         $max_date = 0;
 
         foreach ($users_90_days_records as $record) {
-            // Asegúrate de que el nombre de la columna en tu consulta SQL sea 'usuarios'.
+            // La consulta ahora devuelve campos estandarizados
             if (isset($record->usuarios)) {
                 $max_users = $record->usuarios;
                 $max_date = $record->fecha;
@@ -100,7 +100,8 @@ class users_daily_90_days extends \core\task\scheduled_task
         }
 
         if (debugging('', DEBUG_DEVELOPER)) {
-            mtrace("Usuarios principales en los últimos 90 días calculados: " . $max_users . " en fecha " . userdate($max_date));
+            $formatted_date = $max_date ? format_timestamp_date($max_date) : 'N/A';
+            mtrace("Usuarios principales en los últimos 90 días calculados: " . $max_users . " en fecha " . $formatted_date);
             mtrace("Tarea de cálculo de usuarios principales en los últimos 90 días completada.");
         }
     }
