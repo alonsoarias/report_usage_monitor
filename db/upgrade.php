@@ -218,6 +218,58 @@ function xmldb_report_usage_monitor_upgrade($oldversion)
         // Punto de guardado de la versión 2025030300
         upgrade_plugin_savepoint(true, 2025030300, 'report', 'usage_monitor');
     }
+    
+    // Actualizaciones para la versión 2025030402 (refactorización)
+    if ($oldversion < 2025030402) {
+        // Inicializar campos para las proyecciones si no existen
+        if (!isset($CFG->disk_growth_rate)) {
+            set_config('disk_growth_rate', '5', 'report_usage_monitor'); // 5% por defecto
+        }
+        
+        if (!isset($CFG->users_growth_rate)) {
+            set_config('users_growth_rate', '2', 'report_usage_monitor'); // 2% por defecto
+        }
+        
+        // Si hay registros en la tabla report_usage_monitor, asegurarse de que estén en formato timestamp
+        $records = $DB->get_records('report_usage_monitor', [], '', 'id, fecha');
+        foreach ($records as $record) {
+            if (!is_numeric($record->fecha)) {
+                // Intentar convertir cualquier formato de fecha a timestamp
+                if (preg_match('/^\d{2}\/\d{2}\/\d{4}$/', $record->fecha)) {
+                    // Formato dd/mm/yyyy
+                    $timestamp = strtotime(str_replace('/', '-', $record->fecha));
+                } else {
+                    // Intentar con strtotime para otros formatos
+                    $timestamp = strtotime($record->fecha);
+                }
+                
+                if ($timestamp) {
+                    $DB->set_field('report_usage_monitor', 'fecha', $timestamp, ['id' => $record->id]);
+                    if (debugging('', DEBUG_DEVELOPER)) {
+                        mtrace("Convertido valor de fecha '{$record->fecha}' a timestamp $timestamp para registro id {$record->id}.");
+                    }
+                }
+            }
+        }
+        
+        // Actualizar configuraciones precalculadas para garantizar consistencia
+        $configs = [
+            'disk_percent', 'disk_warning_class', 'disk_usage_gb', 'quotadisk_gb',
+            'users_percent', 'users_warning_class'
+        ];
+        
+        foreach ($configs as $config) {
+            if (!isset($CFG->{$config})) {
+                // Si no existe la configuración, se calculará automáticamente en el próximo cron
+                if (debugging('', DEBUG_DEVELOPER)) {
+                    mtrace("La configuración '$config' no existe y se calculará automáticamente en el próximo cron.");
+                }
+            }
+        }
+        
+        // Punto de guardado para la versión refactorizada
+        upgrade_plugin_savepoint(true, 2025030402, 'report', 'usage_monitor');
+    }
 
     return true;
 }
