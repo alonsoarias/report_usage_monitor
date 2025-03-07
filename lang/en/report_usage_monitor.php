@@ -208,6 +208,17 @@ $string['days_to_threshold_disk_desc'] = 'Projected days until reaching the disk
 $string['days_to_threshold_users'] = 'Days until user threshold';
 $string['days_to_threshold_users_desc'] = 'Projected days until reaching the user warning threshold';
 
+// Thresholds explanation strings added with our modifications
+$string['thresholds_explanation_title'] = 'How thresholds work';
+$string['thresholds_explanation_desc'] = 'The warning thresholds configured above determine:
+<ul>
+<li>When notifications start being sent (when the threshold is exceeded)</li>
+<li>How frequently notifications are sent (more frequent as the threshold is exceeded by larger amounts)</li>
+<li>Display colors on the dashboard (green, yellow, red)</li>
+</ul>
+<p>Example: With a disk threshold of 90%, notifications will be sent every 5 days if exceeding 90%, 
+every day if exceeding 94%, and every 12 hours if exceeding 98%.</p>';
+
 // Email templates
 $string['messagehtml_userlimit'] = '<!DOCTYPE html>
 <html lang="en">
