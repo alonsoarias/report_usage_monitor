@@ -65,7 +65,7 @@ $lastexec_disk_ts = !empty($reportconfig->lastexecutioncalculate) ? $reportconfi
 if (!is_numeric($lastexec_disk_ts) || $lastexec_disk_ts <= 0) {
     $lastexec_disk = get_string('notcalculatedyet', 'report_usage_monitor');
 } else {
-    $lastexec_disk = userdate($lastexec_disk_ts);
+    $lastexec_disk = date('d/m/Y H:i', (int)$lastexec_disk_ts);
 }
 
 $lastexec_users_ts = !empty($reportconfig->lastexecution) ? $reportconfig->lastexecution : 0;
@@ -73,7 +73,7 @@ $lastexec_users_ts = !empty($reportconfig->lastexecution) ? $reportconfig->laste
 if (!is_numeric($lastexec_users_ts) || $lastexec_users_ts <= 0) {
     $lastexec_users = get_string('notcalculatedyet', 'report_usage_monitor');
 } else {
-    $lastexec_users = userdate($lastexec_users_ts);
+    $lastexec_users = date('d/m/Y H:i', (int)$lastexec_users_ts);
 }
     
 // Máximo usuarios 90 días
@@ -84,7 +84,7 @@ $max_90_days_date_ts = $reportconfig->max_userdaily_for_90_days_date  ?? 0;
 if (!is_numeric($max_90_days_date_ts) || $max_90_days_date_ts <= 0) {
     $max_90_days_date = get_string('notcalculatedyet', 'report_usage_monitor');
 } else {
-    $max_90_days_date = format_timestamp_date($max_90_days_date_ts);
+    $max_90_days_date = date('d/m/Y', (int)$max_90_days_date_ts);
 }
 
 // Análisis de disco por directorios (obtener desde configuración)
@@ -123,14 +123,18 @@ $userdaily_records = $DB->get_records_sql($userdaily_sql);
 // Formatear los registros con timestamps para visualización
 $formatted_userdaily_records = array();
 foreach ($userdaily_records as $record) {
-    // Validar que el timestamp sea correcto
-    if (!is_numeric($record->timestamp_fecha) || $record->timestamp_fecha <= 0) {
-        debugging('index.php: Timestamp inválido en userdaily_records: ' . var_export($record->timestamp_fecha, true), DEBUG_DEVELOPER);
-        continue;
+    // Crear una copia del objeto para evitar modificar el original
+    $new_record = new stdClass();
+    $new_record->conteo_accesos_unicos = $record->conteo_accesos_unicos;
+    
+    // Formatear la fecha usando date() y convertir explícitamente a integer
+    if (is_numeric($record->timestamp_fecha)) {
+        $new_record->fecha_formateada = date('d/m/Y', (int)$record->timestamp_fecha);
+    } else {
+        $new_record->fecha_formateada = date('d/m/Y'); // Fecha actual como fallback
     }
     
-    $record->fecha_formateada = format_timestamp_date($record->timestamp_fecha);
-    $formatted_userdaily_records[] = $record;
+    $formatted_userdaily_records[] = $new_record;
 }
 
 // Top 10 usuarios diarios - REFACTORIZADO
@@ -140,14 +144,18 @@ $userdaily_recordstop = $DB->get_records_sql($userdailytop_sql);
 // Formatear los registros con timestamps para visualización
 $formatted_userdaily_recordstop = array();
 foreach ($userdaily_recordstop as $record) {
-    // Validar que timestamp_fecha sea un timestamp válido
-    if (!is_numeric($record->timestamp_fecha) || $record->timestamp_fecha <= 0) {
-        debugging('index.php: Timestamp inválido en userdaily_recordstop: ' . var_export($record->timestamp_fecha, true), DEBUG_DEVELOPER);
-        continue;
+    // Crear una copia del objeto para evitar modificar el original
+    $new_record = new stdClass();
+    $new_record->cantidad_usuarios = $record->cantidad_usuarios;
+    
+    // Formatear la fecha usando date() y convertir explícitamente a integer
+    if (is_numeric($record->timestamp_fecha)) {
+        $new_record->fecha_formateada = date('d/m/Y', (int)$record->timestamp_fecha);
+    } else {
+        $new_record->fecha_formateada = date('d/m/Y'); // Fecha actual como fallback
     }
     
-    $record->fecha_formateada = format_timestamp_date($record->timestamp_fecha);
-    $formatted_userdaily_recordstop[] = $record;
+    $formatted_userdaily_recordstop[] = $new_record;
 }
 
 // Info del sistema
@@ -170,13 +178,11 @@ $disk_history_labels = [];
 $disk_history_data = [];
 foreach ($disk_history as $record) {
     // Validar que timecreated sea un timestamp válido
-    if (!is_numeric($record->timecreated) || $record->timecreated <= 0) {
-        debugging('index.php: Timestamp inválido en disk_history: ' . var_export($record->timecreated, true), DEBUG_DEVELOPER);
-        continue;
+    if (is_numeric($record->timecreated)) {
+        // Usar date() en lugar de userdate() y convertir explícitamente a integer
+        $disk_history_labels[] = date('d/m/Y', (int)$record->timecreated);
+        $disk_history_data[] = round($record->percentage, 1);
     }
-    
-    $disk_history_labels[] = format_timestamp_date($record->timecreated);
-    $disk_history_data[] = round($record->percentage, 1);
 }
 
 // -------------------------------------------------------------------------
