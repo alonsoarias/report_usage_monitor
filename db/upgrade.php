@@ -105,17 +105,47 @@ function xmldb_report_usage_monitor_upgrade($oldversion)
         upgrade_plugin_savepoint(true, 2022103100, 'report', 'usage_monitor');
     }
     
-    // Otras actualizaciones permanecen igual, omitidas para brevedad
-    
     // Nueva actualización para corregir manejo de fechas
     if ($oldversion < 2025030403) {
         // Asegurarse de que la columna fecha en report_usage_monitor sea INTEGER
         $table = new xmldb_table('report_usage_monitor');
-        $field = new xmldb_field('fecha', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
         
+        // Identificar índices comunes por convención de nombres
+        $indices = [
+            'idx_fecha' => new xmldb_index('idx_fecha', XMLDB_INDEX_NOTUNIQUE, ['fecha']),
+            'mdl_repousagmoni_fec_ix' => new xmldb_index('mdl_repousagmoni_fec_ix', XMLDB_INDEX_NOTUNIQUE, ['fecha'])
+        ];
+        
+        // Eliminar todos los índices relacionados con fecha
+        foreach ($indices as $indexname => $index) {
+            if ($dbman->index_exists($table, $index)) {
+                $dbman->drop_index($table, $index);
+                if (debugging('', DEBUG_DEVELOPER)) {
+                    mtrace("Eliminado índice $indexname en tabla report_usage_monitor");
+                }
+            }
+        }
+        
+        // Ahora cambiar el tipo de campo
+        $field = new xmldb_field('fecha', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
         if ($dbman->field_exists($table, $field)) {
-            // Esta función cambiará el tipo y mantendrá los datos
-            $dbman->change_field_type($table, $field);
+            try {
+                $dbman->change_field_type($table, $field);
+                if (debugging('', DEBUG_DEVELOPER)) {
+                    mtrace("Cambiado tipo de campo fecha a INTEGER en tabla report_usage_monitor");
+                }
+            } catch (Exception $e) {
+                debugging("Error al cambiar el tipo de campo: " . $e->getMessage(), DEBUG_DEVELOPER);
+            }
+        }
+        
+        // Recrear el índice principal
+        $index = new xmldb_index('idx_fecha', XMLDB_INDEX_NOTUNIQUE, ['fecha']);
+        if (!$dbman->index_exists($table, $index)) {
+            $dbman->add_index($table, $index);
+            if (debugging('', DEBUG_DEVELOPER)) {
+                mtrace("Recreado índice idx_fecha en tabla report_usage_monitor");
+            }
         }
         
         // Verificar y corregir cualquier dato inválido en la tabla
@@ -128,7 +158,7 @@ function xmldb_report_usage_monitor_upgrade($oldversion)
                 // Usar la fecha actual como fallback para cualquier fecha inválida
                 $DB->set_field('report_usage_monitor', 'fecha', time(), ['id' => $record->id]);
                 if (debugging('', DEBUG_DEVELOPER)) {
-                    mtrace("Actualizado registro con ID {$record->id} con fecha inválida {$record->fecha} a timestamp actual.");
+                    mtrace("Actualizado registro con ID {$record->id} con fecha inválida {$record->fecha} a timestamp actual");
                 }
             }
             
@@ -136,6 +166,29 @@ function xmldb_report_usage_monitor_upgrade($oldversion)
         } catch (Exception $e) {
             $transaction->rollback($e);
             debugging("Error al corregir fechas inválidas: " . $e->getMessage(), DEBUG_DEVELOPER);
+        }
+
+        // Verificar y actualizar datos existentes para asegurar que sean timestamps UNIX válidos
+        $transaction = $DB->start_delegated_transaction();
+        try {
+            // Obtener todos los registros para verificación
+            $allrecords = $DB->get_records('report_usage_monitor');
+            foreach ($allrecords as $record) {
+                // Si la fecha parece ser un formato o no un timestamp válido
+                if (!is_numeric($record->fecha) || $record->fecha < 946684800) { // 01/01/2000
+                    // Intentar convertir formatos de fecha comunes a timestamp
+                    $timestamp = strtotime(date('Y-m-d', time())); // Fallback a hoy
+                    $DB->set_field('report_usage_monitor', 'fecha', $timestamp, ['id' => $record->id]);
+                    
+                    if (debugging('', DEBUG_DEVELOPER)) {
+                        mtrace("Actualizado registro con ID {$record->id}, fecha {$record->fecha} a timestamp {$timestamp}");
+                    }
+                }
+            }
+            $transaction->allow_commit();
+        } catch (Exception $e) {
+            $transaction->rollback($e);
+            debugging("Error al actualizar fechas: " . $e->getMessage(), DEBUG_DEVELOPER);
         }
         
         // Punto de guardado para la versión de corrección de fechas
