@@ -843,3 +843,32 @@ $string['threshold_success'] = 'Indicates whether the operation was generally su
 $string['user_threshold_updated_status'] = 'Indicates whether the user threshold was updated';
 $string['disk_threshold_updated_status'] = 'Indicates whether the disk threshold was updated';
 $string['threshold_message'] = 'Informational or error message';
+
+
+// Additional strings for projections and growth rates
+$string['usage_disk_current'] = 'Current disk usage in bytes';
+$string['usage_disk_current_readable'] = 'Current disk usage in readable format';
+$string['usage_disk_threshold'] = 'Disk threshold in bytes';
+$string['usage_disk_threshold_readable'] = 'Disk threshold in readable format';
+$string['usage_disk_percentage'] = 'Disk usage percentage';
+$string['usage_disk_last_calculated'] = 'Timestamp of last disk calculation';
+$string['usage_user_current'] = 'Current users';
+$string['usage_user_threshold'] = 'User threshold';
+$string['usage_user_percentage'] = 'User usage percentage';
+$string['usage_user_last_calculated'] = 'Timestamp of last user calculation';
+$string['usage_user_max_90_days'] = 'Maximum users in the last 90 days';
+$string['usage_user_max_90_days_date'] = 'Timestamp of the date with maximum users';
+// Strings for projections
+$string['growth_rate_disk'] = 'Disk growth rate';
+$string['growth_rate_disk_desc'] = 'Monthly growth rate of disk usage in percentage';
+$string['growth_rate_users'] = 'User growth rate';
+$string['growth_rate_users_desc'] = 'Monthly growth rate of the number of users in percentage';
+$string['days_to_threshold_disk'] = 'Days until disk threshold';
+$string['days_to_threshold_disk_desc'] = 'Projected days until reaching the disk warning threshold';
+$string['days_to_threshold_users'] = 'Days until user threshold';
+$string['days_to_threshold_users_desc'] = 'Projected days until reaching the user warning threshold';
+// Strings for enhanced API
+$string['api_projections_title'] = 'Growth projections';
+$string['api_projections_desc'] = 'Growth projection data and estimated days to reach thresholds';
+$string['api_monthly_growth_rate'] = 'Monthly growth rate';
+$string['api_projection_days'] = 'Days to reach threshold';
