@@ -69,6 +69,12 @@ class notification_disk extends \core\task\scheduled_task
      */
     private function calculate_notification_interval($disk_percent)
     {
+        // Validación del parámetro
+        if (!is_numeric($disk_percent)) {
+            debugging('calculate_notification_interval: Porcentaje no numérico: ' . var_export($disk_percent, true), DEBUG_DEVELOPER);
+            return PHP_INT_MAX; // No notificar en caso de error
+        }
+
         // Thresholds definidos para el intervalo de notificación según la severidad
         $thresholds = [
             99.9 => 12 * 60 * 60,   // 12 horas para uso crítico (>99.9%)
@@ -212,13 +218,19 @@ class notification_disk extends \core\task\scheduled_task
             $record->threshold = $quotadisk;
             $record->timecreated = time();
             
+            // Usar transacción para asegurar consistencia
+            $transaction = $DB->start_delegated_transaction();
+            
             try {
                 $DB->insert_record('report_usage_monitor_history', $record);
+                $transaction->allow_commit();
+                
                 if (debugging('', DEBUG_DEVELOPER)) {
                     mtrace("Notificación registrada en el historial.");
                 }
                 return true;
             } catch (\Exception $e) {
+                $transaction->rollback($e);
                 if (debugging('', DEBUG_DEVELOPER)) {
                     mtrace("Error al registrar la notificación: " . $e->getMessage());
                 }
