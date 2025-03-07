@@ -71,7 +71,7 @@ $lastexec_users = !empty($reportconfig->lastexecution)
 $max_90_days_users   = $reportconfig->max_userdaily_for_90_days_users ?? get_string('notcalculatedyet', 'report_usage_monitor');
 $max_90_days_date_ts = $reportconfig->max_userdaily_for_90_days_date  ?? 0;
 $max_90_days_date    = $max_90_days_date_ts
-    ? date(get_string('dateformat', 'report_usage_monitor'), $max_90_days_date_ts)
+    ? format_timestamp_date($max_90_days_date_ts)
     : get_string('notcalculatedyet', 'report_usage_monitor');
 
 // Análisis de disco por directorios (obtener desde configuración)
@@ -103,13 +103,32 @@ if (empty($largest_courses)) {
     $largest_courses = get_largest_courses(5);
 }
 
-// Usuarios últimos 10 días
-$userdaily_sql = report_user_daily_sql(get_string('dateformatsql', 'report_usage_monitor'));
+// Usuarios últimos 10 días - REFACTORIZADO
+$userdaily_sql = report_user_daily_sql();
 $userdaily_records = $DB->get_records_sql($userdaily_sql);
 
-// Top 10 usuarios diarios
-$userdailytop_sql = report_user_daily_top_sql(get_string('dateformatsql', 'report_usage_monitor'));
+// Formatear los registros con timestamps para visualización
+$formatted_userdaily_records = array();
+foreach ($userdaily_records as $record) {
+    $record->fecha_formateada = format_timestamp_date($record->timestamp_fecha);
+    $formatted_userdaily_records[] = $record;
+}
+
+// Top 10 usuarios diarios - REFACTORIZADO
+$userdailytop_sql = report_user_daily_top_sql();
 $userdaily_recordstop = $DB->get_records_sql($userdailytop_sql);
+
+// Formatear los registros con timestamps para visualización
+$formatted_userdaily_recordstop = array();
+foreach ($userdaily_recordstop as $record) {
+    if (is_numeric($record->timestamp_fecha)) {
+        $record->fecha_formateada = format_timestamp_date($record->timestamp_fecha);
+    } else {
+        // Mantener el formato existente si no es un timestamp
+        $record->fecha_formateada = $record->timestamp_fecha;
+    }
+    $formatted_userdaily_recordstop[] = $record;
+}
 
 // Info del sistema
 $totalcourses    = $DB->count_records('course');
@@ -130,7 +149,7 @@ $disk_history = $DB->get_records_sql($sql, [$month_ago]);
 $disk_history_labels = [];
 $disk_history_data = [];
 foreach ($disk_history as $record) {
-    $disk_history_labels[] = userdate($record->timecreated, get_string('dateformat', 'report_usage_monitor'));
+    $disk_history_labels[] = format_timestamp_date($record->timecreated);
     $disk_history_data[] = round($record->percentage, 1);
 }
 
@@ -155,15 +174,12 @@ $doughnutData = [
 // B) Para la gráfica lineal de "usuarios últimos 10 días"
 $last10daysLabels = [];
 $last10daysData   = [];
-if (!empty($userdaily_records)) {
-    $tempArr = [];
-    foreach ($userdaily_records as $day) {
-        $tempArr[$day->fecha] = (int)$day->conteo_accesos_unicos;
+if (!empty($formatted_userdaily_records)) {
+    // Ya no necesitamos ordenar aquí porque la SQL ya ordena correctamente
+    foreach ($formatted_userdaily_records as $day) {
+        $last10daysLabels[] = $day->fecha_formateada;
+        $last10daysData[] = (int)$day->conteo_accesos_unicos;
     }
-    // Usar la función mejorada para ordenar fechas
-    uksort($tempArr, 'compararFechas');
-    $last10daysLabels = array_keys($tempArr);
-    $last10daysData   = array_values($tempArr);
 }
 
 // -------------------------------------------------------------------------
@@ -245,8 +261,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                             <?php echo $users_today; ?> / <?php echo $max_users_threshold; ?>
                         </h5>
                         <p class="text-muted">
-                            <?php echo(userdate($reportconfig->lastexecution));
-                             ?>
+                            <?php echo get_string('lastexecution', 'report_usage_monitor', $lastexec_users); ?>
                         </p>
                     </div>
                 </div>
@@ -449,10 +464,10 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <?php if (!empty($userdaily_records)): ?>
-                                            <?php foreach ($userdaily_records as $daylog): ?>
+                                        <?php if (!empty($formatted_userdaily_records)): ?>
+                                            <?php foreach ($formatted_userdaily_records as $daylog): ?>
                                                 <tr>
-                                                    <td><?php echo $daylog->fecha; ?></td>
+                                                    <td><?php echo $daylog->fecha_formateada; ?></td>
                                                     <td><?php echo $daylog->conteo_accesos_unicos; ?></td>
                                                 </tr>
                                             <?php endforeach; ?>
@@ -471,7 +486,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                         <div class="tab-pane fade" id="grafica10" role="tabpanel"
                             aria-labelledby="grafica10-tab">
                             <div style="position:relative; min-height:400px;">
-                                <?php if (!empty($userdaily_records)): ?>
+                                <?php if (!empty($formatted_userdaily_records)): ?>
                                     <canvas id="chartjs-last10days"></canvas>
                                 <?php else: ?>
                                     <div class="alert alert-info">
@@ -503,8 +518,8 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                             </tr>
                         </thead>
                         <tbody>
-                            <?php if (!empty($userdaily_recordstop)): ?>
-                                <?php foreach ($userdaily_recordstop as $log): ?>
+                            <?php if (!empty($formatted_userdaily_recordstop)): ?>
+                                <?php foreach ($formatted_userdaily_recordstop as $log): ?>
                                     <?php
                                     $percent = 0;
                                     if ($max_users_threshold > 0) {
@@ -518,7 +533,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                                     }
                                     ?>
                                     <tr>
-                                        <td><?php echo $log->fecha; ?></td>
+                                        <td><?php echo $log->fecha_formateada; ?></td>
                                         <td><?php echo $log->cantidad_usuarios; ?></td>
                                         <td class="<?php echo $class; ?>"><?php echo $percent; ?>%</td>
                                     </tr>
@@ -717,6 +732,49 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                         y: {
                             grid: {
                                 color: "rgba(0,0,0,0.05)"
+                            },
+                            // Añadimos una línea de umbral
+                            ticks: {
+                                callback: function(value) {
+                                    return value;
+                                }
+                            },
+                            // NUEVA CARACTERÍSTICA: Añadir línea de umbral
+                            afterDraw: function(scale) {
+                                var yScale = scale;
+                                var ctx = yScale.chart.ctx;
+                                var threshold = <?php echo json_encode($max_users_threshold); ?>;
+                                var index = yScale.getPixelForValue(threshold);
+                                
+                                // Solo dibujamos si el umbral está dentro del rango visible
+                                if (index >= scale.top && index <= scale.bottom) {
+                                    ctx.save();
+                                    ctx.beginPath();
+                                    ctx.moveTo(scale.left, index);
+                                    ctx.lineTo(scale.right, index);
+                                    ctx.lineWidth = 2;
+                                    ctx.strokeStyle = '#dc3545'; // Color rojo para umbral
+                                    ctx.setLineDash([5, 5]); // Línea discontinua
+                                    ctx.stroke();
+                                    
+                                    // Añadir etiqueta al umbral
+                                    ctx.fillStyle = '#dc3545';
+                                    ctx.textAlign = 'right';
+                                    ctx.fillText('Umbral: ' + threshold, scale.right - 5, index - 5);
+                                    ctx.restore();
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                afterLabel: function(context) {
+                                    var threshold = <?php echo json_encode($max_users_threshold); ?>;
+                                    var value = context.parsed.y;
+                                    var percent = ((value / threshold) * 100).toFixed(1);
+                                    return percent + '% del umbral';
+                                }
                             }
                         }
                     }
@@ -746,6 +804,43 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                             beginAtZero: true,
                             ticks: {
                                 callback: function(value) { return value + "%"; }
+                            },
+                            // NUEVA CARACTERÍSTICA: Añadir líneas de umbral para advertencias
+                            afterDraw: function(scale) {
+                                var yScale = scale;
+                                var ctx = yScale.chart.ctx;
+                                
+                                // Umbrales de advertencia y crítico
+                                var warningLevel = 70;
+                                var criticalLevel = 90;
+                                
+                                // Dibujar línea de advertencia (70%)
+                                var warningIndex = yScale.getPixelForValue(warningLevel);
+                                ctx.save();
+                                ctx.beginPath();
+                                ctx.moveTo(scale.left, warningIndex);
+                                ctx.lineTo(scale.right, warningIndex);
+                                ctx.lineWidth = 2;
+                                ctx.strokeStyle = '#ffc107'; // Amarillo
+                                ctx.setLineDash([5, 5]);
+                                ctx.stroke();
+                                ctx.fillStyle = '#ffc107';
+                                ctx.textAlign = 'right';
+                                ctx.fillText('Advertencia: ' + warningLevel + '%', scale.right - 5, warningIndex - 5);
+                                
+                                // Dibujar línea crítica (90%)
+                                var criticalIndex = yScale.getPixelForValue(criticalLevel);
+                                ctx.beginPath();
+                                ctx.moveTo(scale.left, criticalIndex);
+                                ctx.lineTo(scale.right, criticalIndex);
+                                ctx.lineWidth = 2;
+                                ctx.strokeStyle = '#dc3545'; // Rojo
+                                ctx.setLineDash([5, 5]);
+                                ctx.stroke();
+                                ctx.fillStyle = '#dc3545';
+                                ctx.textAlign = 'right';
+                                ctx.fillText('Crítico: ' + criticalLevel + '%', scale.right - 5, criticalIndex - 5);
+                                ctx.restore();
                             }
                         }
                     },
