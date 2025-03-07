@@ -872,3 +872,5 @@ $string['api_projections_title'] = 'Growth projections';
 $string['api_projections_desc'] = 'Growth projection data and estimated days to reach thresholds';
 $string['api_monthly_growth_rate'] = 'Monthly growth rate';
 $string['api_projection_days'] = 'Days to reach threshold';
+
+$string['unknowndate'] = 'Unknown date';
