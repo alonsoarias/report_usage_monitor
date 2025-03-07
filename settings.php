@@ -65,6 +65,13 @@ if ($ADMIN->fulltree) {
         get_string('notificationsettingsinfo', 'report_usage_monitor')
     ));
     
+    // Explicación de cómo funcionan los thresholds
+    $settings->add(new admin_setting_heading(
+        'report_usage_monitor/thresholds_explanation',
+        get_string('thresholds_explanation_title', 'report_usage_monitor'),
+        get_string('thresholds_explanation_desc', 'report_usage_monitor')
+    ));
+    
     // Opciones para alertas de espacio en disco (en porcentaje)
     $diskoptions = [
         90 => '90%',
@@ -180,12 +187,4 @@ $ADMIN->add('reports', new admin_externalpage(
     'report_usage_monitor',
     get_string('pluginname', 'report_usage_monitor'),
     new moodle_url('/report/usage_monitor/index.php')
-));
-
-// Agregar página para documentación de la API
-// Agregamos la página también a 'reports' en lugar de 'reportplugins' que no existe
-$ADMIN->add('reports', new admin_externalpage(
-    'report_usage_monitor_api',
-    get_string('api_documentation', 'report_usage_monitor'),
-    new moodle_url('/report/usage_monitor/api-documentation.php')
 ));
