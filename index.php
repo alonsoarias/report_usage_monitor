@@ -39,15 +39,25 @@ $quotadisk_gb = !empty($reportconfig->quotadisk_gb) ? $reportconfig->quotadisk_g
 
 $disk_percent = !empty($reportconfig->disk_percent) ? (float)$reportconfig->disk_percent : 
     (($quotadisk_bytes > 0) ? ($disk_usage_bytes / $quotadisk_bytes * 100) : 0);
+
+$disk_warning_level = !empty($reportconfig->disk_warning_level) ? (float)$reportconfig->disk_warning_level : 90;
+$disk_caution_level = max(70, $disk_warning_level - 20); // 20% menos que el warning o mínimo 70%
+
 $disk_warning_class = !empty($reportconfig->disk_warning_class) ? $reportconfig->disk_warning_class : 
-    (($disk_percent < 70) ? 'bg-success' : (($disk_percent < 90) ? 'bg-warning' : 'bg-danger'));
+    (($disk_percent < $disk_caution_level) ? 'bg-success' : 
+    (($disk_percent < $disk_warning_level) ? 'bg-warning' : 'bg-danger'));
 
 $users_today = (int)($reportconfig->totalusersdaily ?? 0);
 $max_users_threshold = (int)($reportconfig->max_daily_users_threshold ?? 100);
 $users_percent = !empty($reportconfig->users_percent) ? (float)$reportconfig->users_percent : 
     (($max_users_threshold > 0) ? ($users_today / $max_users_threshold * 100) : 0);
+
+$users_warning_level = !empty($reportconfig->users_warning_level) ? (float)$reportconfig->users_warning_level : 90;
+$users_caution_level = max(70, $users_warning_level - 20); // 20% menos que el warning o mínimo 70%
+
 $users_warning_class = !empty($reportconfig->users_warning_class) ? $reportconfig->users_warning_class : 
-    (($users_percent < 70) ? 'bg-success' : (($users_percent < 90) ? 'bg-warning' : 'bg-danger'));
+    (($users_percent < $users_caution_level) ? 'bg-success' : 
+    (($users_percent < $users_warning_level) ? 'bg-warning' : 'bg-danger'));
 
 $lastexec_disk_ts = !empty($reportconfig->lastexecutioncalculate) ? $reportconfig->lastexecutioncalculate : 0;
 if (!is_numeric($lastexec_disk_ts) || $lastexec_disk_ts <= 0) {
@@ -570,9 +580,9 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                                         $percent = round(($log->cantidad_usuarios / $max_users_threshold) * 100, 1);
                                     }
                                     $class = '';
-                                    if ($percent >= 70 && $percent < 90) {
+                                    if ($percent >= $users_caution_level && $percent < $users_warning_level) {
                                         $class = 'text-warning';
-                                    } else if ($percent >= 90) {
+                                    } else if ($percent >= $users_warning_level) {
                                         $class = 'text-danger';
                                     }
                                     ?>
@@ -667,8 +677,8 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                 </div>
                 <div class="card-body">
                     <!-- Alerta disco -->
-                    <?php if ($disk_percent > 70): ?>
-                        <div class="alert alert-<?php echo ($disk_percent > 90) ? 'danger' : 'warning'; ?>">
+                    <?php if ($disk_percent > $disk_caution_level): ?>
+                        <div class="alert alert-<?php echo ($disk_percent > $disk_warning_level) ? 'danger' : 'warning'; ?>">
                             <h5><?php echo get_string('space_saving_tips', 'report_usage_monitor'); ?></h5>
                             <ul class="mb-0">
                                 <li><?php echo get_string('tip_backups', 'report_usage_monitor', $backup_max_kept); ?></li>
@@ -685,8 +695,8 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                     <?php endif; ?>
 
                     <!-- Alerta usuarios -->
-                    <?php if ($users_percent > 70): ?>
-                        <div class="alert alert-<?php echo ($users_percent > 90) ? 'danger' : 'warning'; ?>">
+                    <?php if ($users_percent > $users_caution_level): ?>
+                        <div class="alert alert-<?php echo ($users_percent > $users_warning_level) ? 'danger' : 'warning'; ?>">
                             <h5><?php echo get_string('user_limit_tips', 'report_usage_monitor'); ?></h5>
                             <ul class="mb-0">
                                 <li><?php echo get_string('tip_user_inactive', 'report_usage_monitor'); ?></li>
@@ -772,7 +782,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                             borderColor: "#ffc107",
                             borderDash: [5, 5],
                             pointRadius: 0,
-                            data: Array(<?php echo json_encode($last10daysLabels); ?>.length).fill(70),
+                            data: Array(<?php echo json_encode($last10daysLabels); ?>.length).fill(<?php echo $users_caution_level; ?>),
                             yAxisID: 'percentage'
                         },
                         {
@@ -781,7 +791,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                             borderColor: "#dc3545",
                             borderDash: [5, 5],
                             pointRadius: 0,
-                            data: Array(<?php echo json_encode($last10daysLabels); ?>.length).fill(90),
+                            data: Array(<?php echo json_encode($last10daysLabels); ?>.length).fill(<?php echo $users_warning_level; ?>),
                             yAxisID: 'percentage'
                         },
                         {
@@ -862,7 +872,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                         borderColor: "#ffc107",
                         borderDash: [5, 5],
                         pointRadius: 0,
-                        data: Array(<?php echo !empty($disk_history_labels) ? count($disk_history_labels) : 0; ?>).fill(70),
+                        data: Array(<?php echo !empty($disk_history_labels) ? count($disk_history_labels) : 0; ?>).fill(<?php echo $disk_caution_level; ?>),
                         yAxisID: 'percentage'
                     },
                     {
@@ -871,7 +881,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                         borderColor: "#dc3545",
                         borderDash: [5, 5],
                         pointRadius: 0,
-                        data: Array(<?php echo !empty($disk_history_labels) ? count($disk_history_labels) : 0; ?>).fill(90),
+                        data: Array(<?php echo !empty($disk_history_labels) ? count($disk_history_labels) : 0; ?>).fill(<?php echo $disk_warning_level; ?>),
                         yAxisID: 'percentage'
                     },
                     {
