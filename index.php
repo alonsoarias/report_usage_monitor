@@ -273,7 +273,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                         <?php echo $max_90_days_users; ?>
                     </h2>
                     <p class="text-muted">
-                        <?php echo $max_90_days_date; ?> / <?php echo $max_users_threshold; ?>
+                        <?php echo $max_90_days_users; ?> / <?php echo $max_users_threshold; ?>
                     </p>
                 </div>
             </div>
