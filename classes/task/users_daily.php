@@ -124,8 +124,8 @@ class users_daily extends \core\task\scheduled_task
                 }
             }
         }
-
-        set_config('lastexecution', time(), 'report_usage_monitor');
+        $execution_time = time();
+        set_config('lastexecution', $execution_time, 'report_usage_monitor');
         if (debugging('', DEBUG_DEVELOPER)) {
             mtrace("Tarea completada.");
         }
