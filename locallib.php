@@ -12,7 +12,7 @@
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
  * Local functions.
@@ -25,35 +25,38 @@
 
 /**
  * Obtener la lista de usuarios de los últimos 10 días.
+ * Refactorizado para trabajar directamente con timestamps.
  *
- * @param string $format Formato de fecha para la consulta SQL.
  * @return string Consulta SQL para obtener la lista de usuarios.
  */
-function report_user_daily_sql($format)
+function report_user_daily_sql()
 {
-    return "SELECT FROM_UNIXTIME(`timecreated`, '$format') as fecha, count(DISTINCT`userid`) as conteo_accesos_unicos
-    FROM {logstore_standard_log}
-    WHERE `action`='loggedin' 
-    AND FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') BETWEEN DATE_SUB(CURDATE(), INTERVAL 10 DAY) AND DATE_SUB(CURDATE(), INTERVAL 1 DAY)
-    GROUP by fecha 
-    ORDER BY fecha DESC";
+    return "SELECT UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(timecreated))) as timestamp_fecha, 
+                   count(DISTINCT userid) as conteo_accesos_unicos
+            FROM {logstore_standard_log}
+            WHERE `action`='loggedin' 
+            AND timecreated BETWEEN UNIX_TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 10 DAY)) 
+                              AND UNIX_TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY))
+            GROUP BY timestamp_fecha 
+            ORDER BY timestamp_fecha DESC";
 }
 
 /**
  * Obtener datos del top de usuarios máximos diarios.
+ * Refactorizado para trabajar directamente con timestamps.
  *
- * @param string $format Formato de fecha para la consulta SQL.
  * @return string Consulta SQL para obtener los datos del top de usuarios.
  */
-function report_user_daily_top_sql($format)
+function report_user_daily_top_sql()
 {
-    return "SELECT FROM_UNIXTIME(`fecha`, '$format') as fecha, cantidad_usuarios 
+    return "SELECT fecha as timestamp_fecha, cantidad_usuarios 
             FROM {report_usage_monitor}  
-            ORDER BY cantidad_usuarios DESC";
+            ORDER BY cantidad_usuarios DESC, fecha DESC";
 }
 
 /**
  * Obtener datos del top de usuarios máximos diarios para una tarea específica.
+ * Refactorizado para trabajar con timestamps.
  *
  * @return string Consulta SQL para obtener los datos del top de usuarios.
  */
@@ -61,13 +64,13 @@ function report_user_daily_top_task()
 {
     return "SELECT fecha, cantidad_usuarios 
             FROM {report_usage_monitor}  
-            ORDER BY cantidad_usuarios DESC";
+            ORDER BY cantidad_usuarios DESC, fecha DESC";
 }
 
 /**
  * Actualizar el top de usuarios diarios si el número de usuarios actuales es mayor o igual al menor registro en el top.
  *
- * @param string $fecha Fecha a actualizar en el top.
+ * @param int $fecha Timestamp de la fecha a actualizar.
  * @param int $usuarios Cantidad de usuarios a actualizar en el top.
  * @param int $min Valor mínimo a comparar en el top.
  * @return void
@@ -75,19 +78,28 @@ function report_user_daily_top_task()
 function update_min_top_sql($fecha, $usuarios, $min)
 {
     global $DB;
-    $DB->execute(
-        "UPDATE {report_usage_monitor} 
-         SET fecha = ?, cantidad_usuarios = ? 
-         WHERE fecha = ?",
-        [$fecha, $usuarios, $min]
-    );
+    
+    // Obtener el registro con la menor cantidad de usuarios
+    $sql = "SELECT fecha FROM {report_usage_monitor} 
+            WHERE cantidad_usuarios = ? 
+            ORDER BY fecha ASC LIMIT 1";
+    $oldest_min_record = $DB->get_field_sql($sql, [$min]);
+    
+    if ($oldest_min_record) {
+        $DB->execute(
+            "UPDATE {report_usage_monitor} 
+             SET fecha = ?, cantidad_usuarios = ? 
+             WHERE fecha = ?",
+            [$fecha, $usuarios, $oldest_min_record]
+        );
+    }
 }
 
 /**
  * Insertar un registro si el top de usuarios diarios no tiene 10 registros.
  * Mantiene solo los 10 registros más recientes.
  *
- * @param string $fecha Fecha a insertar en el top.
+ * @param int $fecha Timestamp de la fecha a insertar.
  * @param int $cantidad_usuarios Cantidad de usuarios a insertar en el top.
  * @return void
  */
@@ -105,7 +117,7 @@ function insert_top_sql($fecha, $cantidad_usuarios)
     // Count records and remove excess
     $count = $DB->count_records('report_usage_monitor');
     if ($count > 10) {
-        // Get the IDs of the oldest records
+        // Get the IDs of the oldest records based on fecha column
         $sql = "SELECT id FROM {report_usage_monitor} ORDER BY fecha ASC LIMIT " . ($count - 10);
         $records = $DB->get_records_sql($sql);
         
@@ -124,73 +136,68 @@ function insert_top_sql($fecha, $cantidad_usuarios)
 /**
  * Obtener la cantidad de usuarios conectados el día de ayer.
  * Optimizado para usar índices en logstore_standard_log (action, timecreated)
+ * Refactorizado para trabajar directamente con timestamps.
  *
- * @param string $format Formato de fecha para la consulta SQL.
  * @return string Consulta SQL para obtener la cantidad de usuarios conectados.
  */
-function user_limit_daily_sql($format)
+function user_limit_daily_sql()
 {
     return "SELECT count(DISTINCT `userid`) as conteo_accesos_unicos, 
-                   FROM_UNIXTIME(`timecreated`, '$format') as fecha
+                   UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(timecreated))) as timestamp_fecha
             FROM {logstore_standard_log}
             WHERE `action` = 'loggedin' 
-              AND FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') = DATE_SUB(CURDATE(), INTERVAL 1 DAY)
-            GROUP by fecha";
+              AND timecreated BETWEEN UNIX_TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY)) 
+                                AND UNIX_TIMESTAMP(CURDATE())
+            GROUP by timestamp_fecha";
 }
 
 /**
  * Obtener el límite diario de usuarios para una tarea específica.
- * Optimizado para rendimiento.
+ * Optimizado para rendimiento y refactorizado para usar timestamps.
  *
  * @return string Consulta SQL para obtener el límite diario de usuarios.
  */
 function user_limit_daily_task()
 {
-    return "SELECT UNIX_TIMESTAMP(STR_TO_DATE(x.fecha, '%Y/%m/%d')) as fecha, 
-                   x.conteo_accesos_unicos 
-            FROM (
-                SELECT FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') as fecha, 
-                       count(DISTINCT`userid`) as conteo_accesos_unicos 
-                FROM {logstore_standard_log}
-                WHERE `action` = 'loggedin' 
-                  AND FROM_UNIXTIME(`timecreated`, '%Y/%m/%d') = DATE_SUB(CURDATE(), INTERVAL 1 DAY) 
-                GROUP by fecha
-            ) as x";
+    return "SELECT UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(timecreated))) as fecha, 
+                   count(DISTINCT userid) as conteo_accesos_unicos 
+            FROM {logstore_standard_log}
+            WHERE `action` = 'loggedin' 
+              AND timecreated BETWEEN UNIX_TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY)) 
+                                AND UNIX_TIMESTAMP(CURDATE())
+            GROUP by fecha";
 }
 
 /**
- * Recuperar los usuarios conectados recientemente para hoy.
- * Optimizado para usar índice en user.lastaccess
+ * Recuperar los usuarios conectados hoy.
+ * Optimizado para usar índice en user.lastaccess y refactorizado para timestamps.
  *
  * @return string Consulta SQL para obtener los usuarios conectados hoy.
  */
 function users_today()
 {
-    return "SELECT FROM_UNIXTIME(`lastaccess`, '%d/%m/%Y') as fecha, 
-                   count(DISTINCT `id`) as conteo_accesos_unicos 
+    return "SELECT UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(lastaccess))) as timestamp_fecha, 
+                   count(DISTINCT id) as conteo_accesos_unicos 
             FROM {user}
-            WHERE FROM_UNIXTIME(`lastaccess`, '%Y/%m/%d') >= DATE_SUB(NOW(), INTERVAL 1 DAY)";
+            WHERE lastaccess >= UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 1 DAY))
+            GROUP BY timestamp_fecha";
 }
 
 /**
  * Obtener el número máximo de accesos en los últimos 90 días.
  * Optimizado para usar índices y mejorar rendimiento.
+ * Refactorizado para trabajar directamente con timestamps.
  *
- * @param string $format Formato de fecha para la consulta SQL.
  * @return string Consulta SQL para obtener el número máximo de accesos en los últimos 90 días.
  */
-function max_userdaily_for_90_days($format)
+function max_userdaily_for_90_days()
 {
-    return "SELECT UNIX_TIMESTAMP(STR_TO_DATE(x.fecha, '$format')) as fecha, 
-                   x.conteo_accesos_unicos as usuarios 
-            FROM (
-                SELECT FROM_UNIXTIME(`timecreated`, '$format') as fecha, 
-                       count(DISTINCT`userid`) as conteo_accesos_unicos 
-                FROM {logstore_standard_log}
-                WHERE `action` = 'loggedin' 
-                  AND timecreated >= UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 90 DAY))  
-                GROUP by fecha
-            ) as x
+    return "SELECT UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(timecreated))) as fecha, 
+                   count(DISTINCT userid) as usuarios 
+            FROM {logstore_standard_log}
+            WHERE `action` = 'loggedin' 
+              AND timecreated >= UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 90 DAY))  
+            GROUP by fecha
             ORDER BY usuarios DESC 
             LIMIT 1";
 }
@@ -473,58 +480,18 @@ function display_size_in_gb($sizeInBytes, $precision = 2)
 }
 
 /**
- * Función para comparar las fechas en diferentes formatos y ordenar en orden ascendente.
- * Mejorada para ser más robusta y manejar diferentes formatos.
+ * Función mejorada para formatear una fecha timestamp UNIX a un formato legible.
+ * Reemplaza la función compararFechas que ya no es necesaria.
  *
- * @param string $fecha1 Primera fecha a comparar.
- * @param string $fecha2 Segunda fecha a comparar.
- * @return int Resultado de la comparación (-1, 0, 1).
+ * @param int $timestamp Timestamp UNIX a formatear
+ * @param string $format Formato de fecha (opcional, usa dateformat del plugin por defecto)
+ * @return string Fecha formateada
  */
-function compararFechas($fecha1, $fecha2) {
-    // Try the expected d/m/Y format first
-    $date1 = DateTime::createFromFormat('d/m/Y', $fecha1);
-    $date2 = DateTime::createFromFormat('d/m/Y', $fecha2);
-    
-    // If either date fails to parse, try other common formats
-    if (!$date1 || !$date2) {
-        $formats = ['Y-m-d', 'm/d/Y', 'Y/m/d', 'Y-m-d H:i:s'];
-        
-        foreach ($formats as $format) {
-            if (!$date1) {
-                $date1 = DateTime::createFromFormat($format, $fecha1);
-            }
-            if (!$date2) {
-                $date2 = DateTime::createFromFormat($format, $fecha2);
-            }
-            
-            if ($date1 && $date2) {
-                break;
-            }
-        }
-        
-        // Last resort: try to use strtotime
-        if (!$date1) {
-            $timestamp1 = strtotime($fecha1);
-            if ($timestamp1) {
-                $date1 = new DateTime();
-                $date1->setTimestamp($timestamp1);
-            } else {
-                $date1 = new DateTime('@0');  // Fallback
-            }
-        }
-        
-        if (!$date2) {
-            $timestamp2 = strtotime($fecha2);
-            if ($timestamp2) {
-                $date2 = new DateTime();
-                $date2->setTimestamp($timestamp2);
-            } else {
-                $date2 = new DateTime('@0');  // Fallback
-            }
-        }
+function format_timestamp_date($timestamp, $format = null) {
+    if (empty($format)) {
+        $format = get_string('dateformat', 'report_usage_monitor');
     }
-    
-    return $date1 <=> $date2;
+    return userdate($timestamp, $format);
 }
 
 /**
@@ -652,19 +619,19 @@ function project_limit_date($current_value, $threshold_value, $growth_rate) {
  * @param int $max_threshold Umbral máximo de usuarios
  * @return string HTML generado para las filas de la tabla
  */
-function generate_historical_data_html($limit = 7, $max_threshold = 100) {
+function generate_historical_data_html($limit = 10, $max_threshold = 100) {
     global $DB;
     
     $html = '';
     
     // Consulta optimizada para usar índices y reducir carga
-    $sql = "SELECT FROM_UNIXTIME(MIN(timecreated), '%d/%m/%Y') as fecha, 
+    $sql = "SELECT UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(timecreated))) as fecha, 
                    COUNT(DISTINCT userid) as usuarios
             FROM {logstore_standard_log}
             WHERE action = 'loggedin'
               AND timecreated > UNIX_TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL :limit DAY))
             GROUP BY DATE(FROM_UNIXTIME(timecreated))
-            ORDER BY MIN(timecreated) DESC
+            ORDER BY fecha DESC
             LIMIT :limit";
     
     $records = $DB->get_records_sql($sql, ['limit' => $limit]);
@@ -672,9 +639,10 @@ function generate_historical_data_html($limit = 7, $max_threshold = 100) {
     foreach ($records as $record) {
         $percent = round(($record->usuarios / $max_threshold) * 100, 1);
         $class = $percent < 70 ? '' : ($percent < 90 ? 'text-warning' : 'text-danger');
+        $formatted_date = format_timestamp_date($record->fecha);
         
         $html .= '<tr>';
-        $html .= '<td>' . $record->fecha . '</td>';
+        $html .= '<td>' . $formatted_date . '</td>';
         $html .= '<td>' . $record->usuarios . '</td>';
         $html .= '<td class="' . $class . '">' . $percent . '%</td>';
         $html .= '</tr>';
@@ -725,7 +693,7 @@ function email_notify_user_limit($numberofusers, $fecha, $percentage)
     $a->sitename = format_string($site->fullname);
     $a->threshold = $reportconfig->max_daily_users_threshold;
     $a->numberofusers = $numberofusers;
-    $a->lastday = $fecha;
+    $a->lastday = is_numeric($fecha) ? format_timestamp_date($fecha) : $fecha;
     $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php';
     $a->siteurl = $CFG->wwwroot;
     $a->percentaje = round($percentage, 2);
@@ -809,7 +777,7 @@ function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAc
     $a->numberofusers = $userAccessCount;
     $a->referer = $CFG->wwwroot . '/report/usage_monitor/index.php';
     $a->siteurl = $CFG->wwwroot;
-    $a->lastday = date('d/m/Y');
+    $a->lastday = format_timestamp_date(time());
     $a->coursescount = $DB->count_records('course');
     $a->user_percent = round(calculate_threshold_percentage($userAccessCount, $a->threshold), 2);
     $a->moodle_version = $CFG->version;
