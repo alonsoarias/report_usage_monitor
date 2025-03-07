@@ -870,3 +870,5 @@ $string['api_projections_title'] = 'Proyecciones de crecimiento';
 $string['api_projections_desc'] = 'Datos de proyección de crecimiento y días estimados para alcanzar umbrales';
 $string['api_monthly_growth_rate'] = 'Tasa de crecimiento mensual';
 $string['api_projection_days'] = 'Días para alcanzar umbral';
+
+$string['unknowndate'] = 'Fecha desconocida';
