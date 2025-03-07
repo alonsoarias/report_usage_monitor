@@ -136,11 +136,16 @@ foreach ($userdaily_records as $record) {
 
 // Inicialización de variables para el gráfico de líneas (usuarios últimos 10 días)
 $last10daysLabels = [];
-$last10daysData   = [];
+$last10daysData = [];
+$last10daysDataRaw = []; // Añadimos un array para mantener también los valores originales
 if (!empty($formatted_userdaily_records)) {
     foreach ($formatted_userdaily_records as $day) {
         $last10daysLabels[] = $day->fecha_formateada;
-        $last10daysData[] = (int)$day->conteo_accesos_unicos;
+        // Calculamos el porcentaje en relación al umbral
+        $percent = ($max_users_threshold > 0) ? 
+                   min(100, round(($day->conteo_accesos_unicos / $max_users_threshold) * 100, 1)) : 0;
+        $last10daysData[] = $percent;
+        $last10daysDataRaw[] = (int)$day->conteo_accesos_unicos;
     }
 }
 
@@ -758,7 +763,8 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                             fill: true,
                             backgroundColor: "rgba(0, 123, 255, 0.1)",
                             borderColor: "#007bff",
-                            data: <?php echo json_encode($last10daysData); ?>
+                            data: <?php echo json_encode($last10daysData); ?>,
+                            yAxisID: 'percentage'
                         },
                         {
                             label: "<?php echo get_string('warning70', 'report_usage_monitor'); ?>",
@@ -766,7 +772,8 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                             borderColor: "#ffc107",
                             borderDash: [5, 5],
                             pointRadius: 0,
-                            data: Array(<?php echo json_encode($last10daysLabels); ?>.length).fill(<?php echo $max_users_threshold * 0.7; ?>)
+                            data: Array(<?php echo json_encode($last10daysLabels); ?>.length).fill(70),
+                            yAxisID: 'percentage'
                         },
                         {
                             label: "<?php echo get_string('critical90', 'report_usage_monitor'); ?>",
@@ -774,7 +781,8 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                             borderColor: "#dc3545",
                             borderDash: [5, 5],
                             pointRadius: 0,
-                            data: Array(<?php echo json_encode($last10daysLabels); ?>.length).fill(<?php echo $max_users_threshold * 0.9; ?>)
+                            data: Array(<?php echo json_encode($last10daysLabels); ?>.length).fill(90),
+                            yAxisID: 'percentage'
                         },
                         {
                             label: "<?php echo get_string('limit100', 'report_usage_monitor'); ?>",
@@ -782,7 +790,8 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                             borderColor: "#6c757d",
                             borderDash: [2, 2],
                             pointRadius: 0,
-                            data: Array(<?php echo json_encode($last10daysLabels); ?>.length).fill(<?php echo $max_users_threshold; ?>)
+                            data: Array(<?php echo json_encode($last10daysLabels); ?>.length).fill(100),
+                            yAxisID: 'percentage'
                         }
                     ]
                 },
@@ -794,7 +803,9 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                                 color: "rgba(0,0,0,0.05)"
                             }
                         },
-                        y: {
+                        percentage: {
+                            type: 'linear',
+                            position: 'left',
                             beginAtZero: true,
                             max: 100,
                             grid: {
@@ -804,20 +815,22 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                                 callback: function(value) {
                                     return value + "%";
                                 }
+                            },
+                            title: {
+                                display: true,
+                                text: '<?php echo get_string('percent_of_threshold', 'report_usage_monitor'); ?>'
                             }
                         }
                     },
                     plugins: {
                         tooltip: {
                             callbacks: {
-                                afterLabel: function(context) {
+                                label: function(context) {
                                     if (context.dataset.label === "<?php echo get_string('usersquantity', 'report_usage_monitor'); ?>") {
-                                        var threshold = <?php echo $max_users_threshold; ?>;
-                                        var value = context.parsed.y;
-                                        var percent = ((value / threshold) * 100).toFixed(1);
-                                        return percent + '% del umbral';
+                                        return context.dataset.label + ": " + <?php echo json_encode($last10daysDataRaw); ?>[context.dataIndex] + 
+                                               " (" + context.parsed.y + "<?php echo get_string('percent_of_threshold', 'report_usage_monitor'); ?>)";
                                     }
-                                    return "";
+                                    return context.dataset.label + ": " + context.parsed.y + "%";
                                 }
                             }
                         }
@@ -840,7 +853,8 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                         borderColor: "#007bff",
                         data: <?php echo json_encode($disk_history_data); ?>,
                         spanGaps: true,
-                        tension: 0.2
+                        tension: 0.2,
+                        yAxisID: 'percentage'
                     },
                     {
                         label: "<?php echo get_string('warning70', 'report_usage_monitor'); ?>",
@@ -848,7 +862,8 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                         borderColor: "#ffc107",
                         borderDash: [5, 5],
                         pointRadius: 0,
-                        data: Array(<?php echo !empty($disk_history_labels) ? count($disk_history_labels) : 0; ?>).fill(70)
+                        data: Array(<?php echo !empty($disk_history_labels) ? count($disk_history_labels) : 0; ?>).fill(70),
+                        yAxisID: 'percentage'
                     },
                     {
                         label: "<?php echo get_string('critical90', 'report_usage_monitor'); ?>",
@@ -856,7 +871,8 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                         borderColor: "#dc3545",
                         borderDash: [5, 5],
                         pointRadius: 0,
-                        data: Array(<?php echo !empty($disk_history_labels) ? count($disk_history_labels) : 0; ?>).fill(90)
+                        data: Array(<?php echo !empty($disk_history_labels) ? count($disk_history_labels) : 0; ?>).fill(90),
+                        yAxisID: 'percentage'
                     },
                     {
                         label: "<?php echo get_string('limit100', 'report_usage_monitor'); ?>",
@@ -864,7 +880,8 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                         borderColor: "#6c757d",
                         borderDash: [2, 2],
                         pointRadius: 0,
-                        data: Array(<?php echo !empty($disk_history_labels) ? count($disk_history_labels) : 0; ?>).fill(100)
+                        data: Array(<?php echo !empty($disk_history_labels) ? count($disk_history_labels) : 0; ?>).fill(100),
+                        yAxisID: 'percentage'
                     }]
                 },
                 options: {
@@ -880,7 +897,9 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                                 minRotation: 45
                             }
                         },
-                        y: {
+                        percentage: {
+                            type: 'linear',
+                            position: 'left',
                             beginAtZero: true,
                             max: 100,
                             grid: {
@@ -888,6 +907,10 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                             },
                             ticks: {
                                 callback: function(value) { return value + "%"; }
+                            },
+                            title: {
+                                display: true,
+                                text: '<?php echo get_string('percent_of_threshold', 'report_usage_monitor'); ?>'
                             }
                         }
                     },
@@ -896,7 +919,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                             callbacks: {
                                 label: function(context) {
                                     if (context.dataset.label === "<?php echo get_string('percentage_used', 'report_usage_monitor'); ?>") {
-                                        return context.parsed.y + '%';
+                                        return context.parsed.y + '<?php echo get_string('percent_of_threshold', 'report_usage_monitor'); ?>';
                                     }
                                     return context.dataset.label;
                                 }
