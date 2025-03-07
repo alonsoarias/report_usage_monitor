@@ -67,14 +67,6 @@ $lastexec_users = !empty($reportconfig->lastexecution)
     ? userdate($reportconfig->lastexecution)
     : get_string('notcalculatedyet', 'report_usage_monitor');
     
-// Formatear los tiempos para mostrar hora y minutos
-$lastexec_time_disk = !empty($reportconfig->lastexecutioncalculate)
-    ? userdate($reportconfig->lastexecutioncalculate, get_string('datetimeformat', 'report_usage_monitor'))
-    : get_string('notcalculatedyet', 'report_usage_monitor');
-$lastexec_time_users = !empty($reportconfig->lastexecution)
-    ? userdate($reportconfig->lastexecution, get_string('datetimeformat', 'report_usage_monitor'))
-    : get_string('notcalculatedyet', 'report_usage_monitor');
-
 // Máximo usuarios 90 días
 $max_90_days_users   = $reportconfig->max_userdaily_for_90_days_users ?? get_string('notcalculatedyet', 'report_usage_monitor');
 $max_90_days_date_ts = $reportconfig->max_userdaily_for_90_days_date  ?? 0;
