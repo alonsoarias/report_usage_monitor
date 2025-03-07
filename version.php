@@ -24,7 +24,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'report_usage_monitor'; // Nombre completo del plugin
-$plugin->version   = 2025030401;  // Versión actualizada para incluir nuevos métodos API
+$plugin->version   = 2025030402;  // Versión actualizada para refactorización de manejo de fechas y timestamps
 $plugin->requires  = 2020061500;  // Versión mínima de Moodle requerida - Moodle 3.9
-$plugin->release   = '4.5.2';     // Versión legible aumentada para reflejar mejoras en API
+$plugin->release   = '4.5.3';     // Versión legible actualizada para reflejar mejoras en manejo de fechas y proyecciones
 $plugin->maturity  = MATURITY_STABLE; // El nivel de madurez del plugin
