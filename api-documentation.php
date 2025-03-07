@@ -56,6 +56,10 @@ echo $OUTPUT->heading(get_string('api_documentation', 'report_usage_monitor'));
         <div class="card-body">
             <p>The Usage Monitor API allows external systems to retrieve usage statistics and notifications from your Moodle site. This enables integration with monitoring dashboards, alerting systems, and other tools to help manage your Moodle installation.</p>
             
+            <div class="alert alert-info">
+                <strong>Important Date Handling:</strong> All dates in this API are represented as UNIX timestamps (seconds since January 1, 1970, 00:00:00 UTC). When providing dates to the API or processing responses, ensure proper timestamp validation and conversion.
+            </div>
+            
             <p><strong>To use this API, you need to:</strong></p>
             <ol>
                 <li>Enable web services in Moodle</li>
@@ -95,20 +99,26 @@ echo $OUTPUT->heading(get_string('api_documentation', 'report_usage_monitor'));
                             <h6>Example Response:</h6>
 <pre><code>{
   "disk_usage": {
-    "current": 12345678901,            // Uso actual en bytes
-    "current_readable": "11.5 GB",     // Uso actual en formato legible
-    "threshold": 21474836480,          // Umbral configurado en bytes
-    "threshold_readable": "20 GB",     // Umbral en formato legible
-    "percentage": 57.5,                // Porcentaje de uso actual
-    "last_calculated": 1698159284      // Timestamp del último cálculo
+    "current": 12345678901,            // Current usage in bytes
+    "current_readable": "11.5 GB",     // Human-readable current usage
+    "threshold": 21474836480,          // Configured threshold in bytes
+    "threshold_readable": "20 GB",     // Human-readable threshold
+    "percentage": 57.5,                // Current usage percentage
+    "last_calculated": 1698159284      // Timestamp of last calculation
   },
   "user_usage": {
-    "current": 450,                    // Usuarios actuales
-    "threshold": 1000,                 // Umbral de usuarios configurado
-    "percentage": 45.0,                // Porcentaje de uso actual
-    "last_calculated": 1698159350,     // Timestamp del último cálculo
-    "max_90_days": 650,                // Máximo de usuarios en los últimos 90 días
-    "max_90_days_date": 1644934800     // Timestamp de la fecha con máximo de usuarios
+    "current": 450,                    // Current users
+    "threshold": 1000,                 // Configured user threshold
+    "percentage": 45.0,                // Current usage percentage
+    "last_calculated": 1698159350,     // Timestamp of last calculation
+    "max_90_days": 650,                // Maximum users in the last 90 days
+    "max_90_days_date": 1644934800     // Timestamp of the date with maximum users
+  },
+  "projections": {
+    "disk_growth_rate": 5.2,           // Monthly disk growth rate in percentage
+    "users_growth_rate": 2.3,          // Monthly users growth rate in percentage
+    "days_to_disk_threshold": 120,     // Projected days to reach disk warning threshold
+    "days_to_users_threshold": 420     // Projected days to reach users warning threshold
   }
 }</code></pre>
                         </div>
@@ -166,7 +176,7 @@ echo $OUTPUT->heading(get_string('api_documentation', 'report_usage_monitor'));
                         <div class="card-body">
                             <p><strong>Description:</strong> Retrieves comprehensive usage statistics for the site.</p>
                             <p><strong>Parameters:</strong> None</p>
-                            <p><strong>Returns:</strong> Detailed data about disk usage, user counts, system information, and largest courses.</p>
+                            <p><strong>Returns:</strong> Detailed data about disk usage, user counts, system information, projections, and largest courses.</p>
                             
                             <h6>Example Request:</h6>
 <pre><code>curl '<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php?wstoken=YOUR_TOKEN&wsfunction=report_usage_monitor_get_monitor_stats&moodlewsrestformat=json'</code></pre>
@@ -234,12 +244,21 @@ echo $OUTPUT->heading(get_string('api_documentation', 'report_usage_monitor'));
       "backup_size_readable": "512 MB",
       "percentage": 8.7,
       "backup_count": 3
-    },
-    ...
+    }
   ],
   "timestamps": {
     "disk_calculation": 1698159284,
     "users_calculation": 1698159350
+  },
+  "growth_rates": {
+    "disk": {
+      "monthly_percent": 3.5,
+      "projected_days_to_threshold": 95
+    },
+    "users": {
+      "monthly_percent": 2.1,
+      "projected_days_to_threshold": 215
+    }
   }
 }</code></pre>
                         </div>
@@ -283,10 +302,9 @@ echo $OUTPUT->heading(get_string('api_documentation', 'report_usage_monitor'));
       "value_raw": 20503707648,
       "threshold": "20 GB",
       "threshold_raw": 21474836480,
-      "timecreated": 1698159284,
+      "timecreated": 1698159284,            // UNIX timestamp
       "timereadable": "Mon, 24 Oct 2023, 15:34"
-    },
-    ...
+    }
   ]
 }</code></pre>
                         </div>
@@ -302,12 +320,27 @@ echo $OUTPUT->heading(get_string('api_documentation', 'report_usage_monitor'));
         </div>
         <div class="card-body">
             <h5>PHP Example</h5>
-<pre><code>// Obtener datos de uso
+<pre><code>// Get usage data with timestamp validation
 $curl = new curl();
 $response = $curl->get('<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php?wstoken=YOUR_TOKEN&wsfunction=report_usage_monitor_get_usage_data&moodlewsrestformat=json');
 $usage_data = json_decode($response);
 
-// Actualizar umbral de usuarios
+// Processing the data with timestamp validation
+if ($usage_data && isset($usage_data->disk_usage->last_calculated)) {
+    // Validate the timestamp
+    $last_calculated = $usage_data->disk_usage->last_calculated;
+    if (is_numeric($last_calculated) && $last_calculated > 0) {
+        $date_readable = date('Y-m-d H:i:s', $last_calculated);
+        echo "Last calculation: " . $date_readable . "\n";
+    } else {
+        echo "Invalid timestamp in response\n";
+    }
+    
+    echo "Disk usage: " . $usage_data->disk_usage->percentage . "%\n";
+    echo "User usage: " . $usage_data->user_usage->percentage . "%\n";
+}
+
+// Update user threshold
 $post_params = array(
     'wstoken' => 'YOUR_TOKEN',
     'wsfunction' => 'report_usage_monitor_set_usage_thresholds',
@@ -318,15 +351,36 @@ $response = $curl->post('<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php
 $result = json_decode($response);</code></pre>
 
             <h5>JavaScript Example</h5>
-<pre><code>// Obtener datos de uso
+<pre><code>// Get usage data with timestamp handling
 fetch('<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php?wstoken=YOUR_TOKEN&wsfunction=report_usage_monitor_get_usage_data&moodlewsrestformat=json')
   .then(response => response.json())
   .then(data => {
-    console.log('Uso de disco:', data.disk_usage.percentage + '%');
-    console.log('Uso de usuarios:', data.user_usage.percentage + '%');
-  });
+    // Validate timestamps before using them
+    const lastDiskCalc = data.disk_usage.last_calculated;
+    const lastUserCalc = data.user_usage.last_calculated;
+    
+    if (lastDiskCalc && typeof lastDiskCalc === 'number' && lastDiskCalc > 0) {
+      const diskDate = new Date(lastDiskCalc * 1000); // Convert to milliseconds
+      console.log('Last disk calculation:', diskDate.toLocaleString());
+    }
+    
+    if (lastUserCalc && typeof lastUserCalc === 'number' && lastUserCalc > 0) {
+      const userDate = new Date(lastUserCalc * 1000); // Convert to milliseconds
+      console.log('Last user calculation:', userDate.toLocaleString());
+    }
+    
+    console.log('Disk usage:', data.disk_usage.percentage + '%');
+    console.log('User usage:', data.user_usage.percentage + '%');
+    
+    // Check growth projections
+    if (data.projections) {
+      console.log('Days to reach disk threshold:', data.projections.days_to_disk_threshold);
+      console.log('Days to reach user threshold:', data.projections.days_to_users_threshold);
+    }
+  })
+  .catch(error => console.error('API Error:', error));
 
-// Actualizar umbrales
+// Update thresholds
 const formData = new FormData();
 formData.append('wstoken', 'YOUR_TOKEN');
 formData.append('wsfunction', 'report_usage_monitor_set_usage_thresholds');
@@ -340,7 +394,7 @@ fetch('<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php', {
   .then(response => response.json())
   .then(result => {
     if (result.success) {
-      console.log('Umbrales actualizados correctamente');
+      console.log('Thresholds updated successfully');
     } else {
       console.error('Error:', result.messages.join(', '));
     }
@@ -364,6 +418,10 @@ fetch('<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php', {
             
             <div class="alert alert-warning">
                 <i class="fa fa-exclamation-triangle"></i> <strong>Warning:</strong> Keep your tokens secure. They provide access to your Moodle data.
+            </div>
+            
+            <div class="alert alert-info">
+                <i class="fa fa-info-circle"></i> <strong>Best Practice:</strong> For enhanced security, consider using POST requests with tokens in the request body rather than including them in URL parameters.
             </div>
         </div>
     </div>
@@ -403,6 +461,35 @@ fetch('<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php', {
             </table>
             
             <p>Ensure that the user associated with your token has all the required capabilities for the endpoints you intend to use.</p>
+        </div>
+    </div>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            <h3 class="m-0">Date and Time Handling</h3>
+        </div>
+        <div class="card-body">
+            <p>All timestamps in the API are UNIX timestamps (seconds since January 1, 1970, 00:00:00 UTC). When working with these timestamps:</p>
+            
+            <ul>
+                <li><strong>Validation:</strong> Always validate timestamps before using them. Check that they are numeric and greater than zero.</li>
+                <li><strong>Conversion:</strong> To convert a UNIX timestamp to a human-readable date:
+                    <ul>
+                        <li>PHP: <code>date('Y-m-d H:i:s', $timestamp)</code></li>
+                        <li>JavaScript: <code>new Date(timestamp * 1000).toLocaleString()</code></li>
+                    </ul>
+                </li>
+                <li><strong>Current Time:</strong> To get the current UNIX timestamp:
+                    <ul>
+                        <li>PHP: <code>time()</code></li>
+                        <li>JavaScript: <code>Math.floor(Date.now() / 1000)</code></li>
+                    </ul>
+                </li>
+            </ul>
+            
+            <div class="alert alert-warning">
+                <strong>Important:</strong> Dates in the API responses may occasionally be invalid or zero if data hasn't been calculated yet. Always check for these cases in your integration code.
+            </div>
         </div>
     </div>
 </div>
