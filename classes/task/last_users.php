@@ -87,7 +87,7 @@ class last_users extends \core\task\scheduled_task
 
             // Guardar timestamp de última ejecución
             $execution_time = time();
-            set_config('lastexecution', $execution_time, 'report_usage_monitor');
+            set_config('lastexecutioncalculateuserdaily', $execution_time, 'report_usage_monitor');
             
             // Permitir commit si todo ha ido bien
             $transaction->allow_commit();
