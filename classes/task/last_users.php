@@ -66,7 +66,12 @@ class last_users extends \core\task\scheduled_task
 
         if (debugging('', DEBUG_DEVELOPER)) {
             mtrace("Usuarios conectados recientemente: $users_today.");
-            mtrace("Tarea de cálculo de usuarios conectados recientemente completada.");
+            // mtrace("Tarea de cálculo de usuarios conectados recientemente completada.");
+        }
+        $execution_time = time();
+        set_config('lastexecution', $execution_time, 'report_usage_monitor');
+        if (debugging('', DEBUG_DEVELOPER)) {
+            mtrace("Tarea completada.");
         }
 
         return true;
