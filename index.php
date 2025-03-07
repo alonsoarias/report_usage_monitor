@@ -245,7 +245,8 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                             <?php echo $users_today; ?> / <?php echo $max_users_threshold; ?>
                         </h5>
                         <p class="text-muted">
-                            <?php echo get_string('lastexecution', 'report_usage_monitor', $lastexec_users); ?>
+                            <?php echo(userdate($reportconfig->lastexecution));
+                             ?>
                         </p>
                     </div>
                 </div>
