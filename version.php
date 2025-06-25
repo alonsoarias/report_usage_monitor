@@ -26,7 +26,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'report_usage_monitor';
-$plugin->version   = 2025030500;  // Updated version for refactoring
+$plugin->version   = 2025030600;  // Updated version for complete refactoring
 $plugin->requires  = 2020061500;  // Moodle 3.9
-$plugin->release   = '5.0.0';     // Major refactor release
+$plugin->release   = '6.0.0';     // Complete refactor release
 $plugin->maturity  = MATURITY_STABLE;

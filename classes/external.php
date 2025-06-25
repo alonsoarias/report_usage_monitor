@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * API externa para obtener estadísticas del plugin.
+ * External API for Usage Monitor plugin.
  *
  * @package    report_usage_monitor
  * @copyright  2025 Soporte IngeWeb <soporte@ingeweb.co>
@@ -28,171 +28,111 @@ require_once($CFG->libdir . '/externallib.php');
 require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
 
 /**
- * Clase de API externa para el plugin report_usage_monitor
+ * External API class for Usage Monitor plugin
  */
 class report_usage_monitor_external extends external_api {
 
     /**
-     * Devuelve la definición de parámetros para get_monitor_stats.
+     * Returns description of method parameters for get_usage_statistics
      *
      * @return external_function_parameters
      */
-    public static function get_monitor_stats_parameters() {
-        return new external_function_parameters([]);
+    public static function get_usage_statistics_parameters() {
+        return new external_function_parameters([
+            'include_history' => new external_value(PARAM_BOOL, 'Include historical data', VALUE_DEFAULT, false),
+            'history_days' => new external_value(PARAM_INT, 'Number of days for history', VALUE_DEFAULT, 30)
+        ]);
     }
 
     /**
-     * Devuelve las estadísticas actuales de uso para integración con sistemas externos.
+     * Get comprehensive usage statistics
      *
-     * @return array Conjunto de estadísticas
+     * @param bool $include_history Include historical data
+     * @param int $history_days Number of days for history
+     * @return array Usage statistics
      */
-    public static function get_monitor_stats() {
-        global $DB, $CFG;
-        
-        // Verificar permisos
+    public static function get_usage_statistics($include_history = false, $history_days = 30) {
+        // Validate parameters
+        $params = self::validate_parameters(self::get_usage_statistics_parameters(), [
+            'include_history' => $include_history,
+            'history_days' => $history_days
+        ]);
+
+        // Check permissions
         $context = context_system::instance();
         self::validate_context($context);
         require_capability('report/usage_monitor:view', $context);
-        
-        // Obtener configuraciones
-        $reportconfig = get_config('report_usage_monitor');
-        
-        // Calcular uso de disco
-        $disk_usage = ((int) $reportconfig->totalusagereadable + (int) $reportconfig->totalusagereadabledb) ?: 0;
-        $quotadisk = ((int) $reportconfig->disk_quota * 1024) * 1024 * 1024;
-        $disk_percent = calculate_threshold_percentage($disk_usage, $quotadisk);
-        
-        // Calcular uso de usuarios
-        $users_today = !empty($reportconfig->totalusersdaily) ? ($reportconfig->totalusersdaily) : 0;
-        $user_threshold = $reportconfig->max_daily_users_threshold;
-        $users_percent = calculate_threshold_percentage($users_today, $user_threshold);
-        
-        // Analizar directorios - usar datos precalculados si están disponibles
-        $dir_analysis_json = $reportconfig->dir_analysis ?? '{}';
-        $dir_analysis = json_decode($dir_analysis_json, true);
-        if (empty($dir_analysis) || !is_array($dir_analysis)) {
-            $dir_analysis = analyze_disk_usage_by_directory($CFG->dataroot);
-        }
-        
-        // Obtener cursos más grandes - usar datos precalculados si están disponibles
-        $largest_courses_json = $reportconfig->largest_courses ?? '[]';
-        $largest_courses = json_decode($largest_courses_json);
-        if (empty($largest_courses)) {
-            $largest_courses = get_largest_courses(5);
-        }
 
-        // Validar timestamps para info de últimos cálculos
-        $last_disk_calc = !empty($reportconfig->lastexecutioncalculate) ? $reportconfig->lastexecutioncalculate : 0;
-        $last_users_calc = !empty($reportconfig->lastexecution) ? $reportconfig->lastexecution : 0;
-        
-        // Validar que los timestamps sean valores numéricos válidos
-        if (!is_numeric($last_disk_calc) || $last_disk_calc <= 0) {
-            $last_disk_calc = time();
-            debugging('get_monitor_stats: Timestamp inválido para lastexecutioncalculate: ' . var_export($reportconfig->lastexecutioncalculate, true), DEBUG_DEVELOPER);
-        }
-        
-        if (!is_numeric($last_users_calc) || $last_users_calc <= 0) {
-            $last_users_calc = time();
-            debugging('get_monitor_stats: Timestamp inválido para lastexecution: ' . var_export($reportconfig->lastexecution, true), DEBUG_DEVELOPER);
-        }
-        
-        // Validar timestamp para max_userdaily_for_90_days_date
-        $max_90_days_date = !empty($reportconfig->max_userdaily_for_90_days_date) ? 
-                          $reportconfig->max_userdaily_for_90_days_date : null;
-        if (!is_numeric($max_90_days_date) || $max_90_days_date <= 0) {
-            $max_90_days_date = null;
-            debugging('get_monitor_stats: Timestamp inválido para max_userdaily_for_90_days_date: ' . var_export($reportconfig->max_userdaily_for_90_days_date, true), DEBUG_DEVELOPER);
-        }
-        
-        // Crear estructura de respuesta
-        $response = array(
-            'site_info' => array(
-                'name' => format_string($SITE->fullname),
-                'shortname' => format_string($SITE->shortname),
-                'moodle_version' => $CFG->version,
-                'moodle_release' => $CFG->release,
-                'course_count' => $DB->count_records('course'),
-                'user_count' => $DB->count_records('user', array('deleted' => 0)) - 1,
-                'backup_auto_max_kept' => get_config('backup', 'backup_auto_max_kept'),
-            ),
-            'disk_usage' => array(
-                'total_bytes' => $disk_usage,
-                'total_readable' => display_size($disk_usage),
-                'quota_bytes' => $quotadisk,
-                'quota_readable' => display_size($quotadisk),
-                'percentage' => round($disk_percent, 2),
-                'details' => array(
-                    'database' => array(
-                        'bytes' => $dir_analysis['database'],
-                        'readable' => display_size($dir_analysis['database']),
-                        'percentage' => round(($dir_analysis['database'] / $disk_usage) * 100, 2)
-                    ),
-                    'filedir' => array(
-                        'bytes' => $dir_analysis['filedir'],
-                        'readable' => display_size($dir_analysis['filedir']),
-                        'percentage' => round(($dir_analysis['filedir'] / $disk_usage) * 100, 2)
-                    ),
-                    'cache' => array(
-                        'bytes' => $dir_analysis['cache'],
-                        'readable' => display_size($dir_analysis['cache']),
-                        'percentage' => round(($dir_analysis['cache'] / $disk_usage) * 100, 2)
-                    ),
-                    'backup' => array(
-                        'bytes' => $dir_analysis['backup'] ?? 0,
-                        'readable' => display_size($dir_analysis['backup'] ?? 0),
-                        'percentage' => round((($dir_analysis['backup'] ?? 0) / $disk_usage) * 100, 2)
-                    ),
-                    'others' => array(
-                        'bytes' => $dir_analysis['others'],
-                        'readable' => display_size($dir_analysis['others']),
-                        'percentage' => round(($dir_analysis['others'] / $disk_usage) * 100, 2)
-                    )
-                )
-            ),
-            'user_usage' => array(
-                'daily_users' => $users_today,
-                'threshold' => $user_threshold,
-                'percentage' => round($users_percent, 2),
-                'max_90_days' => !empty($reportconfig->max_userdaily_for_90_days_users) ? 
-                                $reportconfig->max_userdaily_for_90_days_users : 0,
-                'max_90_days_date' => $max_90_days_date ? 
-                                date('Y-m-d', $max_90_days_date) : null
-            ),
-            'largest_courses' => array(),
-            'timestamps' => array(
-                'disk_calculation' => $last_disk_calc,
-                'users_calculation' => $last_users_calc
-            ),
-            // Tasas de crecimiento y proyecciones
-            'growth_rates' => array(
-                'disk' => array(
-                    'monthly_percent' => calculate_growth_rate('disk'),
-                    'projected_days_to_threshold' => project_limit_date(
-                        $disk_usage, 
-                        $quotadisk * 0.9, // Proyección para alcanzar el 90% del umbral
-                        calculate_growth_rate('disk')
-                    )
-                ),
-                'users' => array(
-                    'monthly_percent' => calculate_growth_rate('users'),
-                    'projected_days_to_threshold' => project_limit_date(
-                        $users_today,
-                        $user_threshold * 0.9, // Proyección para alcanzar el 90% del umbral
-                        calculate_growth_rate('users')
-                    )
-                )
-            )
-        );
-        
-        // Formatear datos de cursos más grandes
-        foreach ($largest_courses as $course) {
-            // Asegurarse de que los datos del curso son válidos
-            if (!isset($course->id) || !isset($course->fullname) || !isset($course->shortname)) {
-                debugging('get_monitor_stats: Datos de curso incompletos: ' . var_export($course, true), DEBUG_DEVELOPER);
-                continue;
-            }
-            
-            $response['largest_courses'][] = array(
+        // Get statistics
+        $stats = usage_monitor_data_manager::get_usage_statistics();
+
+        // Format response
+        $response = [
+            'site_info' => [
+                'name' => $stats->system->site_name,
+                'shortname' => $stats->system->site_shortname,
+                'moodle_version' => $stats->system->moodle_version,
+                'moodle_release' => $stats->system->moodle_release,
+                'course_count' => $stats->system->course_count,
+                'user_count' => $stats->system->user_count,
+                'active_users' => $stats->system->active_users,
+                'suspended_users' => $stats->system->suspended_users,
+                'backup_auto_max_kept' => $stats->system->backup_auto_max_kept
+            ],
+            'disk_usage' => [
+                'current_bytes' => $stats->disk->current_bytes,
+                'current_readable' => $stats->disk->current_readable,
+                'quota_bytes' => $stats->disk->quota_bytes,
+                'quota_readable' => $stats->disk->quota_readable,
+                'percentage' => round($stats->disk->percentage, 2),
+                'warning_level' => $stats->disk->warning_level,
+                'warning_class' => $stats->disk->warning_class,
+                'last_calculated' => $stats->disk->last_calculated,
+                'directories' => [
+                    'database' => [
+                        'bytes' => $stats->directories['database'],
+                        'readable' => display_size($stats->directories['database']),
+                        'percentage' => round(($stats->directories['database'] / $stats->disk->current_bytes) * 100, 2)
+                    ],
+                    'filedir' => [
+                        'bytes' => $stats->directories['filedir'],
+                        'readable' => display_size($stats->directories['filedir']),
+                        'percentage' => round(($stats->directories['filedir'] / $stats->disk->current_bytes) * 100, 2)
+                    ],
+                    'cache' => [
+                        'bytes' => $stats->directories['cache'],
+                        'readable' => display_size($stats->directories['cache']),
+                        'percentage' => round(($stats->directories['cache'] / $stats->disk->current_bytes) * 100, 2)
+                    ],
+                    'others' => [
+                        'bytes' => $stats->directories['others'],
+                        'readable' => display_size($stats->directories['others']),
+                        'percentage' => round(($stats->directories['others'] / $stats->disk->current_bytes) * 100, 2)
+                    ]
+                ]
+            ],
+            'user_usage' => [
+                'current' => $stats->users->current,
+                'threshold' => $stats->users->threshold,
+                'percentage' => round($stats->users->percentage, 2),
+                'warning_level' => $stats->users->warning_level,
+                'warning_class' => $stats->users->warning_class,
+                'last_calculated' => $stats->users->last_calculated,
+                'max_90_days' => $stats->users->max_90_days,
+                'max_90_days_date' => $stats->users->max_90_days_date
+            ],
+            'projections' => [
+                'disk_growth_rate' => $stats->projections->disk_growth_rate,
+                'users_growth_rate' => $stats->projections->users_growth_rate,
+                'days_to_disk_threshold' => $stats->projections->days_to_disk_threshold,
+                'days_to_users_threshold' => $stats->projections->days_to_users_threshold
+            ],
+            'largest_courses' => []
+        ];
+
+        // Format largest courses
+        foreach ($stats->courses as $course) {
+            $response['largest_courses'][] = [
                 'id' => $course->id,
                 'fullname' => format_string($course->fullname),
                 'shortname' => format_string($course->shortname),
@@ -200,191 +140,277 @@ class report_usage_monitor_external extends external_api {
                 'size_readable' => display_size($course->filesize),
                 'backup_size_bytes' => $course->backupsize ?? 0,
                 'backup_size_readable' => display_size($course->backupsize ?? 0),
+                'total_size_bytes' => $course->totalsize,
+                'total_size_readable' => display_size($course->totalsize),
                 'percentage' => $course->percentage,
                 'backup_count' => $course->backupcount
-            );
+            ];
         }
-        
+
+        // Include history if requested
+        if ($params['include_history']) {
+            $history = usage_monitor_data_manager::get_usage_history($params['history_days']);
+            $response['history'] = [
+                'disk' => array_values($history['disk']),
+                'users' => array_values($history['users'])
+            ];
+        }
+
         return $response;
     }
 
     /**
-     * Devuelve la definición de resultado para get_monitor_stats.
+     * Returns description of method result value for get_usage_statistics
      *
      * @return external_description
      */
-    public static function get_monitor_stats_returns() {
-        return new external_single_structure(
-            array(
-                'site_info' => new external_single_structure(
-                    array(
-                        'name' => new external_value(PARAM_TEXT, get_string('site_name', 'report_usage_monitor')),
-                        'shortname' => new external_value(PARAM_TEXT, get_string('site_shortname', 'report_usage_monitor')),
-                        'moodle_version' => new external_value(PARAM_INT, get_string('moodle_version', 'report_usage_monitor')),
-                        'moodle_release' => new external_value(PARAM_TEXT, get_string('moodle_release', 'report_usage_monitor')),
-                        'course_count' => new external_value(PARAM_INT, get_string('course_count', 'report_usage_monitor')),
-                        'user_count' => new external_value(PARAM_INT, get_string('user_count', 'report_usage_monitor')),
-                        'backup_auto_max_kept' => new external_value(PARAM_INT, get_string('backup_auto_max_kept', 'report_usage_monitor'))
-                    )
+    public static function get_usage_statistics_returns() {
+        return new external_single_structure([
+            'site_info' => new external_single_structure([
+                'name' => new external_value(PARAM_TEXT, 'Site name'),
+                'shortname' => new external_value(PARAM_TEXT, 'Site short name'),
+                'moodle_version' => new external_value(PARAM_INT, 'Moodle version'),
+                'moodle_release' => new external_value(PARAM_TEXT, 'Moodle release'),
+                'course_count' => new external_value(PARAM_INT, 'Number of courses'),
+                'user_count' => new external_value(PARAM_INT, 'Number of users'),
+                'active_users' => new external_value(PARAM_INT, 'Number of active users'),
+                'suspended_users' => new external_value(PARAM_INT, 'Number of suspended users'),
+                'backup_auto_max_kept' => new external_value(PARAM_INT, 'Number of automatic backups kept')
+            ]),
+            'disk_usage' => new external_single_structure([
+                'current_bytes' => new external_value(PARAM_INT, 'Current disk usage in bytes'),
+                'current_readable' => new external_value(PARAM_TEXT, 'Human-readable current usage'),
+                'quota_bytes' => new external_value(PARAM_INT, 'Disk quota in bytes'),
+                'quota_readable' => new external_value(PARAM_TEXT, 'Human-readable quota'),
+                'percentage' => new external_value(PARAM_FLOAT, 'Usage percentage'),
+                'warning_level' => new external_value(PARAM_FLOAT, 'Warning threshold level'),
+                'warning_class' => new external_value(PARAM_TEXT, 'CSS warning class'),
+                'last_calculated' => new external_value(PARAM_INT, 'Last calculation timestamp'),
+                'directories' => new external_single_structure([
+                    'database' => new external_single_structure([
+                        'bytes' => new external_value(PARAM_INT, 'Database size in bytes'),
+                        'readable' => new external_value(PARAM_TEXT, 'Human-readable database size'),
+                        'percentage' => new external_value(PARAM_FLOAT, 'Database percentage of total')
+                    ]),
+                    'filedir' => new external_single_structure([
+                        'bytes' => new external_value(PARAM_INT, 'File directory size in bytes'),
+                        'readable' => new external_value(PARAM_TEXT, 'Human-readable file directory size'),
+                        'percentage' => new external_value(PARAM_FLOAT, 'File directory percentage of total')
+                    ]),
+                    'cache' => new external_single_structure([
+                        'bytes' => new external_value(PARAM_INT, 'Cache size in bytes'),
+                        'readable' => new external_value(PARAM_TEXT, 'Human-readable cache size'),
+                        'percentage' => new external_value(PARAM_FLOAT, 'Cache percentage of total')
+                    ]),
+                    'others' => new external_single_structure([
+                        'bytes' => new external_value(PARAM_INT, 'Other directories size in bytes'),
+                        'readable' => new external_value(PARAM_TEXT, 'Human-readable other directories size'),
+                        'percentage' => new external_value(PARAM_FLOAT, 'Other directories percentage of total')
+                    ])
+                ])
+            ]),
+            'user_usage' => new external_single_structure([
+                'current' => new external_value(PARAM_INT, 'Current daily users'),
+                'threshold' => new external_value(PARAM_INT, 'User threshold'),
+                'percentage' => new external_value(PARAM_FLOAT, 'User usage percentage'),
+                'warning_level' => new external_value(PARAM_FLOAT, 'Warning threshold level'),
+                'warning_class' => new external_value(PARAM_TEXT, 'CSS warning class'),
+                'last_calculated' => new external_value(PARAM_INT, 'Last calculation timestamp'),
+                'max_90_days' => new external_value(PARAM_INT, 'Maximum users in last 90 days'),
+                'max_90_days_date' => new external_value(PARAM_INT, 'Date of maximum users')
+            ]),
+            'projections' => new external_single_structure([
+                'disk_growth_rate' => new external_value(PARAM_FLOAT, 'Monthly disk growth rate percentage'),
+                'users_growth_rate' => new external_value(PARAM_FLOAT, 'Monthly users growth rate percentage'),
+                'days_to_disk_threshold' => new external_value(PARAM_INT, 'Days to reach disk threshold'),
+                'days_to_users_threshold' => new external_value(PARAM_INT, 'Days to reach users threshold')
+            ]),
+            'largest_courses' => new external_multiple_structure(
+                new external_single_structure([
+                    'id' => new external_value(PARAM_INT, 'Course ID'),
+                    'fullname' => new external_value(PARAM_TEXT, 'Course full name'),
+                    'shortname' => new external_value(PARAM_TEXT, 'Course short name'),
+                    'size_bytes' => new external_value(PARAM_INT, 'Course size in bytes'),
+                    'size_readable' => new external_value(PARAM_TEXT, 'Human-readable course size'),
+                    'backup_size_bytes' => new external_value(PARAM_INT, 'Backup size in bytes'),
+                    'backup_size_readable' => new external_value(PARAM_TEXT, 'Human-readable backup size'),
+                    'total_size_bytes' => new external_value(PARAM_INT, 'Total size in bytes'),
+                    'total_size_readable' => new external_value(PARAM_TEXT, 'Human-readable total size'),
+                    'percentage' => new external_value(PARAM_FLOAT, 'Percentage of total site files'),
+                    'backup_count' => new external_value(PARAM_INT, 'Number of backups')
+                ])
+            ),
+            'history' => new external_single_structure([
+                'disk' => new external_multiple_structure(
+                    new external_single_structure([
+                        'timecreated' => new external_value(PARAM_INT, 'Timestamp'),
+                        'value' => new external_value(PARAM_INT, 'Disk usage value'),
+                        'percentage' => new external_value(PARAM_FLOAT, 'Usage percentage')
+                    ])
                 ),
-                'disk_usage' => new external_single_structure(
-                    array(
-                        'total_bytes' => new external_value(PARAM_INT, get_string('total_bytes', 'report_usage_monitor')),
-                        'total_readable' => new external_value(PARAM_TEXT, get_string('total_readable', 'report_usage_monitor')),
-                        'quota_bytes' => new external_value(PARAM_INT, get_string('quota_bytes', 'report_usage_monitor')),
-                        'quota_readable' => new external_value(PARAM_TEXT, get_string('quota_readable', 'report_usage_monitor')),
-                        'percentage' => new external_value(PARAM_FLOAT, get_string('disk_percentage', 'report_usage_monitor')),
-                        'details' => new external_single_structure(
-                            array(
-                                'database' => new external_single_structure(
-                                    array(
-                                        'bytes' => new external_value(PARAM_INT, get_string('database_bytes', 'report_usage_monitor')),
-                                        'readable' => new external_value(PARAM_TEXT, get_string('database_readable', 'report_usage_monitor')),
-                                        'percentage' => new external_value(PARAM_FLOAT, get_string('database_percentage', 'report_usage_monitor'))
-                                    )
-                                ),
-                                'filedir' => new external_single_structure(
-                                    array(
-                                        'bytes' => new external_value(PARAM_INT, get_string('filedir_bytes', 'report_usage_monitor')),
-                                        'readable' => new external_value(PARAM_TEXT, get_string('filedir_readable', 'report_usage_monitor')),
-                                        'percentage' => new external_value(PARAM_FLOAT, get_string('filedir_percentage', 'report_usage_monitor'))
-                                    )
-                                ),
-                                'cache' => new external_single_structure(
-                                    array(
-                                        'bytes' => new external_value(PARAM_INT, get_string('cache_bytes', 'report_usage_monitor')),
-                                        'readable' => new external_value(PARAM_TEXT, get_string('cache_readable', 'report_usage_monitor')),
-                                        'percentage' => new external_value(PARAM_FLOAT, get_string('cache_percentage', 'report_usage_monitor'))
-                                    )
-                                ),
-                                'backup' => new external_single_structure(
-                                    array(
-                                        'bytes' => new external_value(PARAM_INT, get_string('backup_bytes', 'report_usage_monitor')),
-                                        'readable' => new external_value(PARAM_TEXT, get_string('backup_readable', 'report_usage_monitor')),
-                                        'percentage' => new external_value(PARAM_FLOAT, get_string('backup_percentage', 'report_usage_monitor'))
-                                    )
-                                ),
-                                'others' => new external_single_structure(
-                                    array(
-                                        'bytes' => new external_value(PARAM_INT, get_string('others_bytes', 'report_usage_monitor')),
-                                        'readable' => new external_value(PARAM_TEXT, get_string('others_readable', 'report_usage_monitor')),
-                                        'percentage' => new external_value(PARAM_FLOAT, get_string('others_percentage', 'report_usage_monitor'))
-                                    )
-                                )
-                            )
-                        )
-                    )
-                ),
-                'user_usage' => new external_single_structure(
-                    array(
-                        'daily_users' => new external_value(PARAM_INT, get_string('daily_users', 'report_usage_monitor')),
-                        'threshold' => new external_value(PARAM_INT, get_string('user_threshold', 'report_usage_monitor')),
-                        'percentage' => new external_value(PARAM_FLOAT, get_string('user_percentage', 'report_usage_monitor')),
-                        'max_90_days' => new external_value(PARAM_INT, get_string('max_90_days', 'report_usage_monitor')),
-                        'max_90_days_date' => new external_value(PARAM_TEXT, get_string('max_90_days_date', 'report_usage_monitor'), VALUE_OPTIONAL)
-                    )
-                ),
-                'largest_courses' => new external_multiple_structure(
-                    new external_single_structure(
-                        array(
-                            'id' => new external_value(PARAM_INT, get_string('course_id', 'report_usage_monitor')),
-                            'fullname' => new external_value(PARAM_TEXT, get_string('course_fullname', 'report_usage_monitor')),
-                            'shortname' => new external_value(PARAM_TEXT, get_string('course_shortname', 'report_usage_monitor')),
-                            'size_bytes' => new external_value(PARAM_INT, get_string('course_size_bytes', 'report_usage_monitor')),
-                            'size_readable' => new external_value(PARAM_TEXT, get_string('course_size_readable', 'report_usage_monitor')),
-                            'backup_size_bytes' => new external_value(PARAM_INT, get_string('course_backup_size_bytes', 'report_usage_monitor')),
-                            'backup_size_readable' => new external_value(PARAM_TEXT, get_string('course_backup_size_readable', 'report_usage_monitor')),
-                            'percentage' => new external_value(PARAM_FLOAT, get_string('course_percentage', 'report_usage_monitor')),
-                            'backup_count' => new external_value(PARAM_INT, get_string('course_backup_count', 'report_usage_monitor'))
-                        )
-                    )
-                ),
-                'timestamps' => new external_single_structure(
-                    array(
-                        'disk_calculation' => new external_value(PARAM_INT, get_string('disk_calculation_timestamp', 'report_usage_monitor')),
-                        'users_calculation' => new external_value(PARAM_INT, get_string('users_calculation_timestamp', 'report_usage_monitor'))
-                    )
-                ),
-                // Nueva estructura para datos de crecimiento y proyecciones
-                'growth_rates' => new external_single_structure(
-                    array(
-                        'disk' => new external_single_structure(
-                            array(
-                                'monthly_percent' => new external_value(PARAM_FLOAT, 'Tasa de crecimiento mensual de disco en porcentaje'),
-                                'projected_days_to_threshold' => new external_value(PARAM_INT, 'Días proyectados para alcanzar el umbral de advertencia')
-                            )
-                        ),
-                        'users' => new external_single_structure(
-                            array(
-                                'monthly_percent' => new external_value(PARAM_FLOAT, 'Tasa de crecimiento mensual de usuarios en porcentaje'),
-                                'projected_days_to_threshold' => new external_value(PARAM_INT, 'Días proyectados para alcanzar el umbral de advertencia')
-                            )
-                        )
-                    )
+                'users' => new external_multiple_structure(
+                    new external_single_structure([
+                        'date_key' => new external_value(PARAM_INT, 'Date key'),
+                        'users' => new external_value(PARAM_INT, 'Number of users')
+                    ])
                 )
-            )
-        );
+            ], 'Historical data', VALUE_OPTIONAL)
+        ]);
     }
-    
+
     /**
-     * Devuelve la definición de parámetros para get_notification_history.
+     * Returns description of method parameters for update_thresholds
+     *
+     * @return external_function_parameters
+     */
+    public static function update_thresholds_parameters() {
+        return new external_function_parameters([
+            'user_threshold' => new external_value(PARAM_INT, 'New user threshold', VALUE_OPTIONAL),
+            'disk_threshold' => new external_value(PARAM_INT, 'New disk threshold in GB', VALUE_OPTIONAL),
+            'disk_warning_level' => new external_value(PARAM_FLOAT, 'Disk warning level percentage', VALUE_OPTIONAL),
+            'users_warning_level' => new external_value(PARAM_FLOAT, 'Users warning level percentage', VALUE_OPTIONAL)
+        ]);
+    }
+
+    /**
+     * Update configuration thresholds
+     *
+     * @param int|null $user_threshold New user threshold
+     * @param int|null $disk_threshold New disk threshold in GB
+     * @param float|null $disk_warning_level Disk warning level percentage
+     * @param float|null $users_warning_level Users warning level percentage
+     * @return array Result of update operation
+     */
+    public static function update_thresholds($user_threshold = null, $disk_threshold = null, 
+                                           $disk_warning_level = null, $users_warning_level = null) {
+        // Validate parameters
+        $params = self::validate_parameters(self::update_thresholds_parameters(), [
+            'user_threshold' => $user_threshold,
+            'disk_threshold' => $disk_threshold,
+            'disk_warning_level' => $disk_warning_level,
+            'users_warning_level' => $users_warning_level
+        ]);
+
+        // Check permissions
+        $context = context_system::instance();
+        self::validate_context($context);
+        require_capability('report/usage_monitor:manage', $context);
+
+        // Prepare thresholds array
+        $thresholds = [];
+        if ($params['user_threshold'] !== null) {
+            $thresholds['user_threshold'] = $params['user_threshold'];
+        }
+        if ($params['disk_threshold'] !== null) {
+            $thresholds['disk_threshold'] = $params['disk_threshold'];
+        }
+
+        // Update basic thresholds
+        $result = usage_monitor_data_manager::update_thresholds($thresholds);
+
+        // Update warning levels if provided
+        if ($params['disk_warning_level'] !== null) {
+            if ($params['disk_warning_level'] > 0 && $params['disk_warning_level'] <= 100) {
+                set_config('disk_warning_level', $params['disk_warning_level'], 'report_usage_monitor');
+                $result['disk_warning_level_updated'] = true;
+                $result['messages'][] = 'Disk warning level updated successfully.';
+            } else {
+                $result['success'] = false;
+                $result['messages'][] = 'Disk warning level must be between 0 and 100.';
+            }
+        }
+
+        if ($params['users_warning_level'] !== null) {
+            if ($params['users_warning_level'] > 0 && $params['users_warning_level'] <= 100) {
+                set_config('users_warning_level', $params['users_warning_level'], 'report_usage_monitor');
+                $result['users_warning_level_updated'] = true;
+                $result['messages'][] = 'Users warning level updated successfully.';
+            } else {
+                $result['success'] = false;
+                $result['messages'][] = 'Users warning level must be between 0 and 100.';
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Returns description of method result value for update_thresholds
+     *
+     * @return external_description
+     */
+    public static function update_thresholds_returns() {
+        return new external_single_structure([
+            'success' => new external_value(PARAM_BOOL, 'Overall operation success'),
+            'user_threshold_updated' => new external_value(PARAM_BOOL, 'User threshold updated', VALUE_OPTIONAL),
+            'disk_threshold_updated' => new external_value(PARAM_BOOL, 'Disk threshold updated', VALUE_OPTIONAL),
+            'disk_warning_level_updated' => new external_value(PARAM_BOOL, 'Disk warning level updated', VALUE_OPTIONAL),
+            'users_warning_level_updated' => new external_value(PARAM_BOOL, 'Users warning level updated', VALUE_OPTIONAL),
+            'messages' => new external_multiple_structure(
+                new external_value(PARAM_TEXT, 'Status message')
+            )
+        ]);
+    }
+
+    /**
+     * Returns description of method parameters for get_notification_history
      *
      * @return external_function_parameters
      */
     public static function get_notification_history_parameters() {
-        return new external_function_parameters(
-            array(
-                'type' => new external_value(PARAM_ALPHA, get_string('notification_type', 'report_usage_monitor'), VALUE_DEFAULT, 'all'),
-                'limit' => new external_value(PARAM_INT, get_string('notification_limit', 'report_usage_monitor'), VALUE_DEFAULT, 30),
-                'offset' => new external_value(PARAM_INT, get_string('notification_offset', 'report_usage_monitor'), VALUE_DEFAULT, 0)
-            )
-        );
+        return new external_function_parameters([
+            'type' => new external_value(PARAM_ALPHA, 'Notification type (disk, users, or all)', VALUE_DEFAULT, 'all'),
+            'limit' => new external_value(PARAM_INT, 'Maximum number of records', VALUE_DEFAULT, 30),
+            'offset' => new external_value(PARAM_INT, 'Offset for pagination', VALUE_DEFAULT, 0)
+        ]);
     }
 
     /**
-     * Devuelve el historial de notificaciones enviadas.
+     * Get notification history
      *
-     * @param string $type Tipo de notificación (disk, users, o all)
-     * @param int $limit Número máximo de registros
-     * @param int $offset Desplazamiento para paginación
-     * @return array Historial de notificaciones
+     * @param string $type Notification type
+     * @param int $limit Maximum number of records
+     * @param int $offset Offset for pagination
+     * @return array Notification history
      */
     public static function get_notification_history($type = 'all', $limit = 30, $offset = 0) {
         global $DB;
-        
-        // Verificar permisos
+
+        // Validate parameters
+        $params = self::validate_parameters(self::get_notification_history_parameters(), [
+            'type' => $type,
+            'limit' => $limit,
+            'offset' => $offset
+        ]);
+
+        // Check permissions
         $context = context_system::instance();
         self::validate_context($context);
         require_capability('report/usage_monitor:view', $context);
-        
-        // Validar parámetros
-        $params = self::validate_parameters(self::get_notification_history_parameters(), 
-                                           array('type' => $type, 'limit' => $limit, 'offset' => $offset));
-        
-        // Consultar historial de notificaciones
+
+        // Build query
         $where = '';
-        $sqlparams = array();
-        
+        $sqlparams = [];
+
         if ($params['type'] !== 'all') {
             $where = ' WHERE type = :type';
             $sqlparams['type'] = $params['type'];
         }
-        
+
         $sql = "SELECT * FROM {report_usage_monitor_history}" . $where . 
                " ORDER BY timecreated DESC";
-        
+
         $records = $DB->get_records_sql($sql, $sqlparams, $params['offset'], $params['limit']);
-        
-        // Formatear resultados
-        $results = array();
+
+        // Format results
+        $results = [];
         foreach ($records as $record) {
-            // Validar que timecreated sea un timestamp válido
             if (!is_numeric($record->timecreated) || $record->timecreated <= 0) {
-                debugging('get_notification_history: Timestamp inválido: ' . var_export($record->timecreated, true), DEBUG_DEVELOPER);
-                $record->timecreated = time(); // Usar tiempo actual como fallback
+                debugging('Invalid timestamp in notification history: ' . var_export($record->timecreated, true), DEBUG_DEVELOPER);
+                $record->timecreated = time();
             }
-            
-            $results[] = array(
+
+            $results[] = [
                 'id' => $record->id,
                 'type' => $record->type,
                 'percentage' => $record->percentage,
@@ -393,316 +419,128 @@ class report_usage_monitor_external extends external_api {
                 'threshold' => $record->type === 'disk' ? display_size($record->threshold) : $record->threshold,
                 'threshold_raw' => $record->threshold,
                 'timecreated' => $record->timecreated,
-                'timereadable' => is_numeric($record->timecreated) && $record->timecreated > 0 ? date('M d, Y H:i', (int)$record->timecreated) : date('M d, Y H:i'));
+                'timereadable' => date('M d, Y H:i', (int)$record->timecreated)
+            ];
         }
-        
-        return array(
+
+        return [
             'total' => $DB->count_records('report_usage_monitor_history', $sqlparams),
             'limit' => $params['limit'],
             'offset' => $params['offset'],
             'items' => $results
-        );
+        ];
     }
 
     /**
-     * Devuelve la definición de resultado para get_notification_history.
+     * Returns description of method result value for get_notification_history
      *
      * @return external_description
      */
     public static function get_notification_history_returns() {
-        return new external_single_structure(
-            array(
-                'total' => new external_value(PARAM_INT, get_string('notification_total', 'report_usage_monitor')),
-                'limit' => new external_value(PARAM_INT, get_string('notification_limit_value', 'report_usage_monitor')),
-                'offset' => new external_value(PARAM_INT, get_string('notification_offset_value', 'report_usage_monitor')),
-                'items' => new external_multiple_structure(
-                    new external_single_structure(
-                        array(
-                            'id' => new external_value(PARAM_INT, get_string('notification_id', 'report_usage_monitor')),
-                            'type' => new external_value(PARAM_ALPHA, get_string('notification_type_value', 'report_usage_monitor')),
-                            'percentage' => new external_value(PARAM_FLOAT, get_string('notification_percentage', 'report_usage_monitor')),
-                            'value' => new external_value(PARAM_TEXT, get_string('notification_value', 'report_usage_monitor')),
-                            'value_raw' => new external_value(PARAM_INT, get_string('notification_value_raw', 'report_usage_monitor')),
-                            'threshold' => new external_value(PARAM_TEXT, get_string('notification_threshold', 'report_usage_monitor')),
-                            'threshold_raw' => new external_value(PARAM_INT, get_string('notification_threshold_raw', 'report_usage_monitor')),
-                            'timecreated' => new external_value(PARAM_INT, get_string('notification_timecreated', 'report_usage_monitor')),
-                            'timereadable' => new external_value(PARAM_TEXT, get_string('notification_timereadable', 'report_usage_monitor'))
-                        )
-                    )
-                )
+        return new external_single_structure([
+            'total' => new external_value(PARAM_INT, 'Total number of records'),
+            'limit' => new external_value(PARAM_INT, 'Requested limit'),
+            'offset' => new external_value(PARAM_INT, 'Requested offset'),
+            'items' => new external_multiple_structure(
+                new external_single_structure([
+                    'id' => new external_value(PARAM_INT, 'Notification ID'),
+                    'type' => new external_value(PARAM_ALPHA, 'Notification type'),
+                    'percentage' => new external_value(PARAM_FLOAT, 'Usage percentage'),
+                    'value' => new external_value(PARAM_TEXT, 'Human-readable value'),
+                    'value_raw' => new external_value(PARAM_INT, 'Raw value'),
+                    'threshold' => new external_value(PARAM_TEXT, 'Human-readable threshold'),
+                    'threshold_raw' => new external_value(PARAM_INT, 'Raw threshold'),
+                    'timecreated' => new external_value(PARAM_INT, 'Creation timestamp'),
+                    'timereadable' => new external_value(PARAM_TEXT, 'Human-readable time')
+                ])
             )
-        );
+        ]);
     }
 
     /**
-     * Devuelve la definición de parámetros para get_usage_data.
-     * Método GET optimizado para obtener datos precalculados.
+     * Returns description of method parameters for get_dashboard_data
      *
      * @return external_function_parameters
      */
-    public static function get_usage_data_parameters() {
+    public static function get_dashboard_data_parameters() {
         return new external_function_parameters([]);
     }
 
     /**
-     * Obtiene los datos precalculados de usuarios y uso de disco.
-     * Método GET simplificado para consumo ligero por API.
+     * Get optimized dashboard data
      *
-     * @return array Datos de uso
+     * @return array Dashboard data
      */
-    public static function get_usage_data() {
-        global $DB, $CFG;
-        
-        // Verificar permisos
+    public static function get_dashboard_data() {
+        // Check permissions
         $context = context_system::instance();
         self::validate_context($context);
         require_capability('report/usage_monitor:view', $context);
-        
-        // Obtener configuraciones
-        $reportconfig = get_config('report_usage_monitor');
-        
-        // Datos de uso de disco
-        $disk_usage = ((int) $reportconfig->totalusagereadable + (int) $reportconfig->totalusagereadabledb) ?: 0;
-        $quotadisk = ((int) $reportconfig->disk_quota * 1024) * 1024 * 1024;
-        $disk_percent = calculate_threshold_percentage($disk_usage, $quotadisk);
-        
-        // Datos de usuarios
-        $users_today = !empty($reportconfig->totalusersdaily) ? ($reportconfig->totalusersdaily) : 0;
-        $user_threshold = $reportconfig->max_daily_users_threshold;
-        $users_percent = calculate_threshold_percentage($users_today, $user_threshold);
-        
-        // Validación de timestamps para datos de usuarios
-        $last_disk_calc = !empty($reportconfig->lastexecutioncalculate) ? $reportconfig->lastexecutioncalculate : 0;
-        $last_users_calc = !empty($reportconfig->lastexecution) ? $reportconfig->lastexecution : 0;
-        $max_90_days_date = !empty($reportconfig->max_userdaily_for_90_days_date) ? $reportconfig->max_userdaily_for_90_days_date : 0;
-        
-        // Validar cada timestamp
-        if (!is_numeric($last_disk_calc) || $last_disk_calc <= 0) {
-            debugging('get_usage_data: Timestamp inválido para lastexecutioncalculate: ' . var_export($reportconfig->lastexecutioncalculate, true), DEBUG_DEVELOPER);
-            $last_disk_calc = time();
-        }
-        
-        if (!is_numeric($last_users_calc) || $last_users_calc <= 0) {
-            debugging('get_usage_data: Timestamp inválido para lastexecution: ' . var_export($reportconfig->lastexecution, true), DEBUG_DEVELOPER);
-            $last_users_calc = time();
-        }
-        
-        if (!is_numeric($max_90_days_date) || $max_90_days_date <= 0) {
-            debugging('get_usage_data: Timestamp inválido para max_userdaily_for_90_days_date: ' . var_export($reportconfig->max_userdaily_for_90_days_date, true), DEBUG_DEVELOPER);
-            $max_90_days_date = time();
-        }
-        
-        // Preparar respuesta
-        $response = array(
-            'disk_usage' => array(
-                'current' => $disk_usage,
-                'current_readable' => display_size($disk_usage),
-                'threshold' => $quotadisk,
-                'threshold_readable' => display_size($quotadisk),
-                'percentage' => round($disk_percent, 2),
-                'last_calculated' => $last_disk_calc
-            ),
-            'user_usage' => array(
-                'current' => $users_today,
-                'threshold' => $user_threshold,
-                'percentage' => round($users_percent, 2),
-                'last_calculated' => $last_users_calc,
-                'max_90_days' => !empty($reportconfig->max_userdaily_for_90_days_users) ? 
-                                $reportconfig->max_userdaily_for_90_days_users : 0,
-                'max_90_days_date' => $max_90_days_date
-            ),
-            // NUEVOS CAMPOS para proyecciones
-            'projections' => array(
-                'disk_growth_rate' => calculate_growth_rate('disk'),
-                'users_growth_rate' => calculate_growth_rate('users'),
-                'days_to_disk_threshold' => project_limit_date(
-                    $disk_usage, 
-                    $quotadisk * 0.9,
-                    calculate_growth_rate('disk')
-                ),
-                'days_to_users_threshold' => project_limit_date(
-                    $users_today,
-                    $user_threshold * 0.9,
-                    calculate_growth_rate('users')
-                )
-            )
-        );
-        
-        return $response;
+
+        // Get basic statistics
+        $disk_usage = usage_monitor_data_manager::get_disk_usage();
+        $user_usage = usage_monitor_data_manager::get_user_usage();
+        $projections = usage_monitor_data_manager::get_projections();
+
+        return [
+            'disk_usage' => [
+                'current' => $disk_usage->current_bytes,
+                'current_readable' => $disk_usage->current_readable,
+                'threshold' => $disk_usage->quota_bytes,
+                'threshold_readable' => $disk_usage->quota_readable,
+                'percentage' => round($disk_usage->percentage, 2),
+                'warning_class' => $disk_usage->warning_class,
+                'last_calculated' => $disk_usage->last_calculated
+            ],
+            'user_usage' => [
+                'current' => $user_usage->current,
+                'threshold' => $user_usage->threshold,
+                'percentage' => round($user_usage->percentage, 2),
+                'warning_class' => $user_usage->warning_class,
+                'last_calculated' => $user_usage->last_calculated,
+                'max_90_days' => $user_usage->max_90_days,
+                'max_90_days_date' => $user_usage->max_90_days_date
+            ],
+            'projections' => [
+                'disk_growth_rate' => $projections->disk_growth_rate,
+                'users_growth_rate' => $projections->users_growth_rate,
+                'days_to_disk_threshold' => $projections->days_to_disk_threshold,
+                'days_to_users_threshold' => $projections->days_to_users_threshold
+            ]
+        ];
     }
 
     /**
-     * Devuelve la definición de resultado para get_usage_data.
+     * Returns description of method result value for get_dashboard_data
      *
      * @return external_description
      */
-    public static function get_usage_data_returns() {
-        return new external_single_structure(
-            array(
-                'disk_usage' => new external_single_structure(
-                    array(
-                        'current' => new external_value(PARAM_INT, 'Uso actual de disco en bytes'),
-                        'current_readable' => new external_value(PARAM_TEXT, 'Uso actual de disco en formato legible'),
-                        'threshold' => new external_value(PARAM_INT, 'Umbral de disco en bytes'),
-                        'threshold_readable' => new external_value(PARAM_TEXT, 'Umbral de disco en formato legible'),
-                        'percentage' => new external_value(PARAM_FLOAT, 'Porcentaje de uso de disco'),
-                        'last_calculated' => new external_value(PARAM_INT, 'Timestamp del último cálculo de disco')
-                    )
-                ),
-                'user_usage' => new external_single_structure(
-                    array(
-                        'current' => new external_value(PARAM_INT, 'Usuarios actuales'),
-                        'threshold' => new external_value(PARAM_INT, 'Umbral de usuarios'),
-                        'percentage' => new external_value(PARAM_FLOAT, 'Porcentaje de uso de usuarios'),
-                        'last_calculated' => new external_value(PARAM_INT, 'Timestamp del último cálculo de usuarios'),
-                        'max_90_days' => new external_value(PARAM_INT, 'Máximo de usuarios en los últimos 90 días'),
-                        'max_90_days_date' => new external_value(PARAM_INT, 'Timestamp de la fecha con máximo de usuarios')
-                    )
-                ),
-                // Nueva estructura para proyecciones
-                'projections' => new external_single_structure(
-                    array(
-                        'disk_growth_rate' => new external_value(PARAM_FLOAT, 'Tasa de crecimiento mensual de disco en porcentaje'),
-                        'users_growth_rate' => new external_value(PARAM_FLOAT, 'Tasa de crecimiento mensual de usuarios en porcentaje'),
-                        'days_to_disk_threshold' => new external_value(PARAM_INT, 'Días proyectados para alcanzar el umbral de advertencia de disco'),
-                        'days_to_users_threshold' => new external_value(PARAM_INT, 'Días proyectados para alcanzar el umbral de advertencia de usuarios')
-                    )
-                )
-            )
-        );
-    }
-
-    /**
-     * Devuelve la definición de parámetros para set_usage_thresholds.
-     * Método SET para configurar umbrales.
-     *
-     * @return external_function_parameters
-     */
-    public static function set_usage_thresholds_parameters() {
-        return new external_function_parameters(
-            array(
-                'user_threshold' => new external_value(PARAM_INT, 
-                    'Nuevo umbral para usuarios diarios', 
-                    VALUE_DEFAULT, null),
-                'disk_threshold' => new external_value(PARAM_INT, 
-                    'Nuevo umbral para espacio en disco en GB', 
-                    VALUE_DEFAULT, null)
-            )
-        );
-    }
-
-    /**
-     * Configura los umbrales de usuarios y disco.
-     * Método SET para actualizar la configuración.
-     *
-     * @param int|null $user_threshold Nuevo umbral de usuarios diarios
-     * @param int|null $disk_threshold Nuevo umbral de disco en GB
-     * @return array Resultado de la operación
-     */
-    public static function set_usage_thresholds($user_threshold = null, $disk_threshold = null) {
-        global $DB;
-        
-        // Verificar permisos
-        $context = context_system::instance();
-        self::validate_context($context);
-        require_capability('report/usage_monitor:manage', $context);
-        
-        // Validar parámetros
-        $params = self::validate_parameters(self::set_usage_thresholds_parameters(), 
-                                         array('user_threshold' => $user_threshold,
-                                               'disk_threshold' => $disk_threshold));
-        
-        $result = array(
-            'success' => true,
-            'user_threshold_updated' => false,
-            'disk_threshold_updated' => false,
-            'messages' => array()
-        );
-        
-        // Iniciar transacción para garantizar consistencia
-        $transaction = $DB->start_delegated_transaction();
-        
-        try {
-            // Actualizar umbral de usuarios si se proporciona
-            if ($params['user_threshold'] !== null) {
-                if ($params['user_threshold'] > 0) {
-                    set_config('max_daily_users_threshold', $params['user_threshold'], 'report_usage_monitor');
-                    $result['user_threshold_updated'] = true;
-                    $result['messages'][] = get_string('user_threshold_updated', 'report_usage_monitor');
-                    
-                    // Actualizar valores precalculados para que reflejen el nuevo umbral
-                    $reportconfig = get_config('report_usage_monitor');
-                    $users_today = !empty($reportconfig->totalusersdaily) ? ($reportconfig->totalusersdaily) : 0;
-                    $users_percent = calculate_threshold_percentage($users_today, $params['user_threshold']);
-                    $users_warning_class = ($users_percent < 70) ? 'bg-success' : (($users_percent < 90) ? 'bg-warning' : 'bg-danger');
-                    
-                    set_config('users_percent', $users_percent, 'report_usage_monitor');
-                    set_config('users_warning_class', $users_warning_class, 'report_usage_monitor');
-                } else {
-                    $result['success'] = false;
-                    $result['messages'][] = get_string('error_user_threshold_negative', 'report_usage_monitor');
-                }
-            }
-            
-            // Actualizar umbral de disco si se proporciona
-            if ($params['disk_threshold'] !== null) {
-                if ($params['disk_threshold'] > 0) {
-                    set_config('disk_quota', $params['disk_threshold'], 'report_usage_monitor');
-                    $result['disk_threshold_updated'] = true;
-                    $result['messages'][] = get_string('disk_threshold_updated', 'report_usage_monitor');
-                    
-                    // Actualizar valores precalculados para que reflejen el nuevo umbral
-                    $reportconfig = get_config('report_usage_monitor');
-                    $disk_usage = ((int) $reportconfig->totalusagereadable + (int) $reportconfig->totalusagereadabledb) ?: 0;
-                    $quotadisk_bytes = ((int) $params['disk_threshold'] * 1024) * 1024 * 1024;
-                    $disk_percent = calculate_threshold_percentage($disk_usage, $quotadisk_bytes);
-                    $disk_warning_class = ($disk_percent < 70) ? 'bg-success' : (($disk_percent < 90) ? 'bg-warning' : 'bg-danger');
-                    
-                    set_config('disk_percent', $disk_percent, 'report_usage_monitor');
-                    set_config('disk_warning_class', $disk_warning_class, 'report_usage_monitor');
-                    set_config('quotadisk_gb', display_size_in_gb($quotadisk_bytes, 2), 'report_usage_monitor');
-                } else {
-                    $result['success'] = false;
-                    $result['messages'][] = get_string('error_disk_threshold_negative', 'report_usage_monitor');
-                }
-            }
-            
-            // Si no se proporcionó ningún parámetro
-            if ($params['user_threshold'] === null && $params['disk_threshold'] === null) {
-                $result['success'] = false;
-                $result['messages'][] = get_string('error_no_thresholds_provided', 'report_usage_monitor');
-            }
-            
-            // Permitir commit de la transacción si todo ha ido bien
-            if ($result['success']) {
-                $transaction->allow_commit();
-            } else {
-                $transaction->rollback(new moodle_exception('thresholds_update_failed', 'report_usage_monitor'));
-            }
-        } catch (Exception $e) {
-            $transaction->rollback($e);
-            $result['success'] = false;
-            $result['messages'][] = 'Error en actualización: ' . $e->getMessage();
-        }
-        
-        return $result;
-    }
-
-    /**
-     * Devuelve la definición de resultado para set_usage_thresholds.
-     *
-     * @return external_description
-     */
-    public static function set_usage_thresholds_returns() {
-        return new external_single_structure(
-            array(
-                'success' => new external_value(PARAM_BOOL, 'Indica si la operación fue exitosa en general'),
-                'user_threshold_updated' => new external_value(PARAM_BOOL, 'Indica si se actualizó el umbral de usuarios'),
-                'disk_threshold_updated' => new external_value(PARAM_BOOL, 'Indica si se actualizó el umbral de disco'),
-                'messages' => new external_multiple_structure(
-                    new external_value(PARAM_TEXT, 'Mensaje informativo o de error')
-                )
-            )
-        );
+    public static function get_dashboard_data_returns() {
+        return new external_single_structure([
+            'disk_usage' => new external_single_structure([
+                'current' => new external_value(PARAM_INT, 'Current usage in bytes'),
+                'current_readable' => new external_value(PARAM_TEXT, 'Human-readable current usage'),
+                'threshold' => new external_value(PARAM_INT, 'Threshold in bytes'),
+                'threshold_readable' => new external_value(PARAM_TEXT, 'Human-readable threshold'),
+                'percentage' => new external_value(PARAM_FLOAT, 'Usage percentage'),
+                'warning_class' => new external_value(PARAM_TEXT, 'CSS warning class'),
+                'last_calculated' => new external_value(PARAM_INT, 'Last calculation timestamp')
+            ]),
+            'user_usage' => new external_single_structure([
+                'current' => new external_value(PARAM_INT, 'Current users'),
+                'threshold' => new external_value(PARAM_INT, 'User threshold'),
+                'percentage' => new external_value(PARAM_FLOAT, 'Usage percentage'),
+                'warning_class' => new external_value(PARAM_TEXT, 'CSS warning class'),
+                'last_calculated' => new external_value(PARAM_INT, 'Last calculation timestamp'),
+                'max_90_days' => new external_value(PARAM_INT, 'Maximum users in 90 days'),
+                'max_90_days_date' => new external_value(PARAM_INT, 'Date of maximum users')
+            ]),
+            'projections' => new external_single_structure([
+                'disk_growth_rate' => new external_value(PARAM_FLOAT, 'Monthly disk growth rate'),
+                'users_growth_rate' => new external_value(PARAM_FLOAT, 'Monthly users growth rate'),
+                'days_to_disk_threshold' => new external_value(PARAM_INT, 'Days to disk threshold'),
+                'days_to_users_threshold' => new external_value(PARAM_INT, 'Days to users threshold')
+            ])
+        ]);
     }
 }
