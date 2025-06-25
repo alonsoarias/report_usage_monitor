@@ -19,14 +19,15 @@
  *
  * @package     report_usage_monitor
  * @category    admin
- * @copyright   2025 Soporte IngeWeb <soporte@ingeweb.co>
+ * @copyright   2025 Alonso Arias <alonso@aloarias.com>
  * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'report_usage_monitor';
-$plugin->version   = 2025030600;  // Updated version for complete refactoring
+$plugin->version   = 2025070100;  // Version 5.0.0 release
 $plugin->requires  = 2020061500;  // Moodle 3.9
-$plugin->release   = '6.0.0';     // Complete refactor release
+$plugin->release   = '5.0.0';     // Complete rewrite release
 $plugin->maturity  = MATURITY_STABLE;
+$plugin->supported = [39, 405];   // Moodle 3.9 to 4.5+ (and future 5.x)
