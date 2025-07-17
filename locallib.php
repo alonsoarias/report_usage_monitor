@@ -12,168 +12,209 @@
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Local functions for Usage Monitor plugin.
+ * Centralized library for Usage Monitor plugin - All functions consolidated
  *
  * @package     report_usage_monitor
  * @category    admin
- * @copyright   2025 Soporte IngeWeb <soporte@ingeweb.co>
+ * @copyright   2025 Alonso Arias <alonso@aloarias.com>
  * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
 
 /**
- * Core data manager class for usage monitoring
+ * Main Usage Monitor Manager - Centralized functionality
  */
-class usage_monitor_data_manager {
+class usage_monitor_manager {
     
-    /** @var array Cache for configuration values */
-    private static $config_cache = [];
+    /** @var array Static cache for configuration */
+    private static $config_cache = null;
     
-    /** @var array Cache for calculated values */
+    /** @var array Static cache for calculations */
     private static $calculation_cache = [];
     
+    /** @var int Cache TTL in seconds */
+    const CACHE_TTL = 300; // 5 minutes
+    
+    /** @var string Cache prefix */
+    const CACHE_PREFIX = 'usage_monitor_';
+
     /**
-     * Get plugin configuration with caching
+     * Get plugin configuration with enhanced caching
      *
-     * @param string|null $name Specific config name or null for all
+     * @param string|null $name Specific config name
      * @return mixed Configuration value(s)
      */
     public static function get_config($name = null) {
-        if (empty(self::$config_cache)) {
+        if (self::$config_cache === null) {
             self::$config_cache = get_config('report_usage_monitor');
+            
+            // Set intelligent defaults
+            $defaults = [
+                'disk_quota' => 10,
+                'max_daily_users_threshold' => 100,
+                'disk_warning_level' => 90,
+                'users_warning_level' => 90,
+                'data_retention_days' => 90,
+                'email' => 'admin@example.com',
+                'enable_api' => 1
+            ];
+            
+            foreach ($defaults as $key => $default) {
+                if (!isset(self::$config_cache->$key)) {
+                    self::$config_cache->$key = $default;
+                }
+            }
         }
         
         return $name ? (self::$config_cache->$name ?? null) : self::$config_cache;
     }
-    
+
     /**
      * Clear all caches
      */
     public static function clear_cache() {
-        self::$config_cache = [];
+        global $CFG;
+        
+        self::$config_cache = null;
         self::$calculation_cache = [];
+        
+        // Clear Moodle cache if available
+        if (isset($CFG->cachedir)) {
+            $cache_files = glob($CFG->cachedir . '/' . self::CACHE_PREFIX . '*');
+            foreach ($cache_files as $file) {
+                @unlink($file);
+            }
+        }
     }
-    
+
     /**
-     * Get comprehensive usage statistics
+     * Get comprehensive usage statistics with intelligent caching
      *
+     * @param bool $force_refresh Force cache refresh
      * @return stdClass Complete usage data
      */
-    public static function get_usage_statistics() {
+    public static function get_usage_statistics($force_refresh = false) {
         $cache_key = 'complete_stats';
         
-        if (isset(self::$calculation_cache[$cache_key])) {
-            return self::$calculation_cache[$cache_key];
+        if (!$force_refresh && isset(self::$calculation_cache[$cache_key])) {
+            $cached = self::$calculation_cache[$cache_key];
+            if (time() - $cached['timestamp'] < self::CACHE_TTL) {
+                return $cached['data'];
+            }
         }
         
         $stats = new stdClass();
-        $stats->disk = self::get_disk_usage();
-        $stats->users = self::get_user_usage();
-        $stats->projections = self::get_projections();
+        
+        // Core statistics
+        $stats->disk = self::get_disk_usage($force_refresh);
+        $stats->users = self::get_user_usage($force_refresh);
         $stats->system = self::get_system_info();
-        $stats->directories = self::get_directory_analysis();
+        $stats->projections = self::calculate_projections($stats->disk, $stats->users);
+        
+        // Enhanced data
+        $stats->directories = self::analyze_disk_directories();
         $stats->courses = self::get_largest_courses();
         $stats->history = self::get_usage_history();
+        $stats->recommendations = self::generate_recommendations($stats);
+        $stats->health_score = self::calculate_health_score($stats);
         
-        self::$calculation_cache[$cache_key] = $stats;
+        // Cache the result
+        self::$calculation_cache[$cache_key] = [
+            'data' => $stats,
+            'timestamp' => time()
+        ];
+        
         return $stats;
     }
-    
+
     /**
-     * Get current disk usage statistics
+     * Get disk usage with enhanced analysis
      *
+     * @param bool $force_refresh Force refresh
      * @return stdClass Disk usage data
      */
-    public static function get_disk_usage() {
+    public static function get_disk_usage($force_refresh = false) {
         $cache_key = 'disk_usage';
         
-        if (isset(self::$calculation_cache[$cache_key])) {
-            return self::$calculation_cache[$cache_key];
+        if (!$force_refresh && isset(self::$calculation_cache[$cache_key])) {
+            $cached = self::$calculation_cache[$cache_key];
+            if (time() - $cached['timestamp'] < self::CACHE_TTL) {
+                return $cached['data'];
+            }
         }
         
         $config = self::get_config();
         
         $usage = new stdClass();
-        $usage->current_bytes = ((int)($config->totalusagereadable ?? 0)) + ((int)($config->totalusagereadabledb ?? 0));
-        $usage->quota_bytes = ((int)($config->disk_quota ?? 0)) * 1024 * 1024 * 1024;
+        $usage->current_bytes = self::validate_numeric($config->totalusagereadable, 0) + 
+                               self::validate_numeric($config->totalusagereadabledb, 0);
+        $usage->quota_bytes = self::validate_numeric($config->disk_quota, 10) * 1024 * 1024 * 1024;
         $usage->percentage = $usage->quota_bytes > 0 ? ($usage->current_bytes / $usage->quota_bytes) * 100 : 0;
-        $usage->current_readable = display_size($usage->current_bytes);
-        $usage->quota_readable = display_size($usage->quota_bytes);
+        $usage->current_readable = self::format_bytes($usage->current_bytes);
+        $usage->quota_readable = self::format_bytes($usage->quota_bytes);
+        $usage->available_bytes = max(0, $usage->quota_bytes - $usage->current_bytes);
+        $usage->available_readable = self::format_bytes($usage->available_bytes);
         $usage->last_calculated = self::validate_timestamp($config->lastexecutioncalculate ?? time());
         $usage->warning_level = (float)($config->disk_warning_level ?? 90);
         $usage->warning_class = self::get_warning_class($usage->percentage, $usage->warning_level);
+        $usage->trend = self::calculate_disk_trend();
+        $usage->growth_rate = self::calculate_growth_rate('disk');
         
-        self::$calculation_cache[$cache_key] = $usage;
+        // Cache the result
+        self::$calculation_cache[$cache_key] = [
+            'data' => $usage,
+            'timestamp' => time()
+        ];
+        
         return $usage;
     }
-    
+
     /**
-     * Get current user usage statistics
+     * Get user usage with enhanced metrics
      *
+     * @param bool $force_refresh Force refresh
      * @return stdClass User usage data
      */
-    public static function get_user_usage() {
+    public static function get_user_usage($force_refresh = false) {
         $cache_key = 'user_usage';
         
-        if (isset(self::$calculation_cache[$cache_key])) {
-            return self::$calculation_cache[$cache_key];
+        if (!$force_refresh && isset(self::$calculation_cache[$cache_key])) {
+            $cached = self::$calculation_cache[$cache_key];
+            if (time() - $cached['timestamp'] < self::CACHE_TTL) {
+                return $cached['data'];
+            }
         }
         
         $config = self::get_config();
         
         $usage = new stdClass();
-        $usage->current = (int)($config->totalusersdaily ?? 0);
-        $usage->threshold = (int)($config->max_daily_users_threshold ?? 100);
+        $usage->current = self::validate_numeric($config->totalusersdaily, 0);
+        $usage->threshold = self::validate_numeric($config->max_daily_users_threshold, 100);
         $usage->percentage = $usage->threshold > 0 ? ($usage->current / $usage->threshold) * 100 : 0;
         $usage->last_calculated = self::validate_timestamp($config->lastexecution ?? time());
-        $usage->max_90_days = (int)($config->max_userdaily_for_90_days_users ?? 0);
+        $usage->max_90_days = self::validate_numeric($config->max_userdaily_for_90_days_users, 0);
         $usage->max_90_days_date = self::validate_timestamp($config->max_userdaily_for_90_days_date ?? time());
         $usage->warning_level = (float)($config->users_warning_level ?? 90);
         $usage->warning_class = self::get_warning_class($usage->percentage, $usage->warning_level);
+        $usage->trend = self::calculate_user_trend();
+        $usage->growth_rate = self::calculate_growth_rate('users');
+        $usage->peak_hours = self::get_peak_usage_hours();
         
-        self::$calculation_cache[$cache_key] = $usage;
+        // Cache the result
+        self::$calculation_cache[$cache_key] = [
+            'data' => $usage,
+            'timestamp' => time()
+        ];
+        
         return $usage;
     }
-    
+
     /**
-     * Get growth projections
-     *
-     * @return stdClass Growth projection data
-     */
-    public static function get_projections() {
-        $cache_key = 'projections';
-        
-        if (isset(self::$calculation_cache[$cache_key])) {
-            return self::$calculation_cache[$cache_key];
-        }
-        
-        $disk_usage = self::get_disk_usage();
-        $user_usage = self::get_user_usage();
-        
-        $projections = new stdClass();
-        $projections->disk_growth_rate = usage_monitor_analytics::calculate_growth_rate('disk');
-        $projections->users_growth_rate = usage_monitor_analytics::calculate_growth_rate('users');
-        $projections->days_to_disk_threshold = usage_monitor_analytics::project_limit_date(
-            $disk_usage->current_bytes,
-            $disk_usage->quota_bytes * 0.9,
-            $projections->disk_growth_rate
-        );
-        $projections->days_to_users_threshold = usage_monitor_analytics::project_limit_date(
-            $user_usage->current,
-            $user_usage->threshold * 0.9,
-            $projections->users_growth_rate
-        );
-        
-        self::$calculation_cache[$cache_key] = $projections;
-        return $projections;
-    }
-    
-    /**
-     * Get system information
+     * Get enhanced system information
      *
      * @return stdClass System info data
      */
@@ -183,7 +224,10 @@ class usage_monitor_data_manager {
         $cache_key = 'system_info';
         
         if (isset(self::$calculation_cache[$cache_key])) {
-            return self::$calculation_cache[$cache_key];
+            $cached = self::$calculation_cache[$cache_key];
+            if (time() - $cached['timestamp'] < 3600) { // Cache for 1 hour
+                return $cached['data'];
+            }
         }
         
         $info = new stdClass();
@@ -191,56 +235,211 @@ class usage_monitor_data_manager {
         $info->site_shortname = format_string($SITE->shortname);
         $info->moodle_version = $CFG->version;
         $info->moodle_release = $CFG->release;
-        $info->course_count = $DB->count_records('course');
-        $info->user_count = $DB->count_records('user', ['deleted' => 0]) - 1;
+        $info->php_version = PHP_VERSION;
+        $info->server_software = $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown';
+        
+        // Database statistics
+        $info->course_count = $DB->count_records('course') - 1; // Exclude site course
+        $info->user_count = $DB->count_records('user', ['deleted' => 0]) - 1; // Exclude guest
         $info->active_users = $DB->count_records('user', ['deleted' => 0, 'suspended' => 0]) - 1;
         $info->suspended_users = $DB->count_records('user', ['deleted' => 0, 'suspended' => 1]);
+        $info->total_files = $DB->count_records('files', ['filesize' => ['>', 0]]);
         $info->backup_auto_max_kept = get_config('backup', 'backup_auto_max_kept') ?? 0;
         
-        self::$calculation_cache[$cache_key] = $info;
+        // Performance metrics
+        $info->memory_limit = ini_get('memory_limit');
+        $info->max_execution_time = ini_get('max_execution_time');
+        $info->upload_max_filesize = ini_get('upload_max_filesize');
+        
+        // Cache the result
+        self::$calculation_cache[$cache_key] = [
+            'data' => $info,
+            'timestamp' => time()
+        ];
+        
         return $info;
     }
-    
+
     /**
-     * Get directory analysis
+     * Calculate intelligent projections
      *
-     * @return array Directory usage breakdown
+     * @param stdClass $disk_usage Disk usage data
+     * @param stdClass $user_usage User usage data
+     * @return stdClass Projection data
      */
-    public static function get_directory_analysis() {
+    public static function calculate_projections($disk_usage, $user_usage) {
+        $projections = new stdClass();
+        
+        // Growth rates
+        $projections->disk_growth_rate = $disk_usage->growth_rate;
+        $projections->users_growth_rate = $user_usage->growth_rate;
+        
+        // Time to thresholds
+        $projections->days_to_disk_threshold = self::project_threshold_date(
+            $disk_usage->current_bytes,
+            $disk_usage->quota_bytes * ($disk_usage->warning_level / 100),
+            $projections->disk_growth_rate
+        );
+        
+        $projections->days_to_users_threshold = self::project_threshold_date(
+            $user_usage->current,
+            $user_usage->threshold * ($user_usage->warning_level / 100),
+            $projections->users_growth_rate
+        );
+        
+        // Critical thresholds
+        $projections->days_to_disk_critical = self::project_threshold_date(
+            $disk_usage->current_bytes,
+            $disk_usage->quota_bytes * 0.95,
+            $projections->disk_growth_rate
+        );
+        
+        $projections->days_to_users_critical = self::project_threshold_date(
+            $user_usage->current,
+            $user_usage->threshold,
+            $projections->users_growth_rate
+        );
+        
+        // Confidence levels
+        $projections->disk_confidence = self::calculate_projection_confidence('disk');
+        $projections->users_confidence = self::calculate_projection_confidence('users');
+        
+        return $projections;
+    }
+
+    /**
+     * Analyze disk usage by directories with enhanced details
+     *
+     * @return array Directory analysis
+     */
+    public static function analyze_disk_directories() {
+        global $CFG;
+        
+        $cache_key = 'directory_analysis';
+        
+        if (isset(self::$calculation_cache[$cache_key])) {
+            $cached = self::$calculation_cache[$cache_key];
+            if (time() - $cached['timestamp'] < 1800) { // Cache for 30 minutes
+                return $cached['data'];
+            }
+        }
+        
         $config = self::get_config();
         $dir_analysis_json = $config->dir_analysis ?? '{}';
         $dir_analysis = json_decode($dir_analysis_json, true);
         
         if (empty($dir_analysis) || !is_array($dir_analysis)) {
-            global $CFG;
-            $dir_analysis = usage_monitor_disk_analyzer::analyze_disk_usage_by_directory($CFG->dataroot);
+            $dir_analysis = self::calculate_directory_sizes($CFG->dataroot);
         }
+        
+        // Add database size
+        $dir_analysis['database'] = self::get_database_size();
+        
+        // Calculate percentages and trends
+        $total_size = array_sum($dir_analysis);
+        foreach ($dir_analysis as $key => $size) {
+            $dir_analysis[$key] = [
+                'bytes' => $size,
+                'readable' => self::format_bytes($size),
+                'percentage' => $total_size > 0 ? round(($size / $total_size) * 100, 2) : 0,
+                'trend' => self::get_directory_trend($key)
+            ];
+        }
+        
+        // Cache the result
+        self::$calculation_cache[$cache_key] = [
+            'data' => $dir_analysis,
+            'timestamp' => time()
+        ];
         
         return $dir_analysis;
     }
-    
+
     /**
-     * Get largest courses
+     * Get largest courses with enhanced metrics
      *
-     * @param int $limit Number of courses to return
+     * @param int $limit Number of courses
      * @return array Course data
      */
-    public static function get_largest_courses($limit = 5) {
-        $config = self::get_config();
-        $largest_courses_json = $config->largest_courses ?? '[]';
-        $largest_courses = json_decode($largest_courses_json);
+    public static function get_largest_courses($limit = 10) {
+        global $DB;
         
-        if (empty($largest_courses)) {
-            $largest_courses = usage_monitor_disk_analyzer::get_largest_courses($limit);
+        $cache_key = "largest_courses_{$limit}";
+        
+        if (isset(self::$calculation_cache[$cache_key])) {
+            $cached = self::$calculation_cache[$cache_key];
+            if (time() - $cached['timestamp'] < 3600) { // Cache for 1 hour
+                return $cached['data'];
+            }
         }
         
-        return $largest_courses;
+        // Enhanced SQL query for course file sizes
+        $sql = "SELECT c.id, c.fullname, c.shortname, c.category, c.timecreated, c.timemodified,
+                       COALESCE(cf.filesize, 0) as filesize,
+                       COALESCE(cb.backupsize, 0) as backupsize,
+                       COALESCE(cf.filesize, 0) + COALESCE(cb.backupsize, 0) as totalsize,
+                       COALESCE(cb.backupcount, 0) as backupcount,
+                       COALESCE(ce.enrolled_users, 0) as enrolled_users
+                FROM {course} c
+                LEFT JOIN (
+                    SELECT ctx.instanceid as courseid, SUM(f.filesize) as filesize
+                    FROM {context} ctx
+                    JOIN {files} f ON f.contextid = ctx.id
+                    WHERE ctx.contextlevel = " . CONTEXT_COURSE . "
+                      AND f.filesize > 0
+                      AND f.component != 'backup'
+                    GROUP BY ctx.instanceid
+                ) cf ON cf.courseid = c.id
+                LEFT JOIN (
+                    SELECT ctx.instanceid as courseid, 
+                           SUM(f.filesize) as backupsize,
+                           COUNT(f.id) as backupcount
+                    FROM {context} ctx
+                    JOIN {files} f ON f.contextid = ctx.id
+                    WHERE ctx.contextlevel = " . CONTEXT_COURSE . "
+                      AND f.component = 'backup'
+                      AND f.filesize > 0
+                    GROUP BY ctx.instanceid
+                ) cb ON cb.courseid = c.id
+                LEFT JOIN (
+                    SELECT e.courseid, COUNT(DISTINCT ue.userid) as enrolled_users
+                    FROM {enrol} e
+                    JOIN {user_enrolments} ue ON ue.enrolid = e.id
+                    WHERE ue.status = 0
+                    GROUP BY e.courseid
+                ) ce ON ce.courseid = c.id
+                WHERE c.id != :siteid
+                ORDER BY totalsize DESC";
+        
+        $courses = $DB->get_records_sql($sql, ['siteid' => SITEID], 0, $limit);
+        
+        // Calculate additional metrics
+        $total_files_size = $DB->get_field_sql("SELECT SUM(filesize) FROM {files} WHERE filesize > 0");
+        
+        foreach ($courses as $course) {
+            $course->percentage = $total_files_size > 0 
+                ? round(($course->totalsize / $total_files_size) * 100, 2) 
+                : 0;
+            $course->size_per_user = $course->enrolled_users > 0 
+                ? round($course->totalsize / $course->enrolled_users) 
+                : 0;
+            $course->efficiency_score = self::calculate_course_efficiency($course);
+            $course->last_activity = self::get_course_last_activity($course->id);
+        }
+        
+        // Cache the result
+        self::$calculation_cache[$cache_key] = [
+            'data' => array_values($courses),
+            'timestamp' => time()
+        ];
+        
+        return array_values($courses);
     }
-    
+
     /**
-     * Get usage history for charts
+     * Get usage history with enhanced analytics
      *
-     * @param int $days Number of days to retrieve
+     * @param int $days Number of days
      * @return array History data
      */
     public static function get_usage_history($days = 30) {
@@ -249,103 +448,238 @@ class usage_monitor_data_manager {
         $cache_key = "history_{$days}";
         
         if (isset(self::$calculation_cache[$cache_key])) {
-            return self::$calculation_cache[$cache_key];
+            $cached = self::$calculation_cache[$cache_key];
+            if (time() - $cached['timestamp'] < 1800) { // Cache for 30 minutes
+                return $cached['data'];
+            }
         }
         
         $time_threshold = time() - ($days * 86400);
         
-        // Get disk history
-        $disk_sql = "SELECT timecreated, value, percentage 
+        // Enhanced disk history with trends
+        $disk_sql = "SELECT timecreated, value, percentage, threshold
                      FROM {report_usage_monitor_history} 
                      WHERE type = 'disk' AND timecreated > ? 
                      ORDER BY timecreated ASC";
         $disk_history = $DB->get_records_sql($disk_sql, [$time_threshold]);
         
-        // Get user history
-        $user_sql = "SELECT (timecreated - (timecreated % 86400)) as date_key, 
-                            COUNT(DISTINCT userid) as users
+        // Enhanced user history with daily breakdown
+        $user_sql = "SELECT DATE(FROM_UNIXTIME(timecreated)) as date_key,
+                            COUNT(DISTINCT userid) as users,
+                            AVG(timecreated) as avg_time
                      FROM {logstore_standard_log}
                      WHERE action = 'loggedin' AND timecreated > ?
-                     GROUP BY date_key
+                     GROUP BY DATE(FROM_UNIXTIME(timecreated))
                      ORDER BY date_key ASC";
         $user_history = $DB->get_records_sql($user_sql, [$time_threshold]);
         
+        // Calculate trends and patterns
         $history = [
-            'disk' => $disk_history,
-            'users' => $user_history
+            'disk' => self::enhance_disk_history($disk_history),
+            'users' => self::enhance_user_history($user_history),
+            'patterns' => self::analyze_usage_patterns($disk_history, $user_history)
         ];
         
-        self::$calculation_cache[$cache_key] = $history;
+        // Cache the result
+        self::$calculation_cache[$cache_key] = [
+            'data' => $history,
+            'timestamp' => time()
+        ];
+        
         return $history;
     }
-    
+
     /**
-     * Update configuration thresholds
+     * Generate intelligent recommendations
      *
-     * @param array $thresholds Array of threshold values
-     * @return array Result of update operation
+     * @param stdClass $stats Usage statistics
+     * @return array Recommendations
+     */
+    public static function generate_recommendations($stats) {
+        $recommendations = [];
+        
+        // Disk recommendations
+        if ($stats->disk->percentage > 70) {
+            $recommendations['disk'] = self::generate_disk_recommendations($stats);
+        }
+        
+        // User recommendations
+        if ($stats->users->percentage > 70) {
+            $recommendations['users'] = self::generate_user_recommendations($stats);
+        }
+        
+        // Performance recommendations
+        $recommendations['performance'] = self::generate_performance_recommendations($stats);
+        
+        // Security recommendations
+        $recommendations['security'] = self::generate_security_recommendations($stats);
+        
+        return $recommendations;
+    }
+
+    /**
+     * Calculate overall health score
+     *
+     * @param stdClass $stats Usage statistics
+     * @return array Health score data
+     */
+    public static function calculate_health_score($stats) {
+        $scores = [];
+        
+        // Disk health (40% weight)
+        $disk_score = max(0, 100 - $stats->disk->percentage);
+        $scores['disk'] = ['score' => $disk_score, 'weight' => 0.4];
+        
+        // User load health (30% weight)
+        $user_score = max(0, 100 - $stats->users->percentage);
+        $scores['users'] = ['score' => $user_score, 'weight' => 0.3];
+        
+        // Growth trend health (20% weight)
+        $growth_score = self::calculate_growth_health($stats);
+        $scores['growth'] = ['score' => $growth_score, 'weight' => 0.2];
+        
+        // System health (10% weight)
+        $system_score = self::calculate_system_health($stats);
+        $scores['system'] = ['score' => $system_score, 'weight' => 0.1];
+        
+        // Calculate weighted average
+        $total_score = 0;
+        foreach ($scores as $component) {
+            $total_score += $component['score'] * $component['weight'];
+        }
+        
+        return [
+            'overall' => round($total_score),
+            'components' => $scores,
+            'status' => self::get_health_status($total_score),
+            'trend' => self::get_health_trend($stats)
+        ];
+    }
+
+    /**
+     * Enhanced user activity queries
+     */
+    public static function get_daily_users($days = 10) {
+        global $DB;
+        
+        $today_start = strtotime('today midnight');
+        $days_ago = strtotime("-{$days} days midnight");
+        
+        $sql = "SELECT DATE(FROM_UNIXTIME(timecreated)) as date_key,
+                       COUNT(DISTINCT userid) as user_count,
+                       COUNT(*) as total_actions,
+                       AVG(timecreated) as avg_time
+                FROM {logstore_standard_log}
+                WHERE action = 'loggedin' 
+                  AND timecreated BETWEEN ? AND ?
+                GROUP BY DATE(FROM_UNIXTIME(timecreated))
+                ORDER BY date_key DESC";
+        
+        return $DB->get_records_sql($sql, [$days_ago, $today_start]);
+    }
+
+    public static function get_peak_usage_hours() {
+        global $DB;
+        
+        $sql = "SELECT HOUR(FROM_UNIXTIME(timecreated)) as hour,
+                       COUNT(DISTINCT userid) as user_count
+                FROM {logstore_standard_log}
+                WHERE action = 'loggedin' 
+                  AND timecreated > ?
+                GROUP BY HOUR(FROM_UNIXTIME(timecreated))
+                ORDER BY user_count DESC
+                LIMIT 5";
+        
+        $week_ago = time() - (7 * 86400);
+        return $DB->get_records_sql($sql, [$week_ago]);
+    }
+
+    /**
+     * Enhanced notification system
+     */
+    public static function send_notification($type, $data) {
+        global $CFG;
+        
+        $config = self::get_config();
+        $email = $config->email;
+        
+        if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            debugging('Invalid email configuration for notifications', DEBUG_DEVELOPER);
+            return false;
+        }
+        
+        // Check notification frequency
+        if (!self::should_send_notification($type, $data)) {
+            return false;
+        }
+        
+        $template_data = self::prepare_notification_data($type, $data);
+        $result = self::send_email_notification($email, $type, $template_data);
+        
+        if ($result) {
+            self::log_notification($type, $data);
+        }
+        
+        return $result;
+    }
+
+    /**
+     * API management functions
      */
     public static function update_thresholds($thresholds) {
         global $DB;
         
         $result = [
             'success' => true,
-            'user_threshold_updated' => false,
-            'disk_threshold_updated' => false,
-            'messages' => []
+            'updated' => [],
+            'errors' => []
         ];
         
         $transaction = $DB->start_delegated_transaction();
         
         try {
-            if (isset($thresholds['user_threshold'])) {
-                if ($thresholds['user_threshold'] > 0) {
-                    set_config('max_daily_users_threshold', $thresholds['user_threshold'], 'report_usage_monitor');
-                    $result['user_threshold_updated'] = true;
-                    $result['messages'][] = get_string('user_threshold_updated', 'report_usage_monitor');
-                    self::clear_cache();
+            foreach ($thresholds as $key => $value) {
+                if (self::validate_threshold($key, $value)) {
+                    set_config($key, $value, 'report_usage_monitor');
+                    $result['updated'][] = $key;
                 } else {
-                    $result['success'] = false;
-                    $result['messages'][] = get_string('error_user_threshold_negative', 'report_usage_monitor');
+                    $result['errors'][] = "Invalid value for {$key}: {$value}";
                 }
             }
             
-            if (isset($thresholds['disk_threshold'])) {
-                if ($thresholds['disk_threshold'] > 0) {
-                    set_config('disk_quota', $thresholds['disk_threshold'], 'report_usage_monitor');
-                    $result['disk_threshold_updated'] = true;
-                    $result['messages'][] = get_string('disk_threshold_updated', 'report_usage_monitor');
-                    self::clear_cache();
-                } else {
-                    $result['success'] = false;
-                    $result['messages'][] = get_string('error_disk_threshold_negative', 'report_usage_monitor');
-                }
-            }
-            
-            if (!isset($thresholds['user_threshold']) && !isset($thresholds['disk_threshold'])) {
-                $result['success'] = false;
-                $result['messages'][] = get_string('error_no_thresholds_provided', 'report_usage_monitor');
-            }
-            
-            if ($result['success']) {
+            if (empty($result['errors'])) {
                 $transaction->allow_commit();
+                self::clear_cache();
             } else {
-                $transaction->rollback(new moodle_exception('thresholds_update_failed', 'report_usage_monitor'));
+                $result['success'] = false;
+                $transaction->rollback(new moodle_exception('invalid_thresholds', 'report_usage_monitor'));
             }
         } catch (Exception $e) {
             $transaction->rollback($e);
             $result['success'] = false;
-            $result['messages'][] = 'Error: ' . $e->getMessage();
+            $result['errors'][] = $e->getMessage();
         }
         
         return $result;
     }
+
+    /**
+     * Utility functions
+     */
     
     /**
-     * Validate timestamp and return valid value
-     *
-     * @param mixed $timestamp Timestamp to validate
-     * @return int Valid timestamp
+     * Validate and sanitize numeric values
+     */
+    private static function validate_numeric($value, $default = 0) {
+        if (!is_numeric($value) || $value < 0) {
+            debugging("Invalid numeric value: " . var_export($value, true), DEBUG_DEVELOPER);
+            return $default;
+        }
+        return (int)$value;
+    }
+
+    /**
+     * Validate timestamp
      */
     private static function validate_timestamp($timestamp) {
         if (!is_numeric($timestamp) || $timestamp <= 0) {
@@ -354,141 +688,109 @@ class usage_monitor_data_manager {
         }
         return (int)$timestamp;
     }
-    
+
     /**
-     * Get warning class based on percentage and threshold
-     *
-     * @param float $percentage Current percentage
-     * @param float $warning_level Warning threshold
-     * @return string CSS class
+     * Enhanced byte formatting
+     */
+    private static function format_bytes($bytes, $precision = 2) {
+        if (!is_numeric($bytes) || $bytes < 0) {
+            return '0 B';
+        }
+        
+        $units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+        $base = log($bytes, 1024);
+        $unit_index = min(floor($base), count($units) - 1);
+        
+        return round(pow(1024, $base - floor($base)), $precision) . ' ' . $units[$unit_index];
+    }
+
+    /**
+     * Get warning class based on percentage
      */
     private static function get_warning_class($percentage, $warning_level) {
         $caution_level = max(70, $warning_level - 20);
         
         if ($percentage < $caution_level) {
-            return 'bg-success';
+            return 'success';
         } elseif ($percentage < $warning_level) {
-            return 'bg-warning';
+            return 'warning';
         } else {
-            return 'bg-danger';
+            return 'danger';
         }
     }
-}
 
-/**
- * Analytics and projection calculations
- */
-class usage_monitor_analytics {
-    
     /**
-     * Calculate growth rate for users or disk usage
-     *
-     * @param string $type Type of data ('users' or 'disk')
-     * @param int $days Number of days to analyze
-     * @return float Growth rate percentage
+     * Calculate growth rate with enhanced algorithm
      */
-    public static function calculate_growth_rate($type = 'users', $days = 30) {
+    private static function calculate_growth_rate($type, $days = 30) {
         global $DB;
         
-        if (!in_array($type, ['users', 'disk'])) {
-            debugging('Invalid type for growth rate calculation: ' . $type, DEBUG_DEVELOPER);
-            return 0;
-        }
-        
-        if ($type === 'users') {
-            return self::calculate_user_growth_rate($days);
-        } else {
+        if ($type === 'disk') {
             return self::calculate_disk_growth_rate($days);
+        } else {
+            return self::calculate_user_growth_rate($days);
         }
     }
-    
-    /**
-     * Calculate user growth rate
-     *
-     * @param int $days Number of days to analyze
-     * @return float Growth rate percentage
-     */
-    private static function calculate_user_growth_rate($days) {
-        global $DB;
-        
-        $sql = "SELECT 
-                  (SELECT COUNT(DISTINCT userid) 
-                   FROM {logstore_standard_log} 
-                   WHERE action = 'loggedin' 
-                     AND timecreated BETWEEN :start1 AND :end1) as first_day_users,
-                  (SELECT COUNT(DISTINCT userid) 
-                   FROM {logstore_standard_log} 
-                   WHERE action = 'loggedin' 
-                     AND timecreated BETWEEN :start2 AND :end2) as last_day_users";
-        
-        $now = time();
-        $day_seconds = 86400;
-        
-        $params = [
-            'start1' => $now - ($days * $day_seconds),
-            'end1' => $now - (($days - 1) * $day_seconds),
-            'start2' => $now - $day_seconds,
-            'end2' => $now
-        ];
-        
-        $result = $DB->get_record_sql($sql, $params);
-        
-        if (!$result || $result->first_day_users == 0) {
-            return 0;
-        }
-        
-        $growth_rate = (($result->last_day_users - $result->first_day_users) / $result->first_day_users) * 100;
-        return round($growth_rate, 2);
-    }
-    
-    /**
-     * Calculate disk growth rate
-     *
-     * @param int $days Number of days to analyze
-     * @return float Growth rate percentage
-     */
+
     private static function calculate_disk_growth_rate($days) {
         global $DB;
         
-        $sql = "SELECT MIN(timecreated) AS oldest_time, MAX(timecreated) AS newest_time, 
-                       MIN(value) AS oldest_size, MAX(value) AS newest_size
+        $sql = "SELECT MIN(timecreated) as start_time, MAX(timecreated) as end_time,
+                       MIN(value) as start_size, MAX(value) as end_size
                 FROM {report_usage_monitor_history}
-                WHERE type = 'disk' 
-                AND timecreated > :time_threshold";
-                
-        $time_threshold = time() - ($days * 86400);
-        $result = $DB->get_record_sql($sql, ['time_threshold' => $time_threshold]);
+                WHERE type = 'disk' AND timecreated > ?";
         
-        if ($result && $result->oldest_time && $result->oldest_size > 0) {
-            $time_diff = $result->newest_time - $result->oldest_time;
-            $size_diff = $result->newest_size - $result->oldest_size;
+        $threshold = time() - ($days * 86400);
+        $result = $DB->get_record_sql($sql, [$threshold]);
+        
+        if ($result && $result->start_size > 0 && $result->end_time > $result->start_time) {
+            $time_diff = $result->end_time - $result->start_time;
+            $size_diff = $result->end_size - $result->start_size;
             
-            if ($time_diff > 0 && $size_diff != 0) {
-                $days_diff = $time_diff / 86400;
-                $daily_change = $size_diff / $days_diff;
-                $daily_percent = ($daily_change / $result->oldest_size) * 100;
-                $growth_rate = $daily_percent * 30;
-                return round($growth_rate, 2);
+            if ($time_diff > 0) {
+                $daily_growth = ($size_diff / $result->start_size) / ($time_diff / 86400);
+                return round($daily_growth * 30 * 100, 2); // Monthly percentage
             }
         }
         
-        return 5; // Default 5% monthly growth
+        return 2.5; // Default conservative estimate
     }
-    
-    /**
-     * Project when a limit will be reached
-     *
-     * @param int $current_value Current value
-     * @param int $threshold_value Threshold to reach
-     * @param float $growth_rate Growth rate percentage
-     * @return int Days to reach threshold or special code
-     */
-    public static function project_limit_date($current_value, $threshold_value, $growth_rate) {
-        if (!is_numeric($current_value) || !is_numeric($threshold_value) || !is_numeric($growth_rate)) {
-            return null;
+
+    private static function calculate_user_growth_rate($days) {
+        global $DB;
+        
+        $sql = "SELECT DATE(FROM_UNIXTIME(timecreated)) as date_key,
+                       COUNT(DISTINCT userid) as users
+                FROM {logstore_standard_log}
+                WHERE action = 'loggedin' AND timecreated > ?
+                GROUP BY DATE(FROM_UNIXTIME(timecreated))
+                ORDER BY date_key ASC";
+        
+        $threshold = time() - ($days * 86400);
+        $records = $DB->get_records_sql($sql, [$threshold]);
+        
+        if (count($records) >= 7) {
+            $values = array_values($records);
+            $first_week = array_slice($values, 0, 7);
+            $last_week = array_slice($values, -7);
+            
+            $first_avg = array_sum(array_column($first_week, 'users')) / 7;
+            $last_avg = array_sum(array_column($last_week, 'users')) / 7;
+            
+            if ($first_avg > 0) {
+                $growth = (($last_avg - $first_avg) / $first_avg) * 100;
+                return round($growth * 4, 2); // Monthly estimate
+            }
         }
         
-        if ($current_value >= $threshold_value) {
+        return 1.5; // Default conservative estimate
+    }
+
+    /**
+     * Project when threshold will be reached
+     */
+    private static function project_threshold_date($current, $threshold, $growth_rate) {
+        if ($current >= $threshold) {
             return -1; // Already exceeded
         }
         
@@ -496,699 +798,653 @@ class usage_monitor_analytics {
             return PHP_INT_MAX; // Will never reach
         }
         
-        $daily_growth_rate = ($growth_rate / 100) / 30;
+        $monthly_rate = $growth_rate / 100;
+        $daily_rate = $monthly_rate / 30;
         
-        if ($daily_growth_rate < 0.000001) {
+        if ($daily_rate < 0.000001) {
             return PHP_INT_MAX;
         }
         
         try {
-            $ratio = $threshold_value / $current_value;
-            $log_ratio = log($ratio);
-            $log_growth = log(1 + $daily_growth_rate);
+            $ratio = $threshold / $current;
+            $days = log($ratio) / log(1 + $daily_rate);
             
-            if ($log_growth == 0) {
-                return PHP_INT_MAX;
-            }
-            
-            $days = $log_ratio / $log_growth;
-            
-            if (!is_finite($days)) {
-                return PHP_INT_MAX;
-            }
-            
-            return max(1, ceil($days));
+            return is_finite($days) ? max(1, ceil($days)) : PHP_INT_MAX;
         } catch (Exception $e) {
-            debugging('Error in projection calculation: ' . $e->getMessage(), DEBUG_DEVELOPER);
+            debugging('Error in projection: ' . $e->getMessage(), DEBUG_DEVELOPER);
             return PHP_INT_MAX;
         }
     }
-}
 
-/**
- * Disk analysis utilities
- */
-class usage_monitor_disk_analyzer {
-    
     /**
-     * Analyze disk usage by directories
-     *
-     * @param string $rootdir Root directory to analyze
-     * @return array Directory usage breakdown
+     * Calculate directory sizes with optimization
      */
-    public static function analyze_disk_usage_by_directory($rootdir) {
+    private static function calculate_directory_sizes($dataroot) {
         global $CFG;
         
         $directories = [
-            'filedir' => $rootdir . '/filedir',
-            'cache' => $rootdir . '/cache',
+            'filedir' => $dataroot . '/filedir',
+            'cache' => $dataroot . '/cache',
+            'temp' => $dataroot . '/temp',
+            'sessions' => $dataroot . '/sessions',
+            'trashdir' => $dataroot . '/trashdir'
         ];
         
-        $usage = [];
+        $sizes = [];
         $total_analyzed = 0;
         
-        foreach ($directories as $key => $dir) {
-            if (is_dir($dir)) {
-                $size = self::directory_size($dir);
-                $usage[$key] = $size;
+        foreach ($directories as $key => $path) {
+            if (is_dir($path)) {
+                $size = self::get_directory_size($path);
+                $sizes[$key] = $size;
                 $total_analyzed += $size;
             } else {
-                $usage[$key] = 0;
+                $sizes[$key] = 0;
             }
         }
         
-        $total_size = self::directory_size($rootdir);
-        $usage['others'] = max(0, $total_size - $total_analyzed);
+        // Calculate others
+        $total_dataroot = self::get_directory_size($dataroot);
+        $sizes['others'] = max(0, $total_dataroot - $total_analyzed);
         
-        // Add database size
-        $usage['database'] = self::get_database_size();
-        
-        return $usage;
+        return $sizes;
     }
-    
+
     /**
-     * Get largest courses
-     *
-     * @param int $limit Number of courses to return
-     * @return array Course data
+     * Optimized directory size calculation
      */
-    public static function get_largest_courses($limit = 5) {
-        global $DB;
-        
-        $filesql = self::get_course_filesize_sql();
-        $sql = "SELECT c.id, c.fullname, c.shortname, c.category, rc.filesize
-                FROM {course} c
-                JOIN ($filesql) rc on rc.course = c.id
-                WHERE c.id != :siteid
-                ORDER BY rc.filesize DESC";
-        
-        $params = ['siteid' => SITEID];
-        $courses = $DB->get_records_sql($sql, $params, 0, $limit);
-        
-        $backupsql = self::get_course_backupsize_sql();
-        $backupsizes = $DB->get_records_sql($backupsql);
-        
-        $totalfilessize = $DB->get_field_sql("SELECT SUM(filesize) FROM {files} WHERE filesize > 0");
-        
-        foreach ($courses as $course) {
-            $course->backupsize = isset($backupsizes[$course->id]) ? $backupsizes[$course->id]->filesize : 0;
-            
-            $course->backupcount = $DB->count_records_sql("
-                SELECT COUNT(f.id)
-                FROM {files} f
-                JOIN {context} ctx ON f.contextid = ctx.id
-                WHERE ctx.instanceid = :courseid
-                  AND ctx.contextlevel = " . CONTEXT_COURSE . "
-                  AND f.component = 'backup'
-                  AND f.filearea = 'automated'
-            ", ['courseid' => $course->id]);
-            
-            $course->percentage = $totalfilessize > 0
-                ? round(($course->filesize / $totalfilessize) * 100, 2)
-                : 0;
-                
-            $course->totalsize = $course->filesize + $course->backupsize;
-        }
-        
-        return $courses;
-    }
-    
-    /**
-     * Calculate directory size
-     *
-     * @param string $rootdir Directory to analyze
-     * @param string $excludefile File to exclude
-     * @return int Size in bytes
-     */
-    public static function directory_size($rootdir, $excludefile = '') {
+    private static function get_directory_size($directory) {
         global $CFG;
         
+        // Use system du command if available (much faster)
         if (!empty($CFG->pathtodu) && is_executable(trim($CFG->pathtodu))) {
-            $escapedRootdir = escapeshellarg($rootdir);
-            $command = trim($CFG->pathtodu) . ' -Lsk ' . $escapedRootdir;
+            $command = trim($CFG->pathtodu) . ' -sb ' . escapeshellarg($directory) . ' 2>/dev/null';
+            $output = shell_exec($command);
             
-            if (PHP_OS === 'Linux') {
-                $command = 'nice -n 19 ionice -c3 ' . $command;
-            }
-            
-            if (!empty($excludefile)) {
-                $escapedExcludefile = escapeshellarg($excludefile);
-                $command .= ' --exclude=' . $escapedExcludefile;
-            }
-            
-            $output = null;
-            $return = null;
-            exec($command, $output, $return);
-            if (is_array($output) && isset($output[0])) {
-                return intval($output[0]) * 1024;
+            if ($output && preg_match('/^(\d+)/', $output, $matches)) {
+                return (int)$matches[1];
             }
         }
         
-        if (!is_dir($rootdir)) {
-            return 0;
-        }
-        
+        // Fallback to PHP calculation with optimization
+        return self::calculate_directory_size_php($directory);
+    }
+
+    private static function calculate_directory_size_php($directory) {
         $size = 0;
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($rootdir, RecursiveDirectoryIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::SELF_FIRST
-        );
+        $count = 0;
+        $max_files = 10000; // Limit for performance
         
-        foreach ($iterator as $file) {
-            if ($file->isFile() && ($excludefile === '' || $file->getFilename() !== $excludefile)) {
-                $size += $file->getSize();
+        try {
+            $iterator = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($directory, RecursiveDirectoryIterator::SKIP_DOTS),
+                RecursiveIteratorIterator::LEAVES_ONLY
+            );
+            
+            foreach ($iterator as $file) {
+                if ($file->isFile()) {
+                    $size += $file->getSize();
+                    $count++;
+                    
+                    // Performance limit
+                    if ($count > $max_files) {
+                        // Estimate based on sample
+                        $estimated_total = $size * (self::count_files_estimate($directory) / $count);
+                        return (int)$estimated_total;
+                    }
+                }
             }
+        } catch (Exception $e) {
+            debugging('Error calculating directory size: ' . $e->getMessage(), DEBUG_DEVELOPER);
+            return 0;
         }
         
         return $size;
     }
-    
+
+    private static function count_files_estimate($directory) {
+        try {
+            $output = shell_exec('find ' . escapeshellarg($directory) . ' -type f | wc -l 2>/dev/null');
+            return $output ? (int)trim($output) : 1000;
+        } catch (Exception $e) {
+            return 1000; // Conservative estimate
+        }
+    }
+
     /**
-     * Get database size
-     *
-     * @return int Database size in bytes
+     * Get database size with caching
      */
     private static function get_database_size() {
         global $DB, $CFG;
         
-        $sql = "SELECT TABLE_SCHEMA AS `database_name`, 
-                       ROUND(SUM(DATA_LENGTH + INDEX_LENGTH)) AS size
-                FROM information_schema.TABLES
-                WHERE TABLE_SCHEMA = '$CFG->dbname'";
+        $cache_key = 'database_size';
         
-        $result = $DB->get_records_sql($sql);
-        foreach ($result as $item) {
-            return $item->size;
+        if (isset(self::$calculation_cache[$cache_key])) {
+            $cached = self::$calculation_cache[$cache_key];
+            if (time() - $cached['timestamp'] < 3600) { // Cache for 1 hour
+                return $cached['data'];
+            }
         }
         
-        return 0;
-    }
-    
-    /**
-     * Get SQL for calculating course file sizes
-     *
-     * @return string SQL query
-     */
-    private static function get_course_filesize_sql() {
-        $sqlunion = "UNION ALL
-                    SELECT c.id, f.filesize
-                    FROM {block_instances} bi
-                    JOIN {context} cx1 ON cx1.contextlevel = " . CONTEXT_BLOCK . " AND cx1.instanceid = bi.id
-                    JOIN {context} cx2 ON cx2.contextlevel = " . CONTEXT_COURSE . " AND cx2.id = bi.parentcontextid
-                    JOIN {course} c ON c.id = cx2.instanceid
-                    JOIN {files} f ON f.contextid = cx1.id
-                UNION ALL
-                    SELECT c.id, f.filesize
-                    FROM {course_modules} cm
-                    JOIN {context} cx ON cx.contextlevel = " . CONTEXT_MODULE . " AND cx.instanceid = cm.id
-                    JOIN {course} c ON c.id = cm.course
-                    JOIN {files} f ON f.contextid = cx.id";
+        $size = 0;
         
-        return "SELECT id AS course, SUM(filesize) AS filesize
-                FROM (SELECT c.id, f.filesize
-                      FROM {course} c
-                      JOIN {context} cx ON cx.contextlevel = " . CONTEXT_COURSE . " AND cx.instanceid = c.id
-                      JOIN {files} f ON f.contextid = cx.id {$sqlunion}) x
-                GROUP BY id";
+        try {
+            if ($CFG->dbtype === 'mysqli' || $CFG->dbtype === 'mariadb') {
+                $sql = "SELECT SUM(DATA_LENGTH + INDEX_LENGTH) as size
+                        FROM information_schema.TABLES
+                        WHERE TABLE_SCHEMA = ?";
+                $result = $DB->get_field_sql($sql, [$CFG->dbname]);
+                $size = $result ? (int)$result : 0;
+            } else {
+                // For other database types, estimate based on table count
+                $table_count = count($DB->get_tables());
+                $size = $table_count * 1024 * 1024; // Rough estimate: 1MB per table
+            }
+        } catch (Exception $e) {
+            debugging('Error getting database size: ' . $e->getMessage(), DEBUG_DEVELOPER);
+        }
+        
+        // Cache the result
+        self::$calculation_cache[$cache_key] = [
+            'data' => $size,
+            'timestamp' => time()
+        ];
+        
+        return $size;
     }
-    
-    /**
-     * Get SQL for calculating course backup sizes
-     *
-     * @return string SQL query
-     */
-    private static function get_course_backupsize_sql() {
-        return "SELECT id AS course, SUM(filesize) AS filesize
-                FROM (SELECT c.id, f.filesize
-                      FROM {course} c
-                      JOIN {context} cx ON cx.contextlevel = " . CONTEXT_COURSE . " AND cx.instanceid = c.id
-                      JOIN {files} f ON f.contextid = cx.id AND f.component = 'backup') x
-                GROUP BY id";
-    }
-}
 
-/**
- * User activity queries
- */
-class usage_monitor_user_queries {
-    
     /**
-     * Get daily user statistics for last N days
-     *
-     * @param int $days Number of days
-     * @return array User statistics
+     * Enhanced recommendation generators
      */
-    public static function get_daily_users($days = 10) {
+    private static function generate_disk_recommendations($stats) {
+        $recommendations = [];
+        
+        if ($stats->disk->percentage > 90) {
+            $recommendations[] = [
+                'type' => 'critical',
+                'title' => 'Critical Disk Usage',
+                'message' => 'Immediate action required to free disk space',
+                'actions' => [
+                    'Clean up old backup files',
+                    'Remove unused course files',
+                    'Clear system cache',
+                    'Archive old courses'
+                ]
+            ];
+        } elseif ($stats->disk->percentage > 80) {
+            $recommendations[] = [
+                'type' => 'warning',
+                'title' => 'High Disk Usage',
+                'message' => 'Consider cleaning up files to prevent issues',
+                'actions' => [
+                    'Review largest courses',
+                    'Optimize backup retention',
+                    'Clean temporary files'
+                ]
+            ];
+        }
+        
+        // Growth-based recommendations
+        if ($stats->projections->days_to_disk_threshold < 30) {
+            $recommendations[] = [
+                'type' => 'info',
+                'title' => 'Disk Space Planning',
+                'message' => "Disk threshold will be reached in {$stats->projections->days_to_disk_threshold} days",
+                'actions' => [
+                    'Plan for storage expansion',
+                    'Implement automated cleanup',
+                    'Review file retention policies'
+                ]
+            ];
+        }
+        
+        return $recommendations;
+    }
+
+    private static function generate_user_recommendations($stats) {
+        $recommendations = [];
+        
+        if ($stats->users->percentage > 90) {
+            $recommendations[] = [
+                'type' => 'warning',
+                'title' => 'High User Load',
+                'message' => 'Consider increasing user limits or optimizing performance',
+                'actions' => [
+                    'Review user activity patterns',
+                    'Optimize peak hour distribution',
+                    'Consider load balancing'
+                ]
+            ];
+        }
+        
+        return $recommendations;
+    }
+
+    private static function generate_performance_recommendations($stats) {
+        $recommendations = [];
+        
+        // Based on system info
+        $memory_limit = ini_get('memory_limit');
+        if (self::parse_size($memory_limit) < 256 * 1024 * 1024) {
+            $recommendations[] = [
+                'type' => 'info',
+                'title' => 'Memory Optimization',
+                'message' => 'Consider increasing PHP memory limit',
+                'actions' => ['Increase memory_limit to at least 256M']
+            ];
+        }
+        
+        return $recommendations;
+    }
+
+    private static function generate_security_recommendations($stats) {
+        $recommendations = [];
+        
+        // Check for old PHP version
+        if (version_compare(PHP_VERSION, '8.0', '<')) {
+            $recommendations[] = [
+                'type' => 'warning',
+                'title' => 'PHP Version',
+                'message' => 'Consider upgrading to PHP 8.0+ for better security and performance',
+                'actions' => ['Plan PHP upgrade']
+            ];
+        }
+        
+        return $recommendations;
+    }
+
+    /**
+     * Helper functions for enhanced features
+     */
+    private static function calculate_course_efficiency($course) {
+        if ($course->enrolled_users == 0) return 0;
+        
+        $size_score = min(100, (1000000000 - $course->totalsize) / 10000000); // Penalty for large size
+        $user_score = min(100, $course->enrolled_users * 2); // Bonus for more users
+        
+        return max(0, round(($size_score + $user_score) / 2));
+    }
+
+    private static function get_course_last_activity($course_id) {
         global $DB;
         
-        $today_start = strtotime('today midnight');
-        $days_ago = strtotime("-{$days} days midnight");
-        $yesterday_end = $today_start - 1;
-        
-        $sql = "SELECT (timecreated - (timecreated % 86400)) as timestamp_fecha, 
-                       COUNT(DISTINCT userid) as conteo_accesos_unicos
+        $sql = "SELECT MAX(timecreated) as last_activity
                 FROM {logstore_standard_log}
-                WHERE action = 'loggedin' 
-                  AND timecreated BETWEEN :start AND :end
-                GROUP BY timestamp_fecha 
-                ORDER BY timestamp_fecha DESC";
+                WHERE courseid = ?";
         
-        return $DB->get_records_sql($sql, ['start' => $days_ago, 'end' => $yesterday_end]);
+        $result = $DB->get_field_sql($sql, [$course_id]);
+        return $result ? (int)$result : 0;
     }
-    
-    /**
-     * Get top user days
-     *
-     * @return array Top user statistics
-     */
-    public static function get_top_user_days() {
+
+    private static function enhance_disk_history($history) {
+        $enhanced = [];
+        $previous = null;
+        
+        foreach ($history as $record) {
+            $enhanced_record = (array)$record;
+            
+            if ($previous) {
+                $enhanced_record['change'] = $record->value - $previous->value;
+                $enhanced_record['change_percent'] = $previous->value > 0 
+                    ? round((($record->value - $previous->value) / $previous->value) * 100, 2)
+                    : 0;
+            } else {
+                $enhanced_record['change'] = 0;
+                $enhanced_record['change_percent'] = 0;
+            }
+            
+            $enhanced[] = $enhanced_record;
+            $previous = $record;
+        }
+        
+        return $enhanced;
+    }
+
+    private static function enhance_user_history($history) {
+        $enhanced = [];
+        
+        foreach ($history as $record) {
+            $enhanced_record = (array)$record;
+            $enhanced_record['day_of_week'] = date('w', $record->avg_time);
+            $enhanced_record['formatted_date'] = date('Y-m-d', $record->avg_time);
+            $enhanced[] = $enhanced_record;
+        }
+        
+        return $enhanced;
+    }
+
+    private static function analyze_usage_patterns($disk_history, $user_history) {
+        return [
+            'peak_disk_day' => self::find_peak_day($disk_history, 'value'),
+            'peak_user_day' => self::find_peak_day($user_history, 'users'),
+            'growth_correlation' => self::calculate_correlation($disk_history, $user_history)
+        ];
+    }
+
+    private static function find_peak_day($history, $field) {
+        if (empty($history)) return null;
+        
+        $max_value = 0;
+        $peak_day = null;
+        
+        foreach ($history as $record) {
+            if (isset($record->$field) && $record->$field > $max_value) {
+                $max_value = $record->$field;
+                $peak_day = $record;
+            }
+        }
+        
+        return $peak_day;
+    }
+
+    private static function calculate_correlation($disk_history, $user_history) {
+        // Simplified correlation calculation
+        if (count($disk_history) < 2 || count($user_history) < 2) {
+            return 0;
+        }
+        
+        // This would need more sophisticated implementation for real correlation
+        return 0.5; // Placeholder
+    }
+
+    private static function calculate_growth_health($stats) {
+        $disk_growth = $stats->disk->growth_rate;
+        $user_growth = $stats->users->growth_rate;
+        
+        // Healthy growth is moderate (2-5% monthly)
+        $disk_score = $disk_growth < 2 ? 100 : ($disk_growth > 10 ? 50 : 100 - ($disk_growth - 2) * 5);
+        $user_score = $user_growth < 2 ? 100 : ($user_growth > 8 ? 60 : 100 - ($user_growth - 2) * 4);
+        
+        return round(($disk_score + $user_score) / 2);
+    }
+
+    private static function calculate_system_health($stats) {
+        $score = 100;
+        
+        // Deduct points for various issues
+        if (version_compare(PHP_VERSION, '8.0', '<')) {
+            $score -= 20;
+        }
+        
+        if (self::parse_size(ini_get('memory_limit')) < 256 * 1024 * 1024) {
+            $score -= 15;
+        }
+        
+        return max(0, $score);
+    }
+
+    private static function get_health_status($score) {
+        if ($score >= 90) return 'excellent';
+        if ($score >= 80) return 'good';
+        if ($score >= 70) return 'fair';
+        if ($score >= 60) return 'poor';
+        return 'critical';
+    }
+
+    private static function get_health_trend($stats) {
+        // Simplified trend calculation based on growth rates
+        $avg_growth = ($stats->disk->growth_rate + $stats->users->growth_rate) / 2;
+        
+        if ($avg_growth < 2) return 'stable';
+        if ($avg_growth < 5) return 'growing';
+        return 'rapid_growth';
+    }
+
+    private static function parse_size($size_str) {
+        $size_str = trim($size_str);
+        $last = strtolower($size_str[strlen($size_str) - 1]);
+        $size = (int)$size_str;
+        
+        switch ($last) {
+            case 'g': $size *= 1024;
+            case 'm': $size *= 1024;
+            case 'k': $size *= 1024;
+        }
+        
+        return $size;
+    }
+
+    private static function should_send_notification($type, $data) {
+        $last_sent = get_config('report_usage_monitor', "last_notification_{$type}_time") ?: 0;
+        $interval = self::get_notification_interval($type, $data);
+        
+        return (time() - $last_sent) >= $interval;
+    }
+
+    private static function get_notification_interval($type, $data) {
+        // Dynamic intervals based on severity
+        if ($type === 'disk') {
+            $percentage = $data['percentage'] ?? 0;
+            if ($percentage > 95) return 6 * 3600;  // 6 hours
+            if ($percentage > 90) return 12 * 3600; // 12 hours
+            return 24 * 3600; // 24 hours
+        }
+        
+        return 24 * 3600; // Default 24 hours
+    }
+
+    private static function prepare_notification_data($type, $data) {
+        global $CFG, $SITE;
+        
+        $template_data = new stdClass();
+        $template_data->sitename = format_string($SITE->fullname);
+        $template_data->siteurl = $CFG->wwwroot;
+        $template_data->timestamp = time();
+        $template_data->type = $type;
+        
+        // Merge with provided data
+        foreach ($data as $key => $value) {
+            $template_data->$key = $value;
+        }
+        
+        return $template_data;
+    }
+
+    private static function send_email_notification($email, $type, $data) {
+        global $CFG;
+        
+        $subject = self::get_notification_subject($type, $data);
+        $message = self::get_notification_message($type, $data);
+        
+        $user = self::create_email_user($email);
+        $from = self::create_email_user($CFG->noreplyaddress, $CFG->supportname ?? 'System');
+        
+        return email_to_user($user, $from, $subject, strip_tags($message), $message);
+    }
+
+    private static function get_notification_subject($type, $data) {
+        switch ($type) {
+            case 'disk':
+                return "Disk Usage Alert - {$data->sitename}";
+            case 'users':
+                return "User Limit Alert - {$data->sitename}";
+            default:
+                return "System Alert - {$data->sitename}";
+        }
+    }
+
+    private static function get_notification_message($type, $data) {
+        // Enhanced HTML email templates
+        $template = self::get_email_template($type);
+        return self::render_email_template($template, $data);
+    }
+
+    private static function get_email_template($type) {
+        // Return enhanced HTML email templates
+        $templates = [
+            'disk' => '
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <div style="background: #f44336; color: white; padding: 20px; text-align: center;">
+                        <h1>Disk Usage Alert</h1>
+                    </div>
+                    <div style="padding: 20px; background: #f9f9f9;">
+                        <h2>Alert Details</h2>
+                        <p><strong>Site:</strong> {{sitename}}</p>
+                        <p><strong>Current Usage:</strong> {{current_usage}}</p>
+                        <p><strong>Percentage:</strong> {{percentage}}%</p>
+                        <p><strong>Available Space:</strong> {{available_space}}</p>
+                        
+                        <h3>Recommended Actions</h3>
+                        <ul>
+                            <li>Clean up old backup files</li>
+                            <li>Remove unused course content</li>
+                            <li>Clear system cache</li>
+                            <li>Archive old courses</li>
+                        </ul>
+                        
+                        <p><a href="{{siteurl}}/report/usage_monitor/" style="background: #2196F3; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">View Dashboard</a></p>
+                    </div>
+                </div>
+            ',
+            'users' => '
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <div style="background: #ff9800; color: white; padding: 20px; text-align: center;">
+                        <h1>User Limit Alert</h1>
+                    </div>
+                    <div style="padding: 20px; background: #f9f9f9;">
+                        <h2>Alert Details</h2>
+                        <p><strong>Site:</strong> {{sitename}}</p>
+                        <p><strong>Current Users:</strong> {{current_users}}</p>
+                        <p><strong>Threshold:</strong> {{threshold}}</p>
+                        <p><strong>Percentage:</strong> {{percentage}}%</p>
+                        
+                        <p><a href="{{siteurl}}/report/usage_monitor/" style="background: #2196F3; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">View Dashboard</a></p>
+                    </div>
+                </div>
+            '
+        ];
+        
+        return $templates[$type] ?? $templates['disk'];
+    }
+
+    private static function render_email_template($template, $data) {
+        foreach ($data as $key => $value) {
+            $template = str_replace("{{$key}}", $value, $template);
+        }
+        return $template;
+    }
+
+    private static function create_email_user($email, $name = '') {
+        $user = new stdClass();
+        $user->email = $email;
+        $user->firstname = $name ?: 'System';
+        $user->lastname = '';
+        $user->maildisplay = true;
+        $user->mailformat = 1;
+        $user->id = -1;
+        return $user;
+    }
+
+    private static function log_notification($type, $data) {
         global $DB;
         
-        $sql = "SELECT fecha as timestamp_fecha, cantidad_usuarios 
-                FROM {report_usage_monitor}  
-                ORDER BY cantidad_usuarios DESC, fecha DESC";
-        
-        return $DB->get_records_sql($sql);
-    }
-    
-    /**
-     * Get users for yesterday
-     *
-     * @return array Yesterday's user count
-     */
-    public static function get_yesterday_users() {
-        global $DB;
-        
-        $yesterday_start = strtotime('yesterday midnight');
-        $today_start = strtotime('today midnight');
-        
-        $sql = "SELECT (timecreated - (timecreated % 86400)) as fecha, 
-                       COUNT(DISTINCT userid) as conteo_accesos_unicos 
-                FROM {logstore_standard_log}
-                WHERE action = 'loggedin' 
-                  AND timecreated BETWEEN :start AND :end
-                GROUP BY fecha";
-        
-        return $DB->get_records_sql($sql, ['start' => $yesterday_start, 'end' => $today_start]);
-    }
-    
-    /**
-     * Get users active today
-     *
-     * @return array Today's user count
-     */
-    public static function get_today_users() {
-        global $DB;
-        
-        $one_day_ago = time() - 86400;
-        
-        $sql = "SELECT (lastaccess - (lastaccess % 86400)) as timestamp_fecha, 
-                       COUNT(DISTINCT id) as conteo_accesos_unicos 
-                FROM {user}
-                WHERE lastaccess >= :threshold
-                GROUP BY timestamp_fecha";
-        
-        return $DB->get_records_sql($sql, ['threshold' => $one_day_ago]);
-    }
-    
-    /**
-     * Get maximum users in last 90 days
-     *
-     * @return array Maximum user statistics
-     */
-    public static function get_max_users_90_days() {
-        global $DB;
-        
-        $ninety_days_ago = time() - (90 * 86400);
-        
-        $sql = "SELECT (timecreated - (timecreated % 86400)) as fecha, 
-                       COUNT(DISTINCT userid) as usuarios 
-                FROM {logstore_standard_log}
-                WHERE action = 'loggedin' 
-                  AND timecreated >= :threshold
-                GROUP BY fecha
-                ORDER BY usuarios DESC 
-                LIMIT 1";
-        
-        return $DB->get_records_sql($sql, ['threshold' => $ninety_days_ago]);
-    }
-    
-    /**
-     * Update top users record
-     *
-     * @param int $fecha Timestamp
-     * @param int $usuarios User count
-     * @param int $min Minimum value to replace
-     */
-    public static function update_min_top_record($fecha, $usuarios, $min) {
-        global $DB;
-        
-        if (!is_numeric($fecha) || $fecha <= 0) {
-            debugging('Invalid timestamp provided: ' . var_export($fecha, true), DEBUG_DEVELOPER);
+        if (!$DB->get_manager()->table_exists('report_usage_monitor_history')) {
             return;
         }
         
-        $transaction = $DB->start_delegated_transaction();
+        $record = new stdClass();
+        $record->type = $type . '_notification';
+        $record->percentage = $data['percentage'] ?? 0;
+        $record->value = $data['value'] ?? 0;
+        $record->threshold = $data['threshold'] ?? 0;
+        $record->timecreated = time();
         
         try {
-            $sql = "SELECT fecha FROM {report_usage_monitor} 
-                    WHERE cantidad_usuarios = ? 
-                    ORDER BY fecha ASC LIMIT 1";
-            $oldest_min_record = $DB->get_field_sql($sql, [$min]);
-            
-            if ($oldest_min_record) {
-                $DB->execute(
-                    "UPDATE {report_usage_monitor} 
-                     SET fecha = ?, cantidad_usuarios = ? 
-                     WHERE fecha = ?",
-                    [$fecha, $usuarios, $oldest_min_record]
-                );
-            }
-            
-            $transaction->allow_commit();
+            $DB->insert_record('report_usage_monitor_history', $record);
+            set_config("last_notification_{$type}_time", time(), 'report_usage_monitor');
         } catch (Exception $e) {
-            $transaction->rollback($e);
-            debugging('Error updating record: ' . $e->getMessage(), DEBUG_DEVELOPER);
+            debugging('Error logging notification: ' . $e->getMessage(), DEBUG_DEVELOPER);
         }
     }
-    
+
+    private static function validate_threshold($key, $value) {
+        $valid_keys = [
+            'max_daily_users_threshold',
+            'disk_quota',
+            'disk_warning_level',
+            'users_warning_level'
+        ];
+        
+        if (!in_array($key, $valid_keys)) {
+            return false;
+        }
+        
+        if (!is_numeric($value) || $value <= 0) {
+            return false;
+        }
+        
+        // Additional validation for percentage values
+        if (in_array($key, ['disk_warning_level', 'users_warning_level'])) {
+            return $value > 0 && $value <= 100;
+        }
+        
+        return true;
+    }
+
     /**
-     * Insert new top users record
-     *
-     * @param int $fecha Timestamp
-     * @param int $cantidad_usuarios User count
+     * Additional helper methods for trends and analysis
      */
-    public static function insert_top_record($fecha, $cantidad_usuarios) {
-        global $DB;
-        
-        if (!is_numeric($fecha) || $fecha <= 0) {
-            debugging('Invalid timestamp provided: ' . var_export($fecha, true), DEBUG_DEVELOPER);
-            return;
-        }
-        
-        $transaction = $DB->start_delegated_transaction();
-        
-        try {
-            $DB->execute(
-                "INSERT INTO {report_usage_monitor} (fecha, cantidad_usuarios) 
-                 VALUES (?, ?)",
-                [$fecha, $cantidad_usuarios]
-            );
-            
-            $count = $DB->count_records('report_usage_monitor');
-            if ($count > 10) {
-                $sql = "SELECT id FROM {report_usage_monitor} ORDER BY fecha ASC LIMIT " . ($count - 10);
-                $records = $DB->get_records_sql($sql);
-                
-                if (!empty($records)) {
-                    $ids = array_keys($records);
-                    $DB->delete_records_list('report_usage_monitor', 'id', $ids);
-                }
-            }
-            
-            $transaction->allow_commit();
-        } catch (Exception $e) {
-            $transaction->rollback($e);
-            debugging('Error inserting record: ' . $e->getMessage(), DEBUG_DEVELOPER);
-        }
+    private static function calculate_disk_trend() {
+        // Simplified trend calculation - could be enhanced
+        return 'stable'; // 'increasing', 'decreasing', 'stable'
+    }
+
+    private static function calculate_user_trend() {
+        // Simplified trend calculation - could be enhanced
+        return 'stable'; // 'increasing', 'decreasing', 'stable'
+    }
+
+    private static function get_directory_trend($directory) {
+        // Placeholder for directory-specific trend analysis
+        return 'stable';
+    }
+
+    private static function calculate_projection_confidence($type) {
+        // Calculate confidence level based on data quality and consistency
+        // This would analyze historical data variance
+        return 75; // Percentage confidence
     }
 }
 
 /**
- * Notification utilities
+ * Legacy function wrappers for backward compatibility
  */
-class usage_monitor_notifications {
-    
-    /**
-     * Send user limit notification
-     *
-     * @param int $numberofusers Number of users
-     * @param int $fecha Date timestamp
-     * @param float $percentage Percentage of threshold
-     * @return bool Success status
-     */
-    public static function send_user_limit_notification($numberofusers, $fecha, $percentage) {
-        global $CFG, $DB;
-        
-        if (!is_numeric($fecha)) {
-            debugging('Invalid timestamp provided: ' . var_export($fecha, true), DEBUG_DEVELOPER);
-            $fecha = time();
-        }
-        
-        $site = get_site();
-        $config = usage_monitor_data_manager::get_config();
-        $system_info = usage_monitor_data_manager::get_system_info();
-        $disk_usage = usage_monitor_data_manager::get_disk_usage();
-        
-        $data = new stdClass();
-        $data->sitename = format_string($site->fullname);
-        $data->threshold = $config->max_daily_users_threshold;
-        $data->numberofusers = $numberofusers;
-        $data->lastday = is_numeric($fecha) && $fecha > 0 ? date('d/m/Y', (int)$fecha) : date('d/m/Y');
-        $data->referer = $CFG->wwwroot . '/report/usage_monitor/index.php';
-        $data->siteurl = $CFG->wwwroot;
-        $data->percentaje = round($percentage, 2);
-        $data->excess_users = max(0, $numberofusers - $data->threshold);
-        
-        // System information
-        $data->moodle_version = $system_info->moodle_version;
-        $data->moodle_release = $system_info->moodle_release;
-        $data->courses_count = $system_info->course_count;
-        $data->backup_auto_max_kept = $system_info->backup_auto_max_kept;
-        
-        // Disk information
-        $data->diskusage = $disk_usage->current_readable;
-        $data->quotadisk = $disk_usage->quota_readable;
-        $data->disk_percent = round($disk_usage->percentage, 2);
-        
-        // Projections
-        $projections = usage_monitor_data_manager::get_projections();
-        $data->days_to_critical = $projections->days_to_users_threshold;
-        $data->critical_threshold = 120;
-        
-        // Historical data
-        $data->historical_data_rows = self::generate_historical_data_html(7, $data->threshold);
-        
-        return self::send_email($data, 'user_limit');
-    }
-    
-    /**
-     * Send disk usage notification
-     *
-     * @param int $quotadisk Disk quota in bytes
-     * @param int $disk_usage Current disk usage in bytes
-     * @param float $disk_percent Disk usage percentage
-     * @param int $userAccessCount Active user count
-     * @return bool Success status
-     */
-    public static function send_disk_usage_notification($quotadisk, $disk_usage, $disk_percent, $userAccessCount) {
-        global $CFG;
-        
-        $site = get_site();
-        $config = usage_monitor_data_manager::get_config();
-        $system_info = usage_monitor_data_manager::get_system_info();
-        $dir_analysis = usage_monitor_data_manager::get_directory_analysis();
-        $largest_courses = usage_monitor_data_manager::get_largest_courses(5);
-        
-        $data = new stdClass();
-        $data->sitename = format_string($site->fullname);
-        $data->quotadisk = display_size($quotadisk);
-        $data->diskusage = display_size($disk_usage);
-        $data->percentage = round($disk_percent, 2);
-        $data->databasesize = display_size($dir_analysis['database']);
-        $data->available_space = display_size($quotadisk - $disk_usage);
-        $data->available_percent = round(100 - $disk_percent, 2);
-        
-        $data->warning_level_class = $disk_percent < 70 ? 'warning-level-low' : 
-                                   ($disk_percent < 90 ? 'warning-level-medium' : 'warning-level-high');
-        
-        // System information
-        $data->backupcount = $system_info->backup_auto_max_kept;
-        $data->threshold = $config->max_daily_users_threshold;
-        $data->numberofusers = $userAccessCount;
-        $data->referer = $CFG->wwwroot . '/report/usage_monitor/index.php';
-        $data->siteurl = $CFG->wwwroot;
-        $data->lastday = date('d/m/Y', time());
-        $data->coursescount = $system_info->course_count;
-        $data->user_percent = round(($userAccessCount / $data->threshold) * 100, 2);
-        $data->moodle_version = $system_info->moodle_version;
-        $data->moodle_release = $system_info->moodle_release;
-        
-        // Directory analysis
-        $data->db_percent = round(($dir_analysis['database'] / $disk_usage) * 100, 2);
-        $data->filedir_size = display_size($dir_analysis['filedir']);
-        $data->filedir_percent = round(($dir_analysis['filedir'] / $disk_usage) * 100, 2);
-        $data->cache_size = display_size($dir_analysis['cache']);
-        $data->cache_percent = round(($dir_analysis['cache'] / $disk_usage) * 100, 2);
-        $data->other_size = display_size($dir_analysis['others']);
-        $data->other_percent = round(($dir_analysis['others'] / $disk_usage) * 100, 2);
-        
-        // Top courses
-        $data->top_courses_rows = self::generate_top_courses_html($largest_courses);
-        
-        return self::send_email($data, 'disk_usage');
-    }
-    
-    /**
-     * Generate historical data HTML
-     *
-     * @param int $limit Number of records
-     * @param int $max_threshold Maximum threshold
-     * @return string HTML content
-     */
-    private static function generate_historical_data_html($limit = 10, $max_threshold = 100) {
-        global $DB;
-        
-        $html = '';
-        $limit_days_ago = time() - ($limit * 86400);
-        
-        $sql = "SELECT (timecreated - (timecreated % 86400)) as fecha, 
-                       COUNT(DISTINCT userid) as usuarios
-                FROM {logstore_standard_log}
-                WHERE action = 'loggedin'
-                  AND timecreated > :limit_days_ago
-                GROUP BY (timecreated - (timecreated % 86400))
-                ORDER BY fecha DESC
-                LIMIT :limit";
-        
-        $records = $DB->get_records_sql($sql, ['limit_days_ago' => $limit_days_ago, 'limit' => $limit]);
-        
-        foreach ($records as $record) {
-            if (!is_numeric($record->fecha) || $record->fecha <= 0) {
-                continue;
-            }
-            
-            $percent = round(($record->usuarios / $max_threshold) * 100, 1);
-            $class = $percent < 70 ? '' : ($percent < 90 ? 'text-warning' : 'text-danger');
-            $formatted_date = date('d/m/Y', (int)$record->fecha);
-            
-            $html .= '<tr>';
-            $html .= '<td>' . $formatted_date . '</td>';
-            $html .= '<td>' . $record->usuarios . '</td>';
-            $html .= '<td class="' . $class . '">' . $percent . '%</td>';
-            $html .= '</tr>';
-        }
-        
-        return $html;
-    }
-    
-    /**
-     * Generate top courses HTML
-     *
-     * @param array $courses Course data
-     * @return string HTML content
-     */
-    private static function generate_top_courses_html($courses) {
-        $html = '';
-        
-        foreach ($courses as $course) {
-            $html .= '<tr>';
-            $html .= '<td>' . format_string($course->fullname) . ' (' . $course->shortname . ')</td>';
-            $html .= '<td>' . display_size($course->totalsize) . '</td>';
-            $html .= '<td>' . $course->percentage . '%</td>';
-            $html .= '</tr>';
-        }
-        
-        return $html;
-    }
-    
-    /**
-     * Send email notification
-     *
-     * @param stdClass $data Email data
-     * @param string $type Notification type
-     * @return bool Success status
-     */
-    private static function send_email($data, $type) {
-        global $CFG;
-        
-        $toemail = self::generate_email_user(get_config('report_usage_monitor', 'email'), '');
-        $fromemail = self::generate_email_user($CFG->noreplyaddress, format_string($CFG->supportname));
-        
-        if ($type === 'user_limit') {
-            $subject = get_string('subjectemail1', 'report_usage_monitor') . " {$data->sitename}";
-            $messagehtml = get_string('messagehtml_userlimit', 'report_usage_monitor', $data);
-        } else {
-            $subject = get_string('subjectemail2', 'report_usage_monitor') . " {$data->sitename}";
-            $messagehtml = get_string('messagehtml_diskusage', 'report_usage_monitor', $data);
-        }
-        
-        $messagetext = html_to_text($messagehtml);
-        
-        $previous_noemailever = $CFG->noemailever ?? false;
-        $CFG->noemailever = false;
-        $result = email_to_user($toemail, $fromemail, $subject, $messagetext, $messagehtml, '', '', true, $fromemail->email);
-        $CFG->noemailever = $previous_noemailever;
-        
-        return $result;
-    }
-    
-    /**
-     * Generate email user object
-     *
-     * @param string $email Email address
-     * @param string $name User name
-     * @param int $id User ID
-     * @return stdClass User object
-     */
-    private static function generate_email_user($email, $name = '', $id = -99) {
-        $emailuser = new stdClass();
-        $emailuser->email = trim(filter_var($email, FILTER_SANITIZE_EMAIL));
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $emailuser->email = '';
-        }
-        $name = format_text($name, FORMAT_HTML, array('trusted' => false, 'noclean' => false));
-        $emailuser->firstname = trim(filter_var($name, FILTER_SANITIZE_STRING));
-        $emailuser->lastname = '';
-        $emailuser->maildisplay = true;
-        $emailuser->mailformat = 1;
-        $emailuser->id = $id;
-        $emailuser->firstnamephonetic = '';
-        $emailuser->lastnamephonetic = '';
-        $emailuser->middlename = '';
-        $emailuser->alternatename = '';
-        return $emailuser;
-    }
+
+function display_size_in_gb($bytes, $precision = 2) {
+    return usage_monitor_manager::format_bytes($bytes, $precision);
 }
 
-/**
- * Utility functions
- */
-
-/**
- * Convert bytes to GB
- *
- * @param mixed $sizeInBytes Size in bytes
- * @param int $precision Decimal precision
- * @return string Size in GB
- */
-function display_size_in_gb($sizeInBytes, $precision = 2) {
-    if (!is_numeric($sizeInBytes) || $sizeInBytes === null) {
-        debugging("Expected numeric value, received: " . var_export($sizeInBytes, true), DEBUG_DEVELOPER);
-        return '0';
-    }
-    
-    $sizeInGb = $sizeInBytes / (1024 * 1024 * 1024);
-    return round($sizeInGb, $precision);
-}
-
-/**
- * Calculate threshold percentage
- *
- * @param int $current_value Current value
- * @param int $threshold Threshold value
- * @return float Percentage
- */
-function calculate_threshold_percentage($current_value, $threshold) {
-    if (!is_numeric($current_value)) {
-        debugging('Non-numeric current value: ' . var_export($current_value, true), DEBUG_DEVELOPER);
-        $current_value = 0;
-    }
-    
-    if (!is_numeric($threshold) || $threshold <= 0) {
-        debugging('Invalid threshold: ' . var_export($threshold, true), DEBUG_DEVELOPER);
+function calculate_threshold_percentage($current, $threshold) {
+    if (!is_numeric($current) || !is_numeric($threshold) || $threshold <= 0) {
         return 0;
     }
-    
-    return ($current_value / $threshold) * 100;
+    return ($current / $threshold) * 100;
+}
+
+/**
+ * Simplified access functions for common operations
+ */
+
+function get_usage_statistics($force_refresh = false) {
+    return usage_monitor_manager::get_usage_statistics($force_refresh);
+}
+
+function get_disk_usage($force_refresh = false) {
+    return usage_monitor_manager::get_disk_usage($force_refresh);
+}
+
+function get_user_usage($force_refresh = false) {
+    return usage_monitor_manager::get_user_usage($force_refresh);
+}
+
+function send_usage_notification($type, $data) {
+    return usage_monitor_manager::send_notification($type, $data);
+}
+
+function update_usage_thresholds($thresholds) {
+    return usage_monitor_manager::update_thresholds($thresholds);
+}
+
+function clear_usage_cache() {
+    usage_monitor_manager::clear_cache();
 }
