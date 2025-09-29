@@ -44,8 +44,8 @@ class disk_usage extends \core\task\scheduled_task
         }
 
         // Calcular el tamaño de la base de datos con la función refactorizada
-        $size_sql = size_database();
-        $size_database = $DB->get_records_sql($size_sql);
+        list($size_sql, $size_params) = size_database();
+        $size_database = $DB->get_records_sql($size_sql, $size_params);
         $totalusagereadabledb = 0;
         
         foreach ($size_database as $item) {

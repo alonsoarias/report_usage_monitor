@@ -107,9 +107,7 @@ if ($ADMIN->fulltree) {
                 $defaultPathToDu = $pathToDu;
                 
                 // Actualizar la configuración global si no está ya configurada
-                if (empty(get_config('pathtodu'))) {
-                    set_config('pathtodu', $defaultPathToDu);
-                }
+                // Mostrar el valor detectado como sugerencia por defecto.
             } else {
                 // Mostrar recomendación si no se puede detectar automáticamente
                 $infocontent = html_writer::tag('div', 
@@ -179,13 +177,6 @@ if ($ADMIN->fulltree) {
 $ADMIN->add('reports', new admin_externalpage(
     'report_usage_monitor',
     get_string('pluginname', 'report_usage_monitor'),
-    new moodle_url('/report/usage_monitor/index.php')
-));
-
-// Agregar página para documentación de la API
-// Agregamos la página también a 'reports' en lugar de 'reportplugins' que no existe
-$ADMIN->add('reports', new admin_externalpage(
-    'report_usage_monitor_api',
-    get_string('api_documentation', 'report_usage_monitor'),
-    new moodle_url('/report/usage_monitor/api-documentation.php')
+    new moodle_url('/report/usage_monitor/index.php'),
+    'report/usage_monitor:view'
 ));

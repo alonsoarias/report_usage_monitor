@@ -27,6 +27,7 @@ require_once($CFG->libdir . '/adminlib.php');
 require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
 
 admin_externalpage_setup('report_usage_monitor', '', null, '', ['pagelayout' => 'admin']);
+$PAGE->requires->js(new moodle_url('/report/usage_monitor/js/chart.umd.min.js'), true);
 
 $reportconfig = get_config('report_usage_monitor');
 
@@ -83,13 +84,15 @@ $dir_analysis_json = $reportconfig->dir_analysis ?? '{}';
 $dir_analysis = json_decode($dir_analysis_json, true);
 
 if (empty($dir_analysis) || !is_array($dir_analysis)) {
-    $dir_analysis = [
-        'database' => 0,
-        'filedir' => 0,
-        'cache' => 0,
-        'others' => 0
-    ];
+    $dir_analysis = [];
 }
+$dir_analysis = array_merge([
+    'database' => 0,
+    'filedir' => 0,
+    'cache' => 0,
+    'backup' => 0,
+    'others' => 0
+], $dir_analysis);
 
 $database_gb = display_size_in_gb($dir_analysis['database'] ?? 0, 2);
 $filedir_gb  = display_size_in_gb($dir_analysis['filedir']  ?? 0, 2);
@@ -237,7 +240,6 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
 ?>
 
 <!-- Cargar librería Chart.js (ejemplo CDN) -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <div class="container-fluid mt-4">
     <!-- SECCIÓN A: Tarjetas resumen (disco, usuarios, max 90d) -->

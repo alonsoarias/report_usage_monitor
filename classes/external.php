@@ -47,18 +47,23 @@ class report_usage_monitor_external extends external_api {
      * @return array Conjunto de estadísticas
      */
     public static function get_monitor_stats() {
-        global $DB, $CFG;
+        global $DB, $CFG, $SITE;
         
         // Verificar permisos
         $context = context_system::instance();
         self::validate_context($context);
         require_capability('report/usage_monitor:view', $context);
+        require_capability('report/usage_monitor:apiuse', $context);
         
         // Obtener configuraciones
         $reportconfig = get_config('report_usage_monitor');
         
+        if (isset($reportconfig->enable_api) && (int)$reportconfig->enable_api === 0) {
+            throw new moodle_exception('api_disabled', 'report_usage_monitor');
+        }
+
         // Calcular uso de disco
-        $disk_usage = ((int) $reportconfig->totalusagereadable + (int) $reportconfig->totalusagereadabledb) ?: 0;
+        $disk_usage = max(0, (int)$reportconfig->totalusagereadable + (int)$reportconfig->totalusagereadabledb);
         $quotadisk = ((int) $reportconfig->disk_quota * 1024) * 1024 * 1024;
         $disk_percent = calculate_threshold_percentage($disk_usage, $quotadisk);
         
@@ -73,11 +78,29 @@ class report_usage_monitor_external extends external_api {
         if (empty($dir_analysis) || !is_array($dir_analysis)) {
             $dir_analysis = analyze_disk_usage_by_directory($CFG->dataroot);
         }
+        $dir_analysis = array_merge([
+            'database' => 0,
+            'filedir' => 0,
+            'cache' => 0,
+            'backup' => 0,
+            'others' => 0,
+        ], $dir_analysis);
+
+        $disk_percentage = function(int $value, int $total): float {
+            if ($total <= 0 || $value <= 0) {
+                return 0.0;
+            }
+            return round(($value / $total) * 100, 2);
+        };
         
         // Obtener cursos más grandes - usar datos precalculados si están disponibles
         $largest_courses_json = $reportconfig->largest_courses ?? '[]';
         $largest_courses = json_decode($largest_courses_json);
-        if (empty($largest_courses)) {
+        if ($largest_courses instanceof stdClass) {
+            $largest_courses = [$largest_courses];
+        }
+
+        if (empty($largest_courses) || !is_array($largest_courses)) {
             $largest_courses = get_largest_courses(5);
         }
 
@@ -112,7 +135,8 @@ class report_usage_monitor_external extends external_api {
                 'moodle_version' => $CFG->version,
                 'moodle_release' => $CFG->release,
                 'course_count' => $DB->count_records('course'),
-                'user_count' => $DB->count_records('user', array('deleted' => 0)) - 1,
+                'user_count' => $DB->count_records_select('user', 'deleted = 0 AND id <> :guestid',
+                    ['guestid' => get_guest_user()->id]),
                 'backup_auto_max_kept' => get_config('backup', 'backup_auto_max_kept'),
             ),
             'disk_usage' => array(
@@ -125,27 +149,27 @@ class report_usage_monitor_external extends external_api {
                     'database' => array(
                         'bytes' => $dir_analysis['database'],
                         'readable' => display_size($dir_analysis['database']),
-                        'percentage' => round(($dir_analysis['database'] / $disk_usage) * 100, 2)
+                        'percentage' => $disk_percentage($dir_analysis['database'], $disk_usage)
                     ),
                     'filedir' => array(
                         'bytes' => $dir_analysis['filedir'],
                         'readable' => display_size($dir_analysis['filedir']),
-                        'percentage' => round(($dir_analysis['filedir'] / $disk_usage) * 100, 2)
+                        'percentage' => $disk_percentage($dir_analysis['filedir'], $disk_usage)
                     ),
                     'cache' => array(
                         'bytes' => $dir_analysis['cache'],
                         'readable' => display_size($dir_analysis['cache']),
-                        'percentage' => round(($dir_analysis['cache'] / $disk_usage) * 100, 2)
+                        'percentage' => $disk_percentage($dir_analysis['cache'], $disk_usage)
                     ),
                     'backup' => array(
-                        'bytes' => $dir_analysis['backup'] ?? 0,
-                        'readable' => display_size($dir_analysis['backup'] ?? 0),
-                        'percentage' => round((($dir_analysis['backup'] ?? 0) / $disk_usage) * 100, 2)
+                        'bytes' => $dir_analysis['backup'],
+                        'readable' => display_size($dir_analysis['backup']),
+                        'percentage' => $disk_percentage($dir_analysis['backup'], $disk_usage)
                     ),
                     'others' => array(
                         'bytes' => $dir_analysis['others'],
                         'readable' => display_size($dir_analysis['others']),
-                        'percentage' => round(($dir_analysis['others'] / $disk_usage) * 100, 2)
+                        'percentage' => $disk_percentage($dir_analysis['others'], $disk_usage)
                     )
                 )
             ),
@@ -356,7 +380,14 @@ class report_usage_monitor_external extends external_api {
         $context = context_system::instance();
         self::validate_context($context);
         require_capability('report/usage_monitor:view', $context);
+        require_capability('report/usage_monitor:apiuse', $context);
         
+        $reportconfig = get_config('report_usage_monitor');
+
+        if (isset($reportconfig->enable_api) && (int)$reportconfig->enable_api === 0) {
+            throw new moodle_exception('api_disabled', 'report_usage_monitor');
+        }
+
         // Validar parámetros
         $params = self::validate_parameters(self::get_notification_history_parameters(), 
                                            array('type' => $type, 'limit' => $limit, 'offset' => $offset));

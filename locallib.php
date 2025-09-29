@@ -252,15 +252,18 @@ function max_userdaily_for_90_days()
 /**
  * Calcular el tamaño de la base de datos.
  *
- * @return string Consulta SQL para obtener el tamaño de la base de datos.
+ * @return array Consulta SQL y parámetros para obtener el tamaño de la base de datos.
  */
 function size_database()
 {
     global $CFG;
-    return "SELECT TABLE_SCHEMA AS `database_name`, 
+
+    $sql = "SELECT TABLE_SCHEMA AS `database_name`,
                    ROUND(SUM(DATA_LENGTH + INDEX_LENGTH)) AS size
             FROM information_schema.TABLES
-            WHERE TABLE_SCHEMA = '$CFG->dbname'";
+            WHERE TABLE_SCHEMA = ?";
+
+    return [$sql, [$CFG->dbname]];
 }
 
 /**
@@ -278,12 +281,12 @@ function size_database()
 function generate_email_user($email, $name = '', $id = -99)
 {
     $emailuser = new stdClass();
-    $emailuser->email = trim(filter_var($email, FILTER_SANITIZE_EMAIL));
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    $emailuser->email = trim(clean_param($email, PARAM_EMAIL));
+    if (empty($emailuser->email)) {
         $emailuser->email = '';
     }
     $name = format_text($name, FORMAT_HTML, array('trusted' => false, 'noclean' => false));
-    $emailuser->firstname = trim(filter_var($name, FILTER_SANITIZE_STRING));
+    $emailuser->firstname = trim(clean_param($name, PARAM_TEXT));
     $emailuser->lastname = '';
     $emailuser->maildisplay = true;
     $emailuser->mailformat = 1; // 0 (zero) text-only emails, 1 (one) for HTML emails.
@@ -437,9 +440,9 @@ function analyze_disk_usage_by_directory($rootdir) {
     
     // Añadimos el tamaño de la base de datos
     $total_db_size = 0;
-    $size = size_database();
+    list($sizesql, $sizeparams) = size_database();
     global $DB;
-    $size_database = $DB->get_records_sql($size);
+    $size_database = $DB->get_records_sql($sizesql, $sizeparams);
     foreach ($size_database as $item) {
         $total_db_size = $item->size;
     }
@@ -720,16 +723,15 @@ function generate_historical_data_html($limit = 10, $max_threshold = 100) {
     $limit_days_ago = time() - ($limit * 86400);
     
     // Consulta optimizada usando aritmética de timestamps para agrupación por día
-    $sql = "SELECT (timecreated - (timecreated % 86400)) as fecha, 
+    $sql = "SELECT (timecreated - (timecreated % 86400)) as fecha,
                    COUNT(DISTINCT userid) as usuarios
             FROM {logstore_standard_log}
             WHERE action = 'loggedin'
               AND timecreated > :limit_days_ago
             GROUP BY (timecreated - (timecreated % 86400))
-            ORDER BY fecha DESC
-            LIMIT :limit";
-    
-    $records = $DB->get_records_sql($sql, ['limit_days_ago' => $limit_days_ago, 'limit' => $limit]);
+            ORDER BY fecha DESC";
+
+    $records = $DB->get_records_sql($sql, ['limit_days_ago' => $limit_days_ago], 0, $limit);
     
     foreach ($records as $record) {
         // Validar que la fecha sea un timestamp válido
@@ -737,7 +739,8 @@ function generate_historical_data_html($limit = 10, $max_threshold = 100) {
             continue; // Saltar registros con fechas inválidas
         }
         
-        $percent = round(($record->usuarios / $max_threshold) * 100, 1);
+        $threshold = (int)$max_threshold;
+        $percent = $threshold > 0 ? round(($record->usuarios / $threshold) * 100, 1) : 0;
         $class = $percent < 70 ? '' : ($percent < 90 ? 'text-warning' : 'text-danger');
         $formatted_date = is_numeric($record->fecha) && $record->fecha > 0 ? 
                          date('d/m/Y', (int)$record->fecha) : 
@@ -761,15 +764,24 @@ function generate_historical_data_html($limit = 10, $max_threshold = 100) {
  */
 function generate_top_courses_html($courses) {
     $html = '';
-    
+
     foreach ($courses as $course) {
+        if (is_array($course)) {
+            $course = (object)$course;
+        }
+
+        $fullname = isset($course->fullname) ? format_string($course->fullname) : '';
+        $shortname = isset($course->shortname) ? format_string($course->shortname) : '';
+        $sizebytes = isset($course->totalsize) ? (int)$course->totalsize : 0;
+        $percentage = isset($course->percentage) ? round((float)$course->percentage, 2) : 0;
+
         $html .= '<tr>';
-        $html .= '<td>' . format_string($course->fullname) . ' (' . $course->shortname . ')</td>';
-        $html .= '<td>' . display_size($course->totalsize) . '</td>';
-        $html .= '<td>' . $course->percentage . '%</td>';
+        $html .= '<td>' . trim($fullname . ($shortname !== '' ? ' (' . $shortname . ')' : '')) . '</td>';
+        $html .= '<td>' . display_size($sizebytes) . '</td>';
+        $html .= '<td>' . $percentage . '%</td>';
         $html .= '</tr>';
     }
-    
+
     return $html;
 }
 
@@ -870,12 +882,15 @@ function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAc
     // Información básica
     $a = new stdClass();
     $a->sitename = format_string($site->fullname);
-    $a->quotadisk = display_size($quotadisk);
-    $a->diskusage = display_size($disk_usage);
-    $a->percentage = round($disk_percent, 2);
-    $a->databasesize = display_size($reportconfig->totalusagereadabledb);
-    $a->available_space = display_size($quotadisk - $disk_usage);
-    $a->available_percent = round(100 - $disk_percent, 2);
+    $safequotadisk = max(0, (int)$quotadisk);
+    $safediskusage = max(0, (int)$disk_usage);
+    $a->quotadisk = display_size($safequotadisk);
+    $a->diskusage = display_size($safediskusage);
+    $a->percentage = round(max(0, $disk_percent), 2);
+    $a->databasesize = display_size((int)$reportconfig->totalusagereadabledb);
+    $availablebytes = max($safequotadisk - $safediskusage, 0);
+    $a->available_space = display_size($availablebytes);
+    $a->available_percent = round(max(0, 100 - $disk_percent), 2);
     
     // Clase de nivel de advertencia
     $a->warning_level_class = $disk_percent < 70 ? 'warning-level-low' : 
@@ -895,24 +910,42 @@ function email_notify_disk_limit($quotadisk, $disk_usage, $disk_percent, $userAc
 
     // Análisis por directorios
     $dir_analysis_json = $reportconfig->dir_analysis ?? '{}';
+   
     $dir_analysis = json_decode($dir_analysis_json, true);
     if (empty($dir_analysis) || !is_array($dir_analysis)) {
         $dir_analysis = analyze_disk_usage_by_directory($CFG->dataroot);
     }
-    
+    $dir_analysis = array_merge([
+        'database' => 0,
+        'filedir' => 0,
+        'cache' => 0,
+        'backup' => 0,
+        'others' => 0,
+    ], $dir_analysis);
+
+    $percentage = function(int $value, int $total): float {
+        if ($total <= 0 || $value <= 0) {
+            return 0.0;
+        }
+        return round(($value / $total) * 100, 2);
+    };
+
     // Formateamos los tamaños y calculamos porcentajes
-    $a->db_percent = round(($dir_analysis['database'] / $disk_usage) * 100, 2);
+    $a->db_percent = $percentage((int)$dir_analysis['database'], $safediskusage);
     $a->filedir_size = display_size($dir_analysis['filedir']);
-    $a->filedir_percent = round(($dir_analysis['filedir'] / $disk_usage) * 100, 2);
+    $a->filedir_percent = $percentage((int)$dir_analysis['filedir'], $safediskusage);
     $a->cache_size = display_size($dir_analysis['cache']);
-    $a->cache_percent = round(($dir_analysis['cache'] / $disk_usage) * 100, 2);
+    $a->cache_percent = $percentage((int)$dir_analysis['cache'], $safediskusage);
     $a->other_size = display_size($dir_analysis['others']);
-    $a->other_percent = round(($dir_analysis['others'] / $disk_usage) * 100, 2);
+    $a->other_percent = $percentage((int)$dir_analysis['others'], $safediskusage);
 
     // Cursos más grandes
     $largest_courses_json = $reportconfig->largest_courses ?? '[]';
     $largest_courses = json_decode($largest_courses_json);
-    if (empty($largest_courses)) {
+    if ($largest_courses instanceof stdClass) {
+        $largest_courses = [$largest_courses];
+    }
+    if (empty($largest_courses) || !is_array($largest_courses)) {
         $largest_courses = get_largest_courses(5);
     }
     $a->top_courses_rows = generate_top_courses_html($largest_courses);

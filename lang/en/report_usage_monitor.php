@@ -126,6 +126,7 @@ $string['subjectemail2'] = 'Disk Space Alert on Platform:';
 
 // API documentation strings
 $string['api_documentation'] = 'API Documentation';
+$string['api_disabled'] = 'The Usage Monitor web service is currently disabled by the site administrator.';
 $string['get_usage_data'] = 'Get usage data';
 $string['get_usage_data_desc'] = 'Retrieves precalculated usage data for disk and users with minimal overhead.';
 $string['set_usage_thresholds'] = 'Set usage thresholds';
