@@ -18,8 +18,7 @@ namespace report_usage_monitor\local;
 
 defined('MOODLE_INTERNAL') || die();
 
-global $CFG;
-require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
+require_once(__DIR__ . '/../../locallib.php');
 
 use stdClass;
 
