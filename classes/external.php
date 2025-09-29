@@ -27,6 +27,8 @@ defined('MOODLE_INTERNAL') || die();
 require_once($CFG->libdir . '/externallib.php');
 require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
 
+use report_usage_monitor\local\dashboard_data;
+
 /**
  * Clase de API externa para el plugin report_usage_monitor
  */
@@ -47,165 +49,93 @@ class report_usage_monitor_external extends external_api {
      * @return array Conjunto de estadísticas
      */
     public static function get_monitor_stats() {
-        global $DB, $CFG;
-        
-        // Verificar permisos
+        global $CFG, $DB, $SITE;
+
+        self::validate_parameters(self::get_monitor_stats_parameters(), []);
+
         $context = context_system::instance();
         self::validate_context($context);
         require_capability('report/usage_monitor:view', $context);
-        
-        // Obtener configuraciones
-        $reportconfig = get_config('report_usage_monitor');
-        
-        // Calcular uso de disco
-        $disk_usage = ((int) $reportconfig->totalusagereadable + (int) $reportconfig->totalusagereadabledb) ?: 0;
-        $quotadisk = ((int) $reportconfig->disk_quota * 1024) * 1024 * 1024;
-        $disk_percent = calculate_threshold_percentage($disk_usage, $quotadisk);
-        
-        // Calcular uso de usuarios
-        $users_today = !empty($reportconfig->totalusersdaily) ? ($reportconfig->totalusersdaily) : 0;
-        $user_threshold = $reportconfig->max_daily_users_threshold;
-        $users_percent = calculate_threshold_percentage($users_today, $user_threshold);
-        
-        // Analizar directorios - usar datos precalculados si están disponibles
-        $dir_analysis_json = $reportconfig->dir_analysis ?? '{}';
-        $dir_analysis = json_decode($dir_analysis_json, true);
-        if (empty($dir_analysis) || !is_array($dir_analysis)) {
-            $dir_analysis = analyze_disk_usage_by_directory($CFG->dataroot);
-        }
-        
-        // Obtener cursos más grandes - usar datos precalculados si están disponibles
-        $largest_courses_json = $reportconfig->largest_courses ?? '[]';
-        $largest_courses = json_decode($largest_courses_json);
-        if (empty($largest_courses)) {
-            $largest_courses = get_largest_courses(5);
-        }
 
-        // Validar timestamps para info de últimos cálculos
-        $last_disk_calc = !empty($reportconfig->lastexecutioncalculate) ? $reportconfig->lastexecutioncalculate : 0;
-        $last_users_calc = !empty($reportconfig->lastexecution) ? $reportconfig->lastexecution : 0;
-        
-        // Validar que los timestamps sean valores numéricos válidos
-        if (!is_numeric($last_disk_calc) || $last_disk_calc <= 0) {
-            $last_disk_calc = time();
-            debugging('get_monitor_stats: Timestamp inválido para lastexecutioncalculate: ' . var_export($reportconfig->lastexecutioncalculate, true), DEBUG_DEVELOPER);
-        }
-        
-        if (!is_numeric($last_users_calc) || $last_users_calc <= 0) {
-            $last_users_calc = time();
-            debugging('get_monitor_stats: Timestamp inválido para lastexecution: ' . var_export($reportconfig->lastexecution, true), DEBUG_DEVELOPER);
-        }
-        
-        // Validar timestamp para max_userdaily_for_90_days_date
-        $max_90_days_date = !empty($reportconfig->max_userdaily_for_90_days_date) ? 
-                          $reportconfig->max_userdaily_for_90_days_date : null;
-        if (!is_numeric($max_90_days_date) || $max_90_days_date <= 0) {
-            $max_90_days_date = null;
-            debugging('get_monitor_stats: Timestamp inválido para max_userdaily_for_90_days_date: ' . var_export($reportconfig->max_userdaily_for_90_days_date, true), DEBUG_DEVELOPER);
-        }
-        
-        // Crear estructura de respuesta
-        $response = array(
+        $disk = dashboard_data::get_disk_summary();
+        $users = dashboard_data::get_user_summary();
+        $courses = dashboard_data::get_largest_courses();
+        $siteoverview = dashboard_data::get_site_overview();
+
+        $diskusage = $disk['total_bytes'];
+        $diskquota = $disk['quota_bytes'];
+        $diskdetails = self::format_disk_details_for_api($disk['details']);
+
+        $diskgrowth = calculate_growth_rate('disk');
+        $usergrowth = calculate_growth_rate('users');
+
+        $diskthresholdtarget = ($diskquota > 0) ? (int)round($diskquota * 0.9) : 0;
+        $userthresholdtarget = ($users['threshold'] > 0) ? (int)round($users['threshold'] * 0.9) : 0;
+
+        $diskprojection = ($diskthresholdtarget > 0 && $diskusage > 0 && $diskgrowth > 0)
+            ? project_limit_date($diskusage, $diskthresholdtarget, $diskgrowth)
+            : PHP_INT_MAX;
+        $userprojection = ($userthresholdtarget > 0 && $users['current'] > 0 && $usergrowth > 0)
+            ? project_limit_date($users['current'], $userthresholdtarget, $usergrowth)
+            : PHP_INT_MAX;
+
+        $largestcourses = array_map(static function($course) {
+            return array(
+                'id' => $course->id,
+                'fullname' => $course->fullname,
+                'shortname' => $course->shortname,
+                'size_bytes' => $course->filesize,
+                'size_readable' => display_size($course->filesize),
+                'backup_size_bytes' => $course->backupsize,
+                'backup_size_readable' => display_size($course->backupsize),
+                'percentage' => $course->percentage,
+                'backup_count' => $course->backupcount,
+            );
+        }, $courses);
+
+        return array(
             'site_info' => array(
                 'name' => format_string($SITE->fullname),
                 'shortname' => format_string($SITE->shortname),
-                'moodle_version' => $CFG->version,
+                'moodle_version' => (int)$CFG->version,
                 'moodle_release' => $CFG->release,
-                'course_count' => $DB->count_records('course'),
-                'user_count' => $DB->count_records('user', array('deleted' => 0)) - 1,
-                'backup_auto_max_kept' => get_config('backup', 'backup_auto_max_kept'),
+                'course_count' => $siteoverview['total_courses'],
+                'user_count' => $siteoverview['registered_users'],
+                'backup_auto_max_kept' => $siteoverview['backup_auto_max_kept'],
             ),
             'disk_usage' => array(
-                'total_bytes' => $disk_usage,
-                'total_readable' => display_size($disk_usage),
-                'quota_bytes' => $quotadisk,
-                'quota_readable' => display_size($quotadisk),
-                'percentage' => round($disk_percent, 2),
-                'details' => array(
-                    'database' => array(
-                        'bytes' => $dir_analysis['database'],
-                        'readable' => display_size($dir_analysis['database']),
-                        'percentage' => round(($dir_analysis['database'] / $disk_usage) * 100, 2)
-                    ),
-                    'filedir' => array(
-                        'bytes' => $dir_analysis['filedir'],
-                        'readable' => display_size($dir_analysis['filedir']),
-                        'percentage' => round(($dir_analysis['filedir'] / $disk_usage) * 100, 2)
-                    ),
-                    'cache' => array(
-                        'bytes' => $dir_analysis['cache'],
-                        'readable' => display_size($dir_analysis['cache']),
-                        'percentage' => round(($dir_analysis['cache'] / $disk_usage) * 100, 2)
-                    ),
-                    'backup' => array(
-                        'bytes' => $dir_analysis['backup'] ?? 0,
-                        'readable' => display_size($dir_analysis['backup'] ?? 0),
-                        'percentage' => round((($dir_analysis['backup'] ?? 0) / $disk_usage) * 100, 2)
-                    ),
-                    'others' => array(
-                        'bytes' => $dir_analysis['others'],
-                        'readable' => display_size($dir_analysis['others']),
-                        'percentage' => round(($dir_analysis['others'] / $disk_usage) * 100, 2)
-                    )
-                )
+                'total_bytes' => $diskusage,
+                'total_readable' => display_size($diskusage),
+                'quota_bytes' => $diskquota,
+                'quota_readable' => display_size($diskquota),
+                'percentage' => round($disk['percentage'], 2),
+                'details' => $diskdetails,
             ),
             'user_usage' => array(
-                'daily_users' => $users_today,
-                'threshold' => $user_threshold,
-                'percentage' => round($users_percent, 2),
-                'max_90_days' => !empty($reportconfig->max_userdaily_for_90_days_users) ? 
-                                $reportconfig->max_userdaily_for_90_days_users : 0,
-                'max_90_days_date' => $max_90_days_date ? 
-                                date('Y-m-d', $max_90_days_date) : null
+                'daily_users' => $users['current'],
+                'threshold' => $users['threshold'],
+                'percentage' => round($users['percentage'], 2),
+                'max_90_days' => $users['max_90_users'],
+                'max_90_days_date' => !empty($users['max_90_date'])
+                    ? userdate($users['max_90_date'], '%Y-%m-%d')
+                    : null,
             ),
-            'largest_courses' => array(),
+            'largest_courses' => $largestcourses,
             'timestamps' => array(
-                'disk_calculation' => $last_disk_calc,
-                'users_calculation' => $last_users_calc
+                'disk_calculation' => self::safe_timestamp($disk['last_calculated'] ?? null),
+                'users_calculation' => self::safe_timestamp($users['last_calculated'] ?? null),
             ),
-            // Tasas de crecimiento y proyecciones
             'growth_rates' => array(
                 'disk' => array(
-                    'monthly_percent' => calculate_growth_rate('disk'),
-                    'projected_days_to_threshold' => project_limit_date(
-                        $disk_usage, 
-                        $quotadisk * 0.9, // Proyección para alcanzar el 90% del umbral
-                        calculate_growth_rate('disk')
-                    )
+                    'monthly_percent' => $diskgrowth,
+                    'projected_days_to_threshold' => $diskprojection,
                 ),
                 'users' => array(
-                    'monthly_percent' => calculate_growth_rate('users'),
-                    'projected_days_to_threshold' => project_limit_date(
-                        $users_today,
-                        $user_threshold * 0.9, // Proyección para alcanzar el 90% del umbral
-                        calculate_growth_rate('users')
-                    )
-                )
-            )
+                    'monthly_percent' => $usergrowth,
+                    'projected_days_to_threshold' => $userprojection,
+                ),
+            ),
         );
-        
-        // Formatear datos de cursos más grandes
-        foreach ($largest_courses as $course) {
-            // Asegurarse de que los datos del curso son válidos
-            if (!isset($course->id) || !isset($course->fullname) || !isset($course->shortname)) {
-                debugging('get_monitor_stats: Datos de curso incompletos: ' . var_export($course, true), DEBUG_DEVELOPER);
-                continue;
-            }
-            
-            $response['largest_courses'][] = array(
-                'id' => $course->id,
-                'fullname' => format_string($course->fullname),
-                'shortname' => format_string($course->shortname),
-                'size_bytes' => $course->filesize,
-                'size_readable' => display_size($course->filesize),
-                'backup_size_bytes' => $course->backupsize ?? 0,
-                'backup_size_readable' => display_size($course->backupsize ?? 0),
-                'percentage' => $course->percentage,
-                'backup_count' => $course->backupcount
-            );
-        }
-        
-        return $response;
     }
 
     /**
@@ -451,84 +381,52 @@ class report_usage_monitor_external extends external_api {
      * @return array Datos de uso
      */
     public static function get_usage_data() {
-        global $DB, $CFG;
-        
-        // Verificar permisos
+        self::validate_parameters(self::get_usage_data_parameters(), []);
+
         $context = context_system::instance();
         self::validate_context($context);
         require_capability('report/usage_monitor:view', $context);
-        
-        // Obtener configuraciones
-        $reportconfig = get_config('report_usage_monitor');
-        
-        // Datos de uso de disco
-        $disk_usage = ((int) $reportconfig->totalusagereadable + (int) $reportconfig->totalusagereadabledb) ?: 0;
-        $quotadisk = ((int) $reportconfig->disk_quota * 1024) * 1024 * 1024;
-        $disk_percent = calculate_threshold_percentage($disk_usage, $quotadisk);
-        
-        // Datos de usuarios
-        $users_today = !empty($reportconfig->totalusersdaily) ? ($reportconfig->totalusersdaily) : 0;
-        $user_threshold = $reportconfig->max_daily_users_threshold;
-        $users_percent = calculate_threshold_percentage($users_today, $user_threshold);
-        
-        // Validación de timestamps para datos de usuarios
-        $last_disk_calc = !empty($reportconfig->lastexecutioncalculate) ? $reportconfig->lastexecutioncalculate : 0;
-        $last_users_calc = !empty($reportconfig->lastexecution) ? $reportconfig->lastexecution : 0;
-        $max_90_days_date = !empty($reportconfig->max_userdaily_for_90_days_date) ? $reportconfig->max_userdaily_for_90_days_date : 0;
-        
-        // Validar cada timestamp
-        if (!is_numeric($last_disk_calc) || $last_disk_calc <= 0) {
-            debugging('get_usage_data: Timestamp inválido para lastexecutioncalculate: ' . var_export($reportconfig->lastexecutioncalculate, true), DEBUG_DEVELOPER);
-            $last_disk_calc = time();
-        }
-        
-        if (!is_numeric($last_users_calc) || $last_users_calc <= 0) {
-            debugging('get_usage_data: Timestamp inválido para lastexecution: ' . var_export($reportconfig->lastexecution, true), DEBUG_DEVELOPER);
-            $last_users_calc = time();
-        }
-        
-        if (!is_numeric($max_90_days_date) || $max_90_days_date <= 0) {
-            debugging('get_usage_data: Timestamp inválido para max_userdaily_for_90_days_date: ' . var_export($reportconfig->max_userdaily_for_90_days_date, true), DEBUG_DEVELOPER);
-            $max_90_days_date = time();
-        }
-        
-        // Preparar respuesta
-        $response = array(
+
+        $disk = dashboard_data::get_disk_summary();
+        $users = dashboard_data::get_user_summary();
+
+        $diskgrowth = calculate_growth_rate('disk');
+        $usergrowth = calculate_growth_rate('users');
+
+        $diskthresholdtarget = ($disk['quota_bytes'] > 0) ? (int)round($disk['quota_bytes'] * 0.9) : 0;
+        $userthresholdtarget = ($users['threshold'] > 0) ? (int)round($users['threshold'] * 0.9) : 0;
+
+        $diskprojection = ($diskthresholdtarget > 0 && $disk['total_bytes'] > 0 && $diskgrowth > 0)
+            ? project_limit_date($disk['total_bytes'], $diskthresholdtarget, $diskgrowth)
+            : PHP_INT_MAX;
+        $userprojection = ($userthresholdtarget > 0 && $users['current'] > 0 && $usergrowth > 0)
+            ? project_limit_date($users['current'], $userthresholdtarget, $usergrowth)
+            : PHP_INT_MAX;
+
+        return array(
             'disk_usage' => array(
-                'current' => $disk_usage,
-                'current_readable' => display_size($disk_usage),
-                'threshold' => $quotadisk,
-                'threshold_readable' => display_size($quotadisk),
-                'percentage' => round($disk_percent, 2),
-                'last_calculated' => $last_disk_calc
+                'current' => $disk['total_bytes'],
+                'current_readable' => display_size($disk['total_bytes']),
+                'threshold' => $disk['quota_bytes'],
+                'threshold_readable' => display_size($disk['quota_bytes']),
+                'percentage' => round($disk['percentage'], 2),
+                'last_calculated' => self::safe_timestamp($disk['last_calculated'] ?? null)
             ),
             'user_usage' => array(
-                'current' => $users_today,
-                'threshold' => $user_threshold,
-                'percentage' => round($users_percent, 2),
-                'last_calculated' => $last_users_calc,
-                'max_90_days' => !empty($reportconfig->max_userdaily_for_90_days_users) ? 
-                                $reportconfig->max_userdaily_for_90_days_users : 0,
-                'max_90_days_date' => $max_90_days_date
+                'current' => $users['current'],
+                'threshold' => $users['threshold'],
+                'percentage' => round($users['percentage'], 2),
+                'last_calculated' => self::safe_timestamp($users['last_calculated'] ?? null),
+                'max_90_days' => $users['max_90_users'],
+                'max_90_days_date' => self::safe_timestamp($users['max_90_date'] ?? null)
             ),
-            // NUEVOS CAMPOS para proyecciones
             'projections' => array(
-                'disk_growth_rate' => calculate_growth_rate('disk'),
-                'users_growth_rate' => calculate_growth_rate('users'),
-                'days_to_disk_threshold' => project_limit_date(
-                    $disk_usage, 
-                    $quotadisk * 0.9,
-                    calculate_growth_rate('disk')
-                ),
-                'days_to_users_threshold' => project_limit_date(
-                    $users_today,
-                    $user_threshold * 0.9,
-                    calculate_growth_rate('users')
-                )
+                'disk_growth_rate' => $diskgrowth,
+                'users_growth_rate' => $usergrowth,
+                'days_to_disk_threshold' => $diskprojection,
+                'days_to_users_threshold' => $userprojection,
             )
         );
-        
-        return $response;
     }
 
     /**
@@ -629,14 +527,16 @@ class report_usage_monitor_external extends external_api {
                     set_config('max_daily_users_threshold', $params['user_threshold'], 'report_usage_monitor');
                     $result['user_threshold_updated'] = true;
                     $result['messages'][] = get_string('user_threshold_updated', 'report_usage_monitor');
-                    
+
                     // Actualizar valores precalculados para que reflejen el nuevo umbral
-                    $reportconfig = get_config('report_usage_monitor');
-                    $users_today = !empty($reportconfig->totalusersdaily) ? ($reportconfig->totalusersdaily) : 0;
-                    $users_percent = calculate_threshold_percentage($users_today, $params['user_threshold']);
+                    $usersummary = dashboard_data::get_user_summary();
+                    $users_today = $usersummary['current'];
+                    $users_percent = ($params['user_threshold'] > 0)
+                        ? min(100, ($users_today / $params['user_threshold']) * 100)
+                        : 0;
                     $users_warning_class = ($users_percent < 70) ? 'bg-success' : (($users_percent < 90) ? 'bg-warning' : 'bg-danger');
-                    
-                    set_config('users_percent', $users_percent, 'report_usage_monitor');
+
+                    set_config('users_percent', round($users_percent, 2), 'report_usage_monitor');
                     set_config('users_warning_class', $users_warning_class, 'report_usage_monitor');
                 } else {
                     $result['success'] = false;
@@ -650,15 +550,17 @@ class report_usage_monitor_external extends external_api {
                     set_config('disk_quota', $params['disk_threshold'], 'report_usage_monitor');
                     $result['disk_threshold_updated'] = true;
                     $result['messages'][] = get_string('disk_threshold_updated', 'report_usage_monitor');
-                    
+
                     // Actualizar valores precalculados para que reflejen el nuevo umbral
-                    $reportconfig = get_config('report_usage_monitor');
-                    $disk_usage = ((int) $reportconfig->totalusagereadable + (int) $reportconfig->totalusagereadabledb) ?: 0;
+                    $disksummary = dashboard_data::get_disk_summary();
+                    $disk_usage = $disksummary['total_bytes'];
                     $quotadisk_bytes = ((int) $params['disk_threshold'] * 1024) * 1024 * 1024;
-                    $disk_percent = calculate_threshold_percentage($disk_usage, $quotadisk_bytes);
+                    $disk_percent = ($quotadisk_bytes > 0)
+                        ? min(100, ($disk_usage / $quotadisk_bytes) * 100)
+                        : 0;
                     $disk_warning_class = ($disk_percent < 70) ? 'bg-success' : (($disk_percent < 90) ? 'bg-warning' : 'bg-danger');
-                    
-                    set_config('disk_percent', $disk_percent, 'report_usage_monitor');
+
+                    set_config('disk_percent', round($disk_percent, 2), 'report_usage_monitor');
                     set_config('disk_warning_class', $disk_warning_class, 'report_usage_monitor');
                     set_config('quotadisk_gb', display_size_in_gb($quotadisk_bytes, 2), 'report_usage_monitor');
                 } else {
@@ -704,5 +606,56 @@ class report_usage_monitor_external extends external_api {
                 )
             )
         );
+    }
+
+    /**
+     * Formats disk usage details into the structure expected by the external API.
+     *
+     * @param array $details
+     * @return array
+     */
+    private static function format_disk_details_for_api(array $details): array {
+        $database = $details['database'] ?? ['bytes' => 0, 'percentage' => 0];
+        $filedir = $details['filedir'] ?? ['bytes' => 0, 'percentage' => 0];
+        $cache = $details['cache'] ?? ['bytes' => 0, 'percentage' => 0];
+        $others = $details['others'] ?? ['bytes' => 0, 'percentage' => 0];
+
+        return array(
+            'database' => array(
+                'bytes' => (int)($database['bytes'] ?? 0),
+                'readable' => display_size($database['bytes'] ?? 0),
+                'percentage' => round((float)($database['percentage'] ?? 0), 2),
+            ),
+            'filedir' => array(
+                'bytes' => (int)($filedir['bytes'] ?? 0),
+                'readable' => display_size($filedir['bytes'] ?? 0),
+                'percentage' => round((float)($filedir['percentage'] ?? 0), 2),
+            ),
+            'cache' => array(
+                'bytes' => (int)($cache['bytes'] ?? 0),
+                'readable' => display_size($cache['bytes'] ?? 0),
+                'percentage' => round((float)($cache['percentage'] ?? 0), 2),
+            ),
+            'backup' => array(
+                'bytes' => 0,
+                'readable' => display_size(0),
+                'percentage' => 0.0,
+            ),
+            'others' => array(
+                'bytes' => (int)($others['bytes'] ?? 0),
+                'readable' => display_size($others['bytes'] ?? 0),
+                'percentage' => round((float)($others['percentage'] ?? 0), 2),
+            ),
+        );
+    }
+
+    /**
+     * Normalises timestamps so the API always returns an integer value.
+     *
+     * @param mixed $value
+     * @return int
+     */
+    private static function safe_timestamp($value): int {
+        return (is_numeric($value) && (int)$value > 0) ? (int)$value : 0;
     }
 }
