@@ -243,7 +243,7 @@ class usage_monitor_manager {
         $info->user_count = $DB->count_records('user', ['deleted' => 0]) - 1; // Exclude guest
         $info->active_users = $DB->count_records('user', ['deleted' => 0, 'suspended' => 0]) - 1;
         $info->suspended_users = $DB->count_records('user', ['deleted' => 0, 'suspended' => 1]);
-        $info->total_files = $DB->count_records('files', ['filesize' => ['>', 0]]);
+        $info->total_files = $DB->count_records_select('files', 'filesize > ?', [0]);
         $info->backup_auto_max_kept = get_config('backup', 'backup_auto_max_kept') ?? 0;
         
         // Performance metrics
