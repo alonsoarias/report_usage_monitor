@@ -26,103 +26,206 @@ require_once('../../config.php');
 require_once($CFG->libdir . '/adminlib.php');
 require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
 
-use report_usage_monitor\local\dashboard_data;
-
 admin_externalpage_setup('report_usage_monitor', '', null, '', ['pagelayout' => 'admin']);
 
-$disk = dashboard_data::get_disk_summary();
-$users = dashboard_data::get_user_summary();
-$dailytrend = dashboard_data::get_daily_user_trend(10);
-$topusers = dashboard_data::get_daily_user_top(10);
-$largest_courses = dashboard_data::get_largest_courses(5);
-$diskhistory = dashboard_data::get_disk_history(30);
-$siteoverview = dashboard_data::get_site_overview();
+$reportconfig = get_config('report_usage_monitor');
 
-$disk_usage_gb = $disk['total_gb'];
-$quotadisk_gb = $disk['quota_gb'];
-$disk_percent = $disk['percentage'];
-$disk_warning_class = $disk['warning_class'];
-$has_disk_data = $disk['total_bytes'] > 0;
-$lastexec_disk = !empty($disk['last_calculated'])
-    ? userdate($disk['last_calculated'], '%d/%m/%Y %H:%M')
-    : get_string('notcalculatedyet', 'report_usage_monitor');
+$disk_usage_bytes = (int)($reportconfig->totalusagereadable ?? 0)
+    + (int)($reportconfig->totalusagereadabledb ?? 0);
+$quotadisk_bytes  = ((int)($reportconfig->disk_quota ?? 0)) * 1024 * 1024 * 1024;
 
-$users_today = $users['current'];
-$max_users_threshold = $users['threshold'];
-$max_users_threshold_display = $max_users_threshold > 0 ? $max_users_threshold : '—';
-$users_percent = $users['percentage'];
-$users_warning_class = $users['warning_class'];
-$lastexec_users = !empty($users['last_calculated'])
-    ? userdate($users['last_calculated'], '%d/%m/%Y %H:%M')
-    : get_string('notcalculatedyet', 'report_usage_monitor');
+$disk_usage_gb = !empty($reportconfig->disk_usage_gb) ? $reportconfig->disk_usage_gb : display_size_in_gb($disk_usage_bytes, 2);
+$quotadisk_gb = !empty($reportconfig->quotadisk_gb) ? $reportconfig->quotadisk_gb : display_size_in_gb($quotadisk_bytes, 2);
 
-$max_90_days_users_value = $users['max_90_users'];
-$max_90_days_available = $max_90_days_users_value > 0;
-$max_90_days_display = $max_90_days_available
-    ? $max_90_days_users_value
-    : get_string('notcalculatedyet', 'report_usage_monitor');
-$max_90_days_date = !empty($users['max_90_date'])
-    ? userdate($users['max_90_date'], '%d/%m/%Y')
-    : get_string('notcalculatedyet', 'report_usage_monitor');
-$last_calc_90days = !empty($users['last_90_calculated'])
-    ? userdate($users['last_90_calculated'], '%d/%m/%Y %H:%M')
-    : get_string('notcalculatedyet', 'report_usage_monitor');
-$show_max_90_date = $max_90_days_available && !empty($users['max_90_date']);
+$disk_percent = !empty($reportconfig->disk_percent) ? (float)$reportconfig->disk_percent : 
+    (($quotadisk_bytes > 0) ? ($disk_usage_bytes / $quotadisk_bytes * 100) : 0);
+$disk_warning_class = !empty($reportconfig->disk_warning_class) ? $reportconfig->disk_warning_class : 
+    (($disk_percent < 70) ? 'bg-success' : (($disk_percent < 90) ? 'bg-warning' : 'bg-danger'));
 
-$directorylabels = [
-    'database' => get_string('database', 'report_usage_monitor'),
-    'filedir' => get_string('files_dir', 'report_usage_monitor'),
-    'cache' => get_string('cache', 'report_usage_monitor'),
-    'others' => get_string('others', 'report_usage_monitor'),
-];
-$doughnutLabels = array_values($directorylabels);
-$doughnutData = [];
-$directory_rows = [];
-foreach ($directorylabels as $key => $label) {
-    $detail = $disk['details'][$key] ?? ['bytes' => 0, 'gb' => 0, 'percentage' => 0];
-    $doughnutData[] = (float)$detail['gb'];
-    $directory_rows[] = (object) [
-        'label' => $label,
-        'size' => display_size($detail['bytes']),
-        'percentage' => round($detail['percentage'], 2),
+$users_today = (int)($reportconfig->totalusersdaily ?? 0);
+$max_users_threshold = (int)($reportconfig->max_daily_users_threshold ?? 100);
+$users_percent = !empty($reportconfig->users_percent) ? (float)$reportconfig->users_percent : 
+    (($max_users_threshold > 0) ? ($users_today / $max_users_threshold * 100) : 0);
+$users_warning_class = !empty($reportconfig->users_warning_class) ? $reportconfig->users_warning_class : 
+    (($users_percent < 70) ? 'bg-success' : (($users_percent < 90) ? 'bg-warning' : 'bg-danger'));
+
+$lastexec_disk_ts = !empty($reportconfig->lastexecutioncalculate) ? $reportconfig->lastexecutioncalculate : 0;
+if (!is_numeric($lastexec_disk_ts) || $lastexec_disk_ts <= 0) {
+    $lastexec_disk = get_string('notcalculatedyet', 'report_usage_monitor');
+} else {
+    $lastexec_disk = date('d/m/Y H:i', (int)$lastexec_disk_ts);
+}
+
+$lastexec_users_ts = !empty($reportconfig->lastexecution) ? $reportconfig->lastexecution : 0;
+if (!is_numeric($lastexec_users_ts) || $lastexec_users_ts <= 0) {
+    $lastexec_users = get_string('notcalculatedyet', 'report_usage_monitor');
+} else {
+    $lastexec_users = date('d/m/Y H:i', (int)$lastexec_users_ts);
+}
+    
+$max_90_days_users   = $reportconfig->max_userdaily_for_90_days_users ?? get_string('notcalculatedyet', 'report_usage_monitor');
+$max_90_days_date_ts = $reportconfig->max_userdaily_for_90_days_date  ?? 0;
+$last_calc_90days_ts = $reportconfig->lastexecutioncalculateusers90days ?? 0;
+
+if (!is_numeric($max_90_days_date_ts) || $max_90_days_date_ts <= 0) {
+    $max_90_days_date = get_string('notcalculatedyet', 'report_usage_monitor');
+} else {
+    $max_90_days_date = date('d/m/Y', (int)$max_90_days_date_ts);
+}
+
+if (!is_numeric($last_calc_90days_ts) || $last_calc_90days_ts <= 0) {
+    $last_calc_90days = get_string('notcalculatedyet', 'report_usage_monitor');
+} else {
+    $last_calc_90days = date('d/m/Y H:i', (int)$last_calc_90days_ts);
+}
+
+$dir_analysis_json = $reportconfig->dir_analysis ?? '{}';
+$dir_analysis = json_decode($dir_analysis_json, true);
+
+if (empty($dir_analysis) || !is_array($dir_analysis)) {
+    $dir_analysis = [
+        'database' => 0,
+        'filedir' => 0,
+        'cache' => 0,
+        'others' => 0
     ];
 }
 
-$last10daysLabels = array_map(static function(array $entry): string {
-    return $entry['label'];
-}, $dailytrend);
-$last10daysData = array_map(static function(array $entry): float {
-    return (float)$entry['percentage'];
-}, $dailytrend);
-$last10daysDataRaw = array_map(static function(array $entry): int {
-    return (int)$entry['count'];
-}, $dailytrend);
+$database_gb = display_size_in_gb($dir_analysis['database'] ?? 0, 2);
+$filedir_gb  = display_size_in_gb($dir_analysis['filedir']  ?? 0, 2);
+$cache_gb    = display_size_in_gb($dir_analysis['cache']    ?? 0, 2);
+$others_gb   = display_size_in_gb($dir_analysis['others']   ?? 0, 2);
 
-$formatted_userdaily_records = array_map(static function(array $entry): stdClass {
-    $record = new stdClass();
-    $record->fecha_formateada = $entry['label'];
-    $record->conteo_accesos_unicos = $entry['count'];
-    return $record;
-}, $dailytrend);
+// Inicialización de variables para el gráfico de dona (distribución de disco)
+$doughnutLabels = [
+    get_string('database', 'report_usage_monitor'),
+    get_string('files_dir', 'report_usage_monitor'),
+    get_string('cache', 'report_usage_monitor'),
+    get_string('others', 'report_usage_monitor')
+];
+$doughnutData = [
+    $database_gb,
+    $filedir_gb,
+    $cache_gb,
+    $others_gb,
+];
 
-$formatted_userdaily_recordstop = array_map(static function(array $entry): stdClass {
-    $record = new stdClass();
-    $record->fecha_formateada = $entry['label'];
-    $record->cantidad_usuarios = $entry['count'];
-    return $record;
-}, $topusers);
+$largest_courses_json = $reportconfig->largest_courses ?? '[]';
+$largest_courses = json_decode($largest_courses_json);
 
-$disk_history_labels = array_map(static function(array $entry): string {
-    return $entry['label'];
-}, $diskhistory);
-$disk_history_data = array_map(static function(array $entry): float {
-    return (float)$entry['percentage'];
-}, $diskhistory);
+if (empty($largest_courses)) {
+    $largest_courses = get_largest_courses(5);
+}
 
-$totalcourses = $siteoverview['total_courses'];
-$activeusers = $siteoverview['active_users'];
-$suspendedusers = $siteoverview['suspended_users'];
-$backup_max_kept = $siteoverview['backup_auto_max_kept'];
+$userdaily_sql = report_user_daily_sql();
+$userdaily_records = $DB->get_records_sql($userdaily_sql);
+
+$formatted_userdaily_records = array();
+foreach ($userdaily_records as $record) {
+    $new_record = new stdClass();
+    $new_record->conteo_accesos_unicos = $record->conteo_accesos_unicos;
+    
+    if (is_numeric($record->timestamp_fecha)) {
+        $new_record->fecha_formateada = date('d/m/Y', (int)$record->timestamp_fecha);
+    } else {
+        $new_record->fecha_formateada = date('d/m/Y');
+    }
+    
+    $formatted_userdaily_records[] = $new_record;
+}
+
+// Inicialización de variables para el gráfico de líneas (usuarios últimos 10 días)
+$last10daysLabels = [];
+$last10daysData = [];
+$last10daysDataRaw = []; // Añadimos un array para mantener también los valores originales
+if (!empty($formatted_userdaily_records)) {
+    foreach ($formatted_userdaily_records as $day) {
+        $last10daysLabels[] = $day->fecha_formateada;
+        // Calculamos el porcentaje en relación al umbral
+        $percent = ($max_users_threshold > 0) ? 
+                   min(100, round(($day->conteo_accesos_unicos / $max_users_threshold) * 100, 1)) : 0;
+        $last10daysData[] = $percent;
+        $last10daysDataRaw[] = (int)$day->conteo_accesos_unicos;
+    }
+}
+
+$userdailytop_sql = report_user_daily_top_sql();
+$userdaily_recordstop = $DB->get_records_sql($userdailytop_sql);
+
+$formatted_userdaily_recordstop = array();
+foreach ($userdaily_recordstop as $record) {
+    $new_record = new stdClass();
+    $new_record->cantidad_usuarios = $record->cantidad_usuarios;
+    
+    if (is_numeric($record->timestamp_fecha)) {
+        $new_record->fecha_formateada = date('d/m/Y', (int)$record->timestamp_fecha);
+    } else {
+        $new_record->fecha_formateada = date('d/m/Y');
+    }
+    
+    $formatted_userdaily_recordstop[] = $new_record;
+}
+
+$totalcourses    = $DB->count_records('course');
+$activeusers = $DB->count_records('user', ['deleted' => 0, 'suspended' => 0]) - 1;
+$suspendedusers = $DB->count_records('user', ['deleted' => 0, 'suspended' => 1]);
+$registeredusers = $activeusers + $suspendedusers;
+$backup_max_kept = get_config('backup', 'backup_auto_max_kept') ?? 0;
+
+$month_ago = time() - (30 * 24 * 60 * 60);
+$sql = "SELECT timecreated, value, percentage 
+        FROM {report_usage_monitor_history} 
+        WHERE type = 'disk' AND timecreated > ? 
+        ORDER BY timecreated ASC";
+$disk_history = $DB->get_records_sql($sql, [$month_ago]);
+
+$disk_history_labels = [];
+$disk_history_data = [];
+
+$daily_data = [];
+
+foreach ($disk_history as $record) {
+    if (is_numeric($record->timecreated) && $record->timecreated > 0) {
+        $date_key = date('Y-m-d', (int)$record->timecreated);
+        
+        $daily_data[$date_key] = [
+            'label' => date('d/m/Y', (int)$record->timecreated),
+            'percentage' => round($record->percentage, 1)
+        ];
+    }
+}
+
+if (count($daily_data) < 30) {
+    $all_dates = [];
+    for ($i = 29; $i >= 0; $i--) {
+        $date = time() - ($i * 24 * 60 * 60);
+        $date_key = date('Y-m-d', $date);
+        $all_dates[$date_key] = date('d/m/Y', $date);
+    }
+    
+    $combined_data = [];
+    $last_value = null;
+    
+    foreach ($all_dates as $date_key => $formatted_date) {
+        if (isset($daily_data[$date_key])) {
+            $last_value = $daily_data[$date_key]['percentage'];
+            $combined_data[$date_key] = $daily_data[$date_key];
+        } else {
+            $combined_data[$date_key] = [
+                'label' => $formatted_date,
+                'percentage' => $last_value
+            ];
+        }
+    }
+    
+    ksort($combined_data);
+    $daily_data = $combined_data;
+}
+
+foreach ($daily_data as $data) {
+    $disk_history_labels[] = $data['label'];
+    $disk_history_data[] = $data['percentage'];
+}
 
 echo $OUTPUT->header();
 
@@ -193,7 +296,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                     </div>
                     <div class="text-center">
                         <h5>
-                            <?php echo $users_today; ?><?php if ($max_users_threshold > 0): ?> / <?php echo $max_users_threshold_display; ?><?php endif; ?>
+                            <?php echo $users_today; ?> / <?php echo $max_users_threshold; ?>
                         </h5>
                         <p class="text-muted">
                             <?php echo get_string('lastexecution', 'report_usage_monitor', $lastexec_users); ?>
@@ -213,14 +316,10 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                 </div>
                 <div class="card-body text-center">
                     <h2 class="display-5">
-                    <?php if ($max_90_days_available): ?>
-                        <?php echo $max_90_days_display; ?><?php if ($max_users_threshold > 0): ?> / <?php echo $max_users_threshold_display; ?><?php endif; ?>
-                    <?php else: ?>
-                        <?php echo $max_90_days_display; ?>
-                    <?php endif; ?>
+                    <?php echo $max_90_days_users; ?> / <?php echo $max_users_threshold; ?>
                     </h2>
                     <p class="text-muted mt-2">
-                        <?php if ($show_max_90_date): ?>
+                        <?php if ($max_90_days_date != get_string('notcalculatedyet', 'report_usage_monitor')): ?>
                             <?php echo get_string('date', 'report_usage_monitor'); ?>: <?php echo $max_90_days_date; ?><br>
                         <?php endif; ?>
                         <?php echo get_string('last_calculation', 'report_usage_monitor'); ?>: <?php echo $last_calc_90days; ?>
@@ -241,7 +340,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                     </h5>
                 </div>
                 <div class="card-body" style="position:relative; min-height:400px;">
-                    <?php if ($has_disk_data): ?>
+                    <?php if ($disk_usage_bytes > 0): ?>
                         <canvas id="chartjs-doughnut"></canvas>
                     <?php else: ?>
                         <div class="alert alert-info">
@@ -271,12 +370,24 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                             </tr>
                         </thead>
                         <tbody>
-                            <?php if (!empty($directory_rows)): ?>
-                                <?php foreach ($directory_rows as $row): ?>
+                            <?php
+                            $total_bytes = $disk_usage_bytes;
+                            if (!empty($dir_analysis) && $total_bytes > 0):
+                                $directories = [
+                                    'database' => get_string('database', 'report_usage_monitor'),
+                                    'filedir'  => get_string('files_dir', 'report_usage_monitor'),
+                                    'cache'    => get_string('cache', 'report_usage_monitor'),
+                                    'others'   => get_string('others', 'report_usage_monitor'),
+                                ];
+                                foreach ($directories as $key => $label):
+                                    $sub_bytes = (int)($dir_analysis[$key] ?? 0);
+                                    $sub_gb    = display_size_in_gb($sub_bytes, 2);
+                                    $percent   = round(($sub_bytes / $total_bytes) * 100, 2);
+                            ?>
                                     <tr>
-                                        <td><?php echo $row->label; ?></td>
-                                        <td><?php echo $row->size; ?></td>
-                                        <td><?php echo $row->percentage; ?>%</td>
+                                        <td><?php echo $label; ?></td>
+                                        <td><?php echo $sub_gb . ' GB'; ?></td>
+                                        <td><?php echo $percent; ?>%</td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php else: ?>
@@ -661,7 +772,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                             borderColor: "#ffc107",
                             borderDash: [5, 5],
                             pointRadius: 0,
-                            data: Array(<?php echo count($last10daysLabels); ?>).fill(70),
+                            data: Array(<?php echo json_encode($last10daysLabels); ?>.length).fill(70),
                             yAxisID: 'percentage'
                         },
                         {
@@ -670,7 +781,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                             borderColor: "#dc3545",
                             borderDash: [5, 5],
                             pointRadius: 0,
-                            data: Array(<?php echo count($last10daysLabels); ?>).fill(90),
+                            data: Array(<?php echo json_encode($last10daysLabels); ?>.length).fill(90),
                             yAxisID: 'percentage'
                         },
                         {
@@ -679,7 +790,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                             borderColor: "#6c757d",
                             borderDash: [2, 2],
                             pointRadius: 0,
-                            data: Array(<?php echo count($last10daysLabels); ?>).fill(100),
+                            data: Array(<?php echo json_encode($last10daysLabels); ?>.length).fill(100),
                             yAxisID: 'percentage'
                         }
                     ]
