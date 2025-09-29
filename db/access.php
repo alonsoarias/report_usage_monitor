@@ -15,43 +15,45 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Plugin capabilities are defined here.
+ * Capacidades del plugin
  *
  * @package     report_usage_monitor
  * @category    admin
- * @copyright   2025 Alonso Arias <alonso@aloarias.com>
- * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @copyright   2023 Soporte IngeWeb <soporte@ingeweb.co>
+ * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 o posterior
  */
 
 defined('MOODLE_INTERNAL') || die();
 
-$capabilities = [
-    'report/usage_monitor:view' => [
+$capabilities = array(
+    'report/usage_monitor:view' => array(
         'riskbitmask' => RISK_PERSONAL,
         'captype' => 'read',
         'contextlevel' => CONTEXT_SYSTEM,
-        'archetypes' => [
+        'archetypes' => array(
             'teacher' => CAP_ALLOW,
             'editingteacher' => CAP_ALLOW,
             'manager' => CAP_ALLOW
-        ],
-    ],
+        ),
+    ),
     
-    'report/usage_monitor:manage' => [
+    // Nueva capacidad para administrar webhooks y configuraciones del monitor
+    'report/usage_monitor:manage' => array(
         'riskbitmask' => RISK_CONFIG,
         'captype' => 'write',
         'contextlevel' => CONTEXT_SYSTEM,
-        'archetypes' => [
+        'archetypes' => array(
             'manager' => CAP_ALLOW
-        ],
-    ],
+        ),
+    ),
     
-    'report/usage_monitor:apiuse' => [
+    // Nueva capacidad para acceder a través de API
+    'report/usage_monitor:apiuse' => array(
         'riskbitmask' => RISK_PERSONAL,
         'captype' => 'read',
         'contextlevel' => CONTEXT_SYSTEM,
-        'archetypes' => [
+        'archetypes' => array(
             'manager' => CAP_ALLOW
-        ],
-    ]
-];
+        ),
+    )
+);

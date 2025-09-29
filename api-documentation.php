@@ -15,31 +15,34 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * API documentation for Usage Monitor plugin
+ * Documentación de la API del plugin report_usage_monitor
  *
  * @package    report_usage_monitor
- * @copyright  2025 Alonso Arias <alonso@aloarias.com>
+ * @copyright  2025 Soporte IngeWeb <soporte@ingeweb.co>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 require_once('../../config.php');
 require_once($CFG->libdir . '/adminlib.php');
 
-// Verify permissions
+// Verificar permisos
 require_login();
 $context = context_system::instance();
 require_capability('report/usage_monitor:view', $context);
 
-// Page configuration
+// Configuración de página
 $PAGE->set_context($context);
 $PAGE->set_url(new moodle_url('/report/usage_monitor/api-documentation.php'));
 $PAGE->set_title(get_string('api_documentation', 'report_usage_monitor'));
 $PAGE->set_heading(get_string('api_documentation', 'report_usage_monitor'));
 $PAGE->set_pagelayout('admin');
 
-// Get configuration for examples
+// Obtener datos para mostrar en la documentación
 $webservice_admin_url = new moodle_url('/admin/settings.php', array('section' => 'webservicesoverview'));
+$external_service = $DB->get_record('external_services', array('shortname' => 'report_usage_monitor'));
+$service_id = $external_service ? $external_service->id : 0;
 
+// Iniciar salida de la página
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('api_documentation', 'report_usage_monitor'));
 
@@ -51,17 +54,10 @@ echo $OUTPUT->heading(get_string('api_documentation', 'report_usage_monitor'));
             <h3 class="m-0">API Overview</h3>
         </div>
         <div class="card-body">
-            <p>The Usage Monitor API v5.0 provides comprehensive access to usage statistics, notifications, and configuration management for Moodle hosting platforms. This RESTful API enables integration with monitoring dashboards, alerting systems, and automated management tools.</p>
+            <p>The Usage Monitor API allows external systems to retrieve usage statistics and notifications from your Moodle site. This enables integration with monitoring dashboards, alerting systems, and other tools to help manage your Moodle installation.</p>
             
             <div class="alert alert-info">
-                <strong>Version 5.0 Features:</strong>
-                <ul class="mb-0">
-                    <li>Unified data management with caching</li>
-                    <li>Enhanced security and permission controls</li>
-                    <li>Optimized endpoints for dashboard integration</li>
-                    <li>Comprehensive historical data access</li>
-                    <li>Real-time threshold management</li>
-                </ul>
+                <strong>Important Date Handling:</strong> All dates in this API are represented as UNIX timestamps (seconds since January 1, 1970, 00:00:00 UTC). When providing dates to the API or processing responses, ensure proper timestamp validation and conversion.
             </div>
             
             <p><strong>To use this API, you need to:</strong></p>
@@ -82,195 +78,188 @@ echo $OUTPUT->heading(get_string('api_documentation', 'report_usage_monitor'));
         </div>
         <div class="card-body">
             <div class="accordion" id="apiEndpoints">
-                
-                <!-- get_usage_statistics endpoint -->
+                <!-- get_usage_data endpoint (Simplified GET method) -->
                 <div class="card mb-3">
-                    <div class="card-header" id="headingStats">
+                    <div class="card-header" id="headingSimpleGet">
                         <h5 class="mb-0">
-                            <button class="btn btn-link" type="button" data-toggle="collapse" data-target="#collapseStats" aria-expanded="true" aria-controls="collapseStats">
-                                <code>report_usage_monitor_get_usage_statistics</code>
+                            <button class="btn btn-link" type="button" data-toggle="collapse" data-target="#collapseSimpleGet" aria-expanded="true" aria-controls="collapseSimpleGet">
+                                <code>report_usage_monitor_get_usage_data</code>
                             </button>
                         </h5>
                     </div>
-                    <div id="collapseStats" class="collapse show" aria-labelledby="headingStats" data-parent="#apiEndpoints">
+                    <div id="collapseSimpleGet" class="collapse show" aria-labelledby="headingSimpleGet" data-parent="#apiEndpoints">
                         <div class="card-body">
-                            <p><strong>Description:</strong> Retrieves comprehensive usage statistics including disk usage, user activity, system information, and projections.</p>
-                            <p><strong>Parameters:</strong></p>
-                            <ul>
-                                <li><code>include_history</code> (boolean, optional): Include historical data in response</li>
-                                <li><code>history_days</code> (integer, optional): Number of days for historical data (default: 30)</li>
-                            </ul>
-                            <p><strong>Returns:</strong> Complete usage statistics with optional historical data.</p>
-                            
-                            <h6>Example Request:</h6>
-<pre><code>curl '<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php?wstoken=YOUR_TOKEN&wsfunction=report_usage_monitor_get_usage_statistics&include_history=1&history_days=30&moodlewsrestformat=json'</code></pre>
-
-                            <h6>Example Response:</h6>
-<pre><code>{
-  "site_info": {
-    "name": "My Moodle Site",
-    "shortname": "moodle",
-    "moodle_version": 2023042400,
-    "moodle_release": "4.2.0",
-    "course_count": 150,
-    "user_count": 1200,
-    "active_users": 1150,
-    "suspended_users": 50,
-    "backup_auto_max_kept": 2
-  },
-  "disk_usage": {
-    "current_bytes": 15728640000,
-    "current_readable": "14.6 GB",
-    "quota_bytes": 21474836480,
-    "quota_readable": "20 GB",
-    "percentage": 73.2,
-    "warning_level": 90,
-    "warning_class": "bg-success",
-    "last_calculated": 1698159284,
-    "directories": {
-      "database": {
-        "bytes": 2147483648,
-        "readable": "2 GB",
-        "percentage": 13.7
-      },
-      "filedir": {
-        "bytes": 10737418240,
-        "readable": "10 GB",
-        "percentage": 68.3
-      },
-      "cache": {
-        "bytes": 1073741824,
-        "readable": "1 GB",
-        "percentage": 6.8
-      },
-      "others": {
-        "bytes": 1769996288,
-        "readable": "1.6 GB",
-        "percentage": 11.2
-      }
-    }
-  },
-  "user_usage": {
-    "current": 450,
-    "threshold": 1000,
-    "percentage": 45.0,
-    "warning_level": 90,
-    "warning_class": "bg-success",
-    "last_calculated": 1698159350,
-    "max_90_days": 650,
-    "max_90_days_date": 1644934800
-  },
-  "projections": {
-    "disk_growth_rate": 3.5,
-    "users_growth_rate": 2.1,
-    "days_to_disk_threshold": 95,
-    "days_to_users_threshold": 215
-  },
-  "largest_courses": [
-    {
-      "id": 123,
-      "fullname": "Advanced Mathematics",
-      "shortname": "MATH401",
-      "size_bytes": 1073741824,
-      "size_readable": "1 GB",
-      "backup_size_bytes": 536870912,
-      "backup_size_readable": "512 MB",
-      "total_size_bytes": 1610612736,
-      "total_size_readable": "1.5 GB",
-      "percentage": 8.7,
-      "backup_count": 3
-    }
-  ]
-}</code></pre>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- get_dashboard_data endpoint -->
-                <div class="card mb-3">
-                    <div class="card-header" id="headingDashboard">
-                        <h5 class="mb-0">
-                            <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseDashboard" aria-expanded="false" aria-controls="collapseDashboard">
-                                <code>report_usage_monitor_get_dashboard_data</code>
-                            </button>
-                        </h5>
-                    </div>
-                    <div id="collapseDashboard" class="collapse" aria-labelledby="headingDashboard" data-parent="#apiEndpoints">
-                        <div class="card-body">
-                            <p><strong>Description:</strong> Retrieves optimized data specifically for dashboard display with minimal overhead.</p>
+                            <p><strong>Description:</strong> Retrieves precalculated usage data for disk and users with minimal overhead.</p>
                             <p><strong>Parameters:</strong> None</p>
-                            <p><strong>Returns:</strong> Essential usage data optimized for real-time dashboard updates.</p>
+                            <p><strong>Returns:</strong> Simplified usage statistics for disk and users.</p>
                             
                             <h6>Example Request:</h6>
-<pre><code>curl '<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php?wstoken=YOUR_TOKEN&wsfunction=report_usage_monitor_get_dashboard_data&moodlewsrestformat=json'</code></pre>
+<pre><code>curl '<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php?wstoken=YOUR_TOKEN&wsfunction=report_usage_monitor_get_usage_data&moodlewsrestformat=json'</code></pre>
 
                             <h6>Example Response:</h6>
 <pre><code>{
   "disk_usage": {
-    "current": 15728640000,
-    "current_readable": "14.6 GB",
-    "threshold": 21474836480,
-    "threshold_readable": "20 GB",
-    "percentage": 73.2,
-    "warning_class": "bg-success",
-    "last_calculated": 1698159284
+    "current": 12345678901,            // Current usage in bytes
+    "current_readable": "11.5 GB",     // Human-readable current usage
+    "threshold": 21474836480,          // Configured threshold in bytes
+    "threshold_readable": "20 GB",     // Human-readable threshold
+    "percentage": 57.5,                // Current usage percentage
+    "last_calculated": 1698159284      // Timestamp of last calculation
   },
   "user_usage": {
-    "current": 450,
-    "threshold": 1000,
-    "percentage": 45.0,
-    "warning_class": "bg-success",
-    "last_calculated": 1698159350,
-    "max_90_days": 650,
-    "max_90_days_date": 1644934800
+    "current": 450,                    // Current users
+    "threshold": 1000,                 // Configured user threshold
+    "percentage": 45.0,                // Current usage percentage
+    "last_calculated": 1698159350,     // Timestamp of last calculation
+    "max_90_days": 650,                // Maximum users in the last 90 days
+    "max_90_days_date": 1644934800     // Timestamp of the date with maximum users
   },
   "projections": {
-    "disk_growth_rate": 3.5,
-    "users_growth_rate": 2.1,
-    "days_to_disk_threshold": 95,
-    "days_to_users_threshold": 215
+    "disk_growth_rate": 5.2,           // Monthly disk growth rate in percentage
+    "users_growth_rate": 2.3,          // Monthly users growth rate in percentage
+    "days_to_disk_threshold": 120,     // Projected days to reach disk warning threshold
+    "days_to_users_threshold": 420     // Projected days to reach users warning threshold
   }
 }</code></pre>
                         </div>
                     </div>
                 </div>
                 
-                <!-- update_thresholds endpoint -->
+                <!-- set_usage_thresholds endpoint (SET method) -->
                 <div class="card mb-3">
-                    <div class="card-header" id="headingUpdate">
+                    <div class="card-header" id="headingSet">
                         <h5 class="mb-0">
-                            <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseUpdate" aria-expanded="false" aria-controls="collapseUpdate">
-                                <code>report_usage_monitor_update_thresholds</code>
+                            <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseSet" aria-expanded="false" aria-controls="collapseSet">
+                                <code>report_usage_monitor_set_usage_thresholds</code>
                             </button>
                         </h5>
                     </div>
-                    <div id="collapseUpdate" class="collapse" aria-labelledby="headingUpdate" data-parent="#apiEndpoints">
+                    <div id="collapseSet" class="collapse" aria-labelledby="headingSet" data-parent="#apiEndpoints">
                         <div class="card-body">
-                            <p><strong>Description:</strong> Updates configuration thresholds and warning levels.</p>
+                            <p><strong>Description:</strong> Updates the configured thresholds for users and disk space.</p>
                             <p><strong>Parameters:</strong></p>
                             <ul>
                                 <li><code>user_threshold</code> (integer, optional): New threshold for daily users</li>
                                 <li><code>disk_threshold</code> (integer, optional): New threshold for disk space in GB</li>
-                                <li><code>disk_warning_level</code> (float, optional): Disk warning level percentage</li>
-                                <li><code>users_warning_level</code> (float, optional): Users warning level percentage</li>
                             </ul>
+                            <p><strong>Note:</strong> At least one parameter must be provided.</p>
                             <p><strong>Returns:</strong> Result of the update operation with success status and messages.</p>
                             
                             <h6>Example Request:</h6>
 <pre><code>curl -X POST '<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php' \
-  -d 'wstoken=YOUR_TOKEN&wsfunction=report_usage_monitor_update_thresholds&user_threshold=1500&disk_threshold=30&disk_warning_level=85&moodlewsrestformat=json'</code></pre>
+  -d 'wstoken=YOUR_TOKEN&wsfunction=report_usage_monitor_set_usage_thresholds&user_threshold=1500&disk_threshold=30&moodlewsrestformat=json'</code></pre>
 
                             <h6>Example Response:</h6>
 <pre><code>{
   "success": true,
   "user_threshold_updated": true,
   "disk_threshold_updated": true,
-  "disk_warning_level_updated": true,
   "messages": [
     "User threshold updated successfully.",
-    "Disk threshold updated successfully.",
-    "Disk warning level updated successfully."
+    "Disk threshold updated successfully."
   ]
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- get_monitor_stats endpoint (Complete statistics) -->
+                <div class="card mb-3">
+                    <div class="card-header" id="headingOne">
+                        <h5 class="mb-0">
+                            <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
+                                <code>report_usage_monitor_get_monitor_stats</code>
+                            </button>
+                        </h5>
+                    </div>
+                    <div id="collapseOne" class="collapse" aria-labelledby="headingOne" data-parent="#apiEndpoints">
+                        <div class="card-body">
+                            <p><strong>Description:</strong> Retrieves comprehensive usage statistics for the site.</p>
+                            <p><strong>Parameters:</strong> None</p>
+                            <p><strong>Returns:</strong> Detailed data about disk usage, user counts, system information, projections, and largest courses.</p>
+                            
+                            <h6>Example Request:</h6>
+<pre><code>curl '<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php?wstoken=YOUR_TOKEN&wsfunction=report_usage_monitor_get_monitor_stats&moodlewsrestformat=json'</code></pre>
+
+                            <h6>Example Response:</h6>
+<pre><code>{
+  "site_info": {
+    "name": "Site Name",
+    "shortname": "site",
+    "moodle_version": 2023042400,
+    "moodle_release": "4.2.0",
+    "course_count": 120,
+    "user_count": 1500,
+    "backup_auto_max_kept": 1
+  },
+  "disk_usage": {
+    "total_bytes": 12345678901,
+    "total_readable": "11.5 GB",
+    "quota_bytes": 21474836480,
+    "quota_readable": "20 GB",
+    "percentage": 57.5,
+    "details": {
+      "database": {
+        "bytes": 2147483648,
+        "readable": "2 GB",
+        "percentage": 17.4
+      },
+      "filedir": {
+        "bytes": 6442450944,
+        "readable": "6 GB",
+        "percentage": 52.2
+      },
+      "backup": {
+        "bytes": 2147483648,
+        "readable": "2 GB",
+        "percentage": 17.4
+      },
+      "cache": {
+        "bytes": 536870912,
+        "readable": "512 MB",
+        "percentage": 4.3
+      },
+      "others": {
+        "bytes": 1073741824,
+        "readable": "1 GB",
+        "percentage": 8.7
+      }
+    }
+  },
+  "user_usage": {
+    "daily_users": 450,
+    "threshold": 1000,
+    "percentage": 45.0,
+    "max_90_days": 650,
+    "max_90_days_date": "2024-02-15"
+  },
+  "largest_courses": [
+    {
+      "id": 123,
+      "fullname": "Course 1",
+      "shortname": "C1",
+      "size_bytes": 1073741824,
+      "size_readable": "1 GB",
+      "backup_size_bytes": 536870912,
+      "backup_size_readable": "512 MB",
+      "percentage": 8.7,
+      "backup_count": 3
+    }
+  ],
+  "timestamps": {
+    "disk_calculation": 1698159284,
+    "users_calculation": 1698159350
+  },
+  "growth_rates": {
+    "disk": {
+      "monthly_percent": 3.5,
+      "projected_days_to_threshold": 95
+    },
+    "users": {
+      "monthly_percent": 2.1,
+      "projected_days_to_threshold": 215
+    }
+  }
 }</code></pre>
                         </div>
                     </div>
@@ -278,16 +267,16 @@ echo $OUTPUT->heading(get_string('api_documentation', 'report_usage_monitor'));
                 
                 <!-- get_notification_history endpoint -->
                 <div class="card mb-3">
-                    <div class="card-header" id="headingHistory">
+                    <div class="card-header" id="headingTwo">
                         <h5 class="mb-0">
-                            <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseHistory" aria-expanded="false" aria-controls="collapseHistory">
+                            <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseTwo" aria-expanded="false" aria-controls="collapseTwo">
                                 <code>report_usage_monitor_get_notification_history</code>
                             </button>
                         </h5>
                     </div>
-                    <div id="collapseHistory" class="collapse" aria-labelledby="headingHistory" data-parent="#apiEndpoints">
+                    <div id="collapseTwo" class="collapse" aria-labelledby="headingTwo" data-parent="#apiEndpoints">
                         <div class="card-body">
-                            <p><strong>Description:</strong> Retrieves the history of notifications sent with filtering and pagination.</p>
+                            <p><strong>Description:</strong> Retrieves the history of notifications sent.</p>
                             <p><strong>Parameters:</strong></p>
                             <ul>
                                 <li><code>type</code> (string, optional): Type of notification ('disk', 'users', or 'all'). Default: 'all'</li>
@@ -313,8 +302,8 @@ echo $OUTPUT->heading(get_string('api_documentation', 'report_usage_monitor'));
       "value_raw": 20503707648,
       "threshold": "20 GB",
       "threshold_raw": 21474836480,
-      "timecreated": 1698159284,
-      "timereadable": "Oct 24, 2023 15:34"
+      "timecreated": 1698159284,            // UNIX timestamp
+      "timereadable": "Mon, 24 Oct 2023, 15:34"
     }
   ]
 }</code></pre>
@@ -331,114 +320,119 @@ echo $OUTPUT->heading(get_string('api_documentation', 'report_usage_monitor'));
         </div>
         <div class="card-body">
             <h5>PHP Example</h5>
-<pre><code>// Initialize cURL
+<pre><code>// Get usage data with timestamp validation
 $curl = new curl();
-
-// Get comprehensive usage statistics
-$response = $curl->get('<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php?wstoken=YOUR_TOKEN&wsfunction=report_usage_monitor_get_usage_statistics&include_history=1&moodlewsrestformat=json');
+$response = $curl->get('<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php?wstoken=YOUR_TOKEN&wsfunction=report_usage_monitor_get_usage_data&moodlewsrestformat=json');
 $usage_data = json_decode($response);
 
-if ($usage_data && isset($usage_data->disk_usage)) {
+// Processing the data with timestamp validation
+if ($usage_data && isset($usage_data->disk_usage->last_calculated)) {
+    // Validate the timestamp
+    $last_calculated = $usage_data->disk_usage->last_calculated;
+    if (is_numeric($last_calculated) && $last_calculated > 0) {
+        $date_readable = date('Y-m-d H:i:s', $last_calculated);
+        echo "Last calculation: " . $date_readable . "\n";
+    } else {
+        echo "Invalid timestamp in response\n";
+    }
+    
     echo "Disk usage: " . $usage_data->disk_usage->percentage . "%\n";
     echo "User usage: " . $usage_data->user_usage->percentage . "%\n";
-    
-    // Check projections
-    if ($usage_data->projections->days_to_disk_threshold < 30) {
-        echo "Warning: Disk threshold will be reached in " . $usage_data->projections->days_to_disk_threshold . " days\n";
-    }
 }
 
-// Update thresholds
+// Update user threshold
 $post_params = array(
     'wstoken' => 'YOUR_TOKEN',
-    'wsfunction' => 'report_usage_monitor_update_thresholds',
+    'wsfunction' => 'report_usage_monitor_set_usage_thresholds',
     'user_threshold' => 2000,
-    'disk_warning_level' => 85,
     'moodlewsrestformat' => 'json'
 );
 $response = $curl->post('<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php', $post_params);
-$result = json_decode($response);
-
-if ($result->success) {
-    echo "Thresholds updated successfully\n";
-}</code></pre>
+$result = json_decode($response);</code></pre>
 
             <h5>JavaScript Example</h5>
-<pre><code>// Get dashboard data for real-time updates
-async function getDashboardData() {
-    try {
-        const response = await fetch('<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php?wstoken=YOUR_TOKEN&wsfunction=report_usage_monitor_get_dashboard_data&moodlewsrestformat=json');
-        const data = await response.json();
-        
-        // Update dashboard elements
-        updateDiskUsage(data.disk_usage);
-        updateUserUsage(data.user_usage);
-        updateProjections(data.projections);
-        
-    } catch (error) {
-        console.error('API Error:', error);
-    }
-}
-
-function updateDiskUsage(diskData) {
-    document.getElementById('disk-percentage').textContent = diskData.percentage.toFixed(1) + '%';
-    document.getElementById('disk-usage').textContent = diskData.current_readable + ' / ' + diskData.threshold_readable;
+<pre><code>// Get usage data with timestamp handling
+fetch('<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php?wstoken=YOUR_TOKEN&wsfunction=report_usage_monitor_get_usage_data&moodlewsrestformat=json')
+  .then(response => response.json())
+  .then(data => {
+    // Validate timestamps before using them
+    const lastDiskCalc = data.disk_usage.last_calculated;
+    const lastUserCalc = data.user_usage.last_calculated;
     
-    // Update warning class
-    const progressBar = document.getElementById('disk-progress');
-    progressBar.className = 'progress-bar ' + diskData.warning_class;
-    progressBar.style.width = diskData.percentage + '%';
-}
-
-// Update thresholds via API
-async function updateThresholds(userThreshold, diskThreshold) {
-    const formData = new FormData();
-    formData.append('wstoken', 'YOUR_TOKEN');
-    formData.append('wsfunction', 'report_usage_monitor_update_thresholds');
-    formData.append('user_threshold', userThreshold);
-    formData.append('disk_threshold', diskThreshold);
-    formData.append('moodlewsrestformat', 'json');
-
-    try {
-        const response = await fetch('<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php', {
-            method: 'POST',
-            body: formData
-        });
-        const result = await response.json();
-        
-        if (result.success) {
-            console.log('Thresholds updated successfully');
-            // Refresh dashboard data
-            getDashboardData();
-        } else {
-            console.error('Error:', result.messages.join(', '));
-        }
-    } catch (error) {
-        console.error('API Error:', error);
+    if (lastDiskCalc && typeof lastDiskCalc === 'number' && lastDiskCalc > 0) {
+      const diskDate = new Date(lastDiskCalc * 1000); // Convert to milliseconds
+      console.log('Last disk calculation:', diskDate.toLocaleString());
     }
-}
+    
+    if (lastUserCalc && typeof lastUserCalc === 'number' && lastUserCalc > 0) {
+      const userDate = new Date(lastUserCalc * 1000); // Convert to milliseconds
+      console.log('Last user calculation:', userDate.toLocaleString());
+    }
+    
+    console.log('Disk usage:', data.disk_usage.percentage + '%');
+    console.log('User usage:', data.user_usage.percentage + '%');
+    
+    // Check growth projections
+    if (data.projections) {
+      console.log('Days to reach disk threshold:', data.projections.days_to_disk_threshold);
+      console.log('Days to reach user threshold:', data.projections.days_to_users_threshold);
+    }
+  })
+  .catch(error => console.error('API Error:', error));
 
-// Auto-refresh dashboard every 5 minutes
-setInterval(getDashboardData, 300000);</code></pre>
+// Update thresholds
+const formData = new FormData();
+formData.append('wstoken', 'YOUR_TOKEN');
+formData.append('wsfunction', 'report_usage_monitor_set_usage_thresholds');
+formData.append('disk_threshold', 50);
+formData.append('moodlewsrestformat', 'json');
+
+fetch('<?php echo $CFG->wwwroot; ?>/webservice/rest/server.php', {
+  method: 'POST',
+  body: formData
+})
+  .then(response => response.json())
+  .then(result => {
+    if (result.success) {
+      console.log('Thresholds updated successfully');
+    } else {
+      console.error('Error:', result.messages.join(', '));
+    }
+  });</code></pre>
         </div>
     </div>
     
     <div class="card mb-4">
         <div class="card-header">
-            <h3 class="m-0">Authentication & Security</h3>
+            <h3 class="m-0">Authentication</h3>
         </div>
         <div class="card-body">
-            <p>The Usage Monitor API v5.0 uses Moodle's built-in web services authentication system with enhanced security features:</p>
+            <p>To authenticate with the API, you need to use a security token. You can create a token in the Moodle Web Services settings:</p>
             
-            <h5>Token-based Authentication</h5>
             <ol>
                 <li>Go to Site Administration > Plugins > Web Services > Manage tokens</li>
-                <li>Create a token for a user with the required capabilities</li>
+                <li>Create a token for a user with the 'report/usage_monitor:apiuse' capability</li>
                 <li>Select the 'Usage Monitor API' service</li>
                 <li>Include your token in every API request using the 'wstoken' parameter</li>
             </ol>
             
-            <h5>Required Capabilities</h5>
+            <div class="alert alert-warning">
+                <i class="fa fa-exclamation-triangle"></i> <strong>Warning:</strong> Keep your tokens secure. They provide access to your Moodle data.
+            </div>
+            
+            <div class="alert alert-info">
+                <i class="fa fa-info-circle"></i> <strong>Best Practice:</strong> For enhanced security, consider using POST requests with tokens in the request body rather than including them in URL parameters.
+            </div>
+        </div>
+    </div>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            <h3 class="m-0">Required Permissions</h3>
+        </div>
+        <div class="card-body">
+            <p>The following permissions are required for using the API endpoints:</p>
+            
             <table class="table table-bordered">
                 <thead>
                     <tr>
@@ -448,69 +442,58 @@ setInterval(getDashboardData, 300000);</code></pre>
                 </thead>
                 <tbody>
                     <tr>
-                        <td><code>get_usage_statistics</code></td>
+                        <td><code>report_usage_monitor_get_usage_data</code></td>
                         <td><code>report/usage_monitor:view</code></td>
                     </tr>
                     <tr>
-                        <td><code>get_dashboard_data</code></td>
-                        <td><code>report/usage_monitor:view</code></td>
-                    </tr>
-                    <tr>
-                        <td><code>get_notification_history</code></td>
-                        <td><code>report/usage_monitor:view</code></td>
-                    </tr>
-                    <tr>
-                        <td><code>update_thresholds</code></td>
+                        <td><code>report_usage_monitor_set_usage_thresholds</code></td>
                         <td><code>report/usage_monitor:manage</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>report_usage_monitor_get_monitor_stats</code></td>
+                        <td><code>report/usage_monitor:view</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>report_usage_monitor_get_notification_history</code></td>
+                        <td><code>report/usage_monitor:view</code></td>
                     </tr>
                 </tbody>
             </table>
             
-            <div class="alert alert-warning">
-                <i class="fa fa-exclamation-triangle"></i> <strong>Security Best Practices:</strong>
-                <ul class="mb-0">
-                    <li>Keep your tokens secure and rotate them regularly</li>
-                    <li>Use HTTPS for all API communications</li>
-                    <li>Implement proper error handling in your applications</li>
-                    <li>Monitor API usage and implement rate limiting if necessary</li>
-                </ul>
-            </div>
+            <p>Ensure that the user associated with your token has all the required capabilities for the endpoints you intend to use.</p>
         </div>
     </div>
     
     <div class="card mb-4">
         <div class="card-header">
-            <h3 class="m-0">Version 5.0 Improvements</h3>
+            <h3 class="m-0">Date and Time Handling</h3>
         </div>
         <div class="card-body">
-            <div class="row">
-                <div class="col-md-6">
-                    <h5>Performance Enhancements</h5>
-                    <ul>
-                        <li>Unified data management with intelligent caching</li>
-                        <li>Optimized database queries with proper indexing</li>
-                        <li>Reduced API response times by up to 60%</li>
-                        <li>Efficient memory usage for large datasets</li>
-                    </ul>
-                </div>
-                <div class="col-md-6">
-                    <h5>New Features</h5>
-                    <ul>
-                        <li>Real-time dashboard data endpoint</li>
-                        <li>Enhanced historical data management</li>
-                        <li>Improved projection algorithms</li>
-                        <li>Comprehensive error handling and validation</li>
-                    </ul>
-                </div>
-            </div>
+            <p>All timestamps in the API are UNIX timestamps (seconds since January 1, 1970, 00:00:00 UTC). When working with these timestamps:</p>
             
-            <div class="alert alert-success mt-3">
-                <strong>Backward Compatibility:</strong> Version 5.0 maintains compatibility with existing integrations while providing enhanced functionality and performance improvements.
+            <ul>
+                <li><strong>Validation:</strong> Always validate timestamps before using them. Check that they are numeric and greater than zero.</li>
+                <li><strong>Conversion:</strong> To convert a UNIX timestamp to a human-readable date:
+                    <ul>
+                        <li>PHP: <code>date('Y-m-d H:i:s', $timestamp)</code></li>
+                        <li>JavaScript: <code>new Date(timestamp * 1000).toLocaleString()</code></li>
+                    </ul>
+                </li>
+                <li><strong>Current Time:</strong> To get the current UNIX timestamp:
+                    <ul>
+                        <li>PHP: <code>time()</code></li>
+                        <li>JavaScript: <code>Math.floor(Date.now() / 1000)</code></li>
+                    </ul>
+                </li>
+            </ul>
+            
+            <div class="alert alert-warning">
+                <strong>Important:</strong> Dates in the API responses may occasionally be invalid or zero if data hasn't been calculated yet. Always check for these cases in your integration code.
             </div>
         </div>
     </div>
 </div>
 
 <?php
+// Finalizar la página
 echo $OUTPUT->footer();
-?>

@@ -15,84 +15,79 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Scheduled tasks for Usage Monitor plugin.
+ * Definición de las tareas programadas para el informe diario de usuarios.
  *
  * @package     report_usage_monitor
  * @category    admin
- * @copyright   2025 Alonso Arias <alonso@aloarias.com>
- * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @copyright   2023 Soporte IngeWeb <soporte@ingeweb.co>
+ * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 o posterior
  */
 
 defined('MOODLE_INTERNAL') || die();
-
 global $CFG;
 
+// Lista de tareas programadas para el complemento report_usage_monitor.
+// Estas tareas se ejecutarán automáticamente en los intervalos de tiempo especificados.
 $du_command_available = !empty($CFG->pathtodu) && is_executable(trim($CFG->pathtodu));
-
-$tasks = [
-    // Disk usage calculation task
-    [
+$tasks = array(
+    // Tarea para calcular el uso del disco.
+    array(
         'classname' => 'report_usage_monitor\task\disk_usage',
         'blocking' => 0,
         'minute' => '0',
-        'hour' => $du_command_available ? '*/6' : '12', // Every 6 hours if du is available, otherwise every 12 hours
+        'hour' => $du_command_available ? '*/6' : '12', // Cada 6 horas si du está activo, de lo contrario, cada 12 horas.
         'day' => '*',
         'month' => '*',
         'dayofweek' => '*'
-    ],
-    
-    // Daily users calculation task
-    [
-        'classname' => 'report_usage_monitor\task\users_daily',
+    ),
+    // Tarea para calcular los usuarios conectados más recientes.
+    array(
+        'classname' => 'report_usage_monitor\task\last_users',
         'blocking' => 0,
         'minute' => '0',
-        'hour' => '*/2', // Every 2 hours
+        'hour' => '*/2',
         'day' => '*',
         'month' => '*',
         'dayofweek' => '*'
-    ],
-    
-    // 90-day peak users calculation task
-    [
-        'classname' => 'report_usage_monitor\task\users_daily_90_days',
-        'blocking' => 0,
-        'minute' => '0',
-        'hour' => '1', // Daily at 1 AM
-        'day' => '*',
-        'month' => '*',
-        'dayofweek' => '*'
-    ],
-    
-    // Disk usage notification task
-    [
+    ),
+    // Tarea para procesar notificaciones sobre el espacio en disco.
+    array(
         'classname' => 'report_usage_monitor\task\notification_disk',
         'blocking' => 0,
         'minute' => '0',
-        'hour' => '*/12', // Every 12 hours
+        'hour' => '*/12',  // Cada 12 horas
         'day' => '*',
         'month' => '*',
         'dayofweek' => '*'
-    ],
-    
-    // User limit notification task
-    [
+    ),
+    // Tarea para procesar notificaciones sobre los límites de usuarios diarios.
+    array(
         'classname' => 'report_usage_monitor\task\notification_userlimit',
         'blocking' => 0,
         'minute' => '0',
-        'hour' => '8', // Daily at 8 AM
+        'hour' => '8',  // Una vez al día a las 8 AM
         'day' => '*',
         'month' => '*',
         'dayofweek' => '*'
-    ],
-    
-    // History cleanup task
-    [
-        'classname' => 'report_usage_monitor\task\cleanup_history',
+    ),
+    // Tarea para calcular los usuarios principales en los últimos 90 días.
+    array(
+        'classname' => 'report_usage_monitor\task\users_daily_90_days',
         'blocking' => 0,
         'minute' => '0',
-        'hour' => '2', // Daily at 2 AM
+        'hour' => '0',
         'day' => '*',
         'month' => '*',
         'dayofweek' => '*'
-    ]
-];
+    ),
+    // Tarea para calcular los usuarios diarios.
+    array(
+        'classname' => 'report_usage_monitor\task\users_daily',
+        'blocking' => 0,
+        'minute' => '0',
+        'hour' => '0',
+        'day' => '*',
+        'month' => '*',
+        'dayofweek' => '*'
+    )
+);

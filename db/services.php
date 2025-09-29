@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * External services for Usage Monitor plugin.
+ * Servicios externos del plugin report_usage_monitor.
  *
  * @package    report_usage_monitor
  * @copyright  2025 Soporte IngeWeb <soporte@ingeweb.co>
@@ -24,61 +24,59 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$functions = [
-    'report_usage_monitor_get_usage_statistics' => [
+$functions = array(
+    'report_usage_monitor_get_monitor_stats' => array(
         'classname'     => 'report_usage_monitor_external',
-        'methodname'    => 'get_usage_statistics',
+        'methodname'    => 'get_monitor_stats',
         'classpath'     => 'report/usage_monitor/classes/external.php',
-        'description'   => 'Get comprehensive usage statistics including disk, users, and projections.',
+        'description'   => 'Obtiene las estadísticas actuales de uso del sistema.',
         'type'          => 'read',
         'capabilities'  => 'report/usage_monitor:view',
         'ajax'          => true,
-        'loginrequired' => true,
-    ],
-    'report_usage_monitor_update_thresholds' => [
-        'classname'     => 'report_usage_monitor_external',
-        'methodname'    => 'update_thresholds',
-        'classpath'     => 'report/usage_monitor/classes/external.php',
-        'description'   => 'Update configuration thresholds for users and disk space.',
-        'type'          => 'write',
-        'capabilities'  => 'report/usage_monitor:manage',
-        'ajax'          => true,
-        'loginrequired' => true,
-    ],
-    'report_usage_monitor_get_notification_history' => [
+    ),
+    'report_usage_monitor_get_notification_history' => array(
         'classname'     => 'report_usage_monitor_external',
         'methodname'    => 'get_notification_history',
         'classpath'     => 'report/usage_monitor/classes/external.php',
-        'description'   => 'Get notification history with filtering and pagination.',
+        'description'   => 'Obtiene el historial de notificaciones enviadas.',
         'type'          => 'read',
         'capabilities'  => 'report/usage_monitor:view',
         'ajax'          => true,
-        'loginrequired' => true,
-    ],
-    'report_usage_monitor_get_dashboard_data' => [
+    ),
+    // Nuevos métodos GET y SET simplificados
+    'report_usage_monitor_get_usage_data' => array(
         'classname'     => 'report_usage_monitor_external',
-        'methodname'    => 'get_dashboard_data',
+        'methodname'    => 'get_usage_data',
         'classpath'     => 'report/usage_monitor/classes/external.php',
-        'description'   => 'Get optimized data for dashboard display.',
+        'description'   => 'Obtiene los datos precalculados de usuarios y uso de disco.',
         'type'          => 'read',
         'capabilities'  => 'report/usage_monitor:view',
         'ajax'          => true,
-        'loginrequired' => true,
-    ],
-];
+    ),
+    'report_usage_monitor_set_usage_thresholds' => array(
+        'classname'     => 'report_usage_monitor_external',
+        'methodname'    => 'set_usage_thresholds',
+        'classpath'     => 'report/usage_monitor/classes/external.php',
+        'description'   => 'Configura los umbrales de usuarios y disco.',
+        'type'          => 'write',
+        'capabilities'  => 'report/usage_monitor:manage',
+        'ajax'          => true,
+    ),
+);
 
-$services = [
-    'Usage Monitor API' => [
-        'functions' => [
-            'report_usage_monitor_get_usage_statistics',
-            'report_usage_monitor_update_thresholds',
+// Definimos los servicios
+$services = array(
+    'Usage Monitor API' => array(
+        'functions' => array(
+            'report_usage_monitor_get_monitor_stats',
             'report_usage_monitor_get_notification_history',
-            'report_usage_monitor_get_dashboard_data',
-        ],
-        'restrictedusers' => 0,
-        'enabled' => 1,
+            'report_usage_monitor_get_usage_data',
+            'report_usage_monitor_set_usage_thresholds',
+        ),
+        'restrictedusers' => 0, // No es restringido por usuario
+        'enabled' => 1, // Habilitado por defecto
         'shortname' => 'report_usage_monitor',
         'downloadfiles' => 0,
         'uploadfiles' => 0,
-    ],
-];
+    ),
+);

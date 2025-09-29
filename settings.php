@@ -19,14 +19,14 @@
  *
  * @package     report_usage_monitor
  * @category    admin
- * @copyright   2025 Alonso Arias <alonso@aloarias.com>
+ * @copyright   2023 Soporte IngeWeb <soporte@ingeweb.co>
  * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
 
 if ($ADMIN->fulltree) {
-    // Main settings section
+    // Sección principal de configuración
     $settings->add(new admin_setting_heading(
         'report_usage_monitor/mainsettings',
         get_string('mainsettings', 'report_usage_monitor'),
@@ -53,21 +53,20 @@ if ($ADMIN->fulltree) {
         'report_usage_monitor/email',
         get_string('email', 'report_usage_monitor'),
         get_string('configemail', 'report_usage_monitor'),
-        'admin@ingeweb.co',
+        'hostingmoodle@ingeweb.co',
         PARAM_EMAIL,
         50
     ));
     
-    // Notification settings section
+    // Sección de configuraciones de notificación
     $settings->add(new admin_setting_heading(
         'report_usage_monitor/notificationsettings',
         get_string('notificationsettings', 'report_usage_monitor'),
         get_string('notificationsettingsinfo', 'report_usage_monitor')
     ));
     
-    // Disk warning level options
+    // Opciones para alertas de espacio en disco (en porcentaje)
     $diskoptions = [
-        85 => '85%',
         90 => '90%',
         95 => '95%',
         98 => '98%'
@@ -81,10 +80,9 @@ if ($ADMIN->fulltree) {
         $diskoptions
     ));
     
-    // User warning level options
+    // Opciones para alertas de usuarios (en porcentaje)
     $useroptions = [
         80 => '80%',
-        85 => '85%',
         90 => '90%',
         95 => '95%'
     ];
@@ -97,17 +95,9 @@ if ($ADMIN->fulltree) {
         $useroptions
     ));
     
-    // Data retention setting
-    $settings->add(new admin_setting_configtext(
-        'report_usage_monitor/data_retention_days',
-        get_string('data_retention_days', 'report_usage_monitor'),
-        get_string('configdata_retention_days', 'report_usage_monitor'),
-        90,
-        PARAM_INT
-    ));
-    
-    // System paths configuration
+    // Configuración para el comando 'du'
     if (function_exists('shell_exec')) {
+        // Intentar detectar automáticamente la ruta de 'du' en sistemas Linux
         $defaultPathToDu = '';
         
         if (PHP_OS_FAMILY === 'Linux') {
@@ -116,10 +106,12 @@ if ($ADMIN->fulltree) {
             if (!empty($pathToDu) && file_exists($pathToDu) && is_executable($pathToDu)) {
                 $defaultPathToDu = $pathToDu;
                 
+                // Actualizar la configuración global si no está ya configurada
                 if (empty(get_config('pathtodu'))) {
                     set_config('pathtodu', $defaultPathToDu);
                 }
             } else {
+                // Mostrar recomendación si no se puede detectar automáticamente
                 $infocontent = html_writer::tag('div', 
                     get_string('pathtodurecommendation', 'report_usage_monitor'), 
                     ['class' => 'alert alert-info']
@@ -130,8 +122,20 @@ if ($ADMIN->fulltree) {
                     $infocontent
                 ));
             }
+        } else {
+            // Mostrar recomendación para sistemas no Linux
+            $infocontent = html_writer::tag('div', 
+                get_string('pathtodurecommendation', 'report_usage_monitor'), 
+                ['class' => 'alert alert-info']
+            );
+            $settings->add(new admin_setting_heading(
+                'report_usage_monitor/pathtodurecommendation',
+                '',
+                $infocontent
+            ));
         }
 
+        // Configuración para la ruta de du
         $settings->add(new admin_setting_configexecutable(
             'pathtodu', 
             get_string('pathtodu', 'report_usage_monitor'),
@@ -143,6 +147,7 @@ if ($ADMIN->fulltree) {
             255
         ));
     } else {
+        // Mostrar advertencia si shell_exec no está activo
         $alertcontent = html_writer::tag('div', 
             get_string('activateshellexec', 'report_usage_monitor'), 
             ['class' => 'alert alert-danger']
@@ -154,15 +159,15 @@ if ($ADMIN->fulltree) {
         ));
     }
     
-    // Enable API for external integration
+    // Habilitar API para integración con sistemas externos
     $settings->add(new admin_setting_configcheckbox(
         'report_usage_monitor/enable_api',
         get_string('enable_api', 'report_usage_monitor'),
         get_string('configenable_api', 'report_usage_monitor'),
-        1
+        1 // Habilitado por defecto
     ));
     
-    // Credits
+    // Créditos y descargo de responsabilidad
     $settings->add(new admin_setting_heading(
         'report_usage_monitor/reportinfotext',
         '',
@@ -170,9 +175,17 @@ if ($ADMIN->fulltree) {
     ));
 }
 
-// Add external page for the usage report
+// Agregar página externa para el informe de uso
 $ADMIN->add('reports', new admin_externalpage(
     'report_usage_monitor',
     get_string('pluginname', 'report_usage_monitor'),
     new moodle_url('/report/usage_monitor/index.php')
+));
+
+// Agregar página para documentación de la API
+// Agregamos la página también a 'reports' en lugar de 'reportplugins' que no existe
+$ADMIN->add('reports', new admin_externalpage(
+    'report_usage_monitor_api',
+    get_string('api_documentation', 'report_usage_monitor'),
+    new moodle_url('/report/usage_monitor/api-documentation.php')
 ));
