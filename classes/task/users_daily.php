@@ -14,156 +14,109 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
+namespace report_usage_monitor\task;
+
+use report_usage_monitor\helper;
+
+defined('MOODLE_INTERNAL') || die();
+
 /**
- * Tarea programada para calcular el top de accesos únicos diarios.
+ * Scheduled task to calculate daily users top.
  *
  * @package     report_usage_monitor
  * @category    admin
  * @copyright   2023 Soporte IngeWeb <soporte@ingeweb.co>
  * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-
-namespace report_usage_monitor\task;
-
-defined('MOODLE_INTERNAL') || die();
-
-class users_daily extends \core\task\scheduled_task
-{
-    public function get_name()
-    {
+class users_daily extends \core\task\scheduled_task {
+    
+    /**
+     * Get task name.
+     *
+     * @return string
+     */
+    public function get_name() {
         return get_string('getlastusers', 'report_usage_monitor');
     }
-
-    public function execute()
-    {
-        global $DB, $CFG;
-        require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
-
-        if (debugging('', DEBUG_DEVELOPER)) {
-            mtrace("Iniciando tarea para calcular el top de accesos únicos diarios...");
-        }
-
-        $array_daily_top = [];
-
-        // REFACTORIZADO: Obtener el top de usuarios diarios usando la nueva función
-        $sql = report_user_daily_top_task();
-        if (debugging('', DEBUG_DEVELOPER)) {
-            mtrace("Ejecutando consulta: $sql");
-        }
+    
+    /**
+     * Execute the task.
+     *
+     * @return bool
+     */
+    public function execute() {
+        global $DB;
         
-        // Iniciar transacción para asegurar consistencia de datos
-        $transaction = $DB->start_delegated_transaction();
+        mtrace("Starting calculation of daily users top...");
         
-        try {
-            // Ajustar la consulta para no incluir la columna `id`
-            $userdaily_records = $DB->get_records_sql($sql);
+        // Get yesterday's user count.
+        $yesterdaystart = helper::get_day_start(strtotime('yesterday'));
+        $yesterdayend = helper::get_day_end(strtotime('yesterday'));
+        
+        $yesterdayusers = helper::get_users_logged_in($yesterdaystart, $yesterdayend);
+        
+        if ($yesterdayusers > 0) {
+            // Get current top records.
+            $toprecords = $DB->get_records('report_usage_monitor', null, 'usercount DESC', '*', 0, 10);
             
-            foreach ($userdaily_records as $record) {
-                // Validar que fecha sea un timestamp válido
-                if (!is_numeric($record->fecha) || $record->fecha <= 0) {
-                    debugging('users_daily: Timestamp inválido encontrado: ' . var_export($record->fecha, true), DEBUG_DEVELOPER);
-                    continue;
-                }
+            if (count($toprecords) < 10) {
+                // If we have less than 10 records, just insert.
+                $record = new \stdClass();
+                $record->timecreated = $yesterdaystart;
+                $record->usercount = $yesterdayusers;
+                $DB->insert_record('report_usage_monitor', $record);
                 
-                $array_daily_top[] = [
-                    "usuarios" => $record->cantidad_usuarios,
-                    "fecha" => $record->fecha,
-                ];
-            }
-
-            // Corrige el uso de min() verificando si $array_daily_top está vacío
-            if (!empty($array_daily_top)) {
-                $menor = min(array_column($array_daily_top, 'usuarios'));
+                mtrace("Inserted new record: $yesterdayusers users on " . userdate($yesterdaystart));
             } else {
-                $menor = null;
-            }
-
-            // REFACTORIZADO: Verificar si hay que insertar un nuevo registro de usuarios
-            // usando la función refactorizada
-            $sql = user_limit_daily_task();
-            $users_daily_record = $DB->get_records_sql($sql);
-            $users = [];
-            
-            foreach ($users_daily_record as $log) {
-                // Validar que fecha sea un timestamp válido
-                if (!is_numeric($log->fecha) || $log->fecha <= 0) {
-                    debugging('users_daily: Timestamp inválido en user_limit_daily_task: ' . var_export($log->fecha, true), DEBUG_DEVELOPER);
-                    continue;
-                }
-                
-                $users = [
-                    "usuarios" => $log->conteo_accesos_unicos,
-                    "fecha" => $log->fecha,
-                ];
-                // Solo se espera un registro, así que se puede salir del bucle
-                break;
-            }
-
-            // Si no hay usuarios para el día actual, no hacemos nada
-            if (empty($users)) {
-                if (debugging('', DEBUG_DEVELOPER)) {
-                    mtrace("No se encontraron registros de usuarios para el día actual.");
-                }
-            } else {
-                // Procesamos los registros de usuarios diarios
-                if (empty($array_daily_top) || count($array_daily_top) < 10) {
-                    // Se inserta si la tabla está vacía o tiene menos de 10 registros
-                    insert_top_sql($users['fecha'], $users['usuarios']);
-                    if (debugging('', DEBUG_DEVELOPER)) {
-                        mtrace("Insertando nuevo registro con {$users['usuarios']} usuarios para timestamp {$users['fecha']}.");
-                    }
-                } else {
-                    // Se actualiza si hay 10 o más registros y el nuevo registro tiene más usuarios
-                    if (!is_null($menor) && $users['usuarios'] >= $menor) {
-                        // La función update_min_top_sql actualiza el registro más antiguo con la menor cantidad
-                        update_min_top_sql($users['fecha'], $users['usuarios'], $menor);
-                        if (debugging('', DEBUG_DEVELOPER)) {
-                            mtrace("Actualizando registro existente con menor valor ($menor) a nuevo valor ({$users['usuarios']}).");
-                        }
-                    } else {
-                        if (debugging('', DEBUG_DEVELOPER)) {
-                            mtrace("El nuevo registro ({$users['usuarios']} usuarios) no supera el mínimo actual ($menor).");
-                        }
+                // Find the minimum and check if yesterday's count is higher.
+                $minrecord = null;
+                foreach ($toprecords as $rec) {
+                    if (!$minrecord || $rec->usercount < $minrecord->usercount) {
+                        $minrecord = $rec;
                     }
                 }
-            }
-            
-            // Calcular el porcentaje de uso respecto al umbral
-            $reportconfig = get_config('report_usage_monitor');
-            $users_today = !empty($reportconfig->totalusersdaily) ? ($reportconfig->totalusersdaily) : 0;
-            $max_users_threshold = (int)($reportconfig->max_daily_users_threshold ?? 100);
-            $users_percent = calculate_threshold_percentage($users_today, $max_users_threshold);
-            $users_warning_class = ($users_percent < 70) ? 'bg-success' : (($users_percent < 90) ? 'bg-warning' : 'bg-danger');
-            
-            // Guardar valores precomputados
-            set_config('users_percent', $users_percent, 'report_usage_monitor');
-            set_config('users_warning_class', $users_warning_class, 'report_usage_monitor');
-            
-            // Limpiar datos antiguos - Ahora buscamos por el valor del timestamp para asegurar consistencia
-            $sixMonthsAgo = time() - (180 * 24 * 60 * 60); // 180 days
-            
-            // Para report_usage_monitor_history tabla
-            if ($DB->get_manager()->table_exists('report_usage_monitor_history')) {
-                $oldHistoryCount = $DB->count_records_select('report_usage_monitor_history', 'timecreated < ?', [$sixMonthsAgo]);
                 
-                if ($oldHistoryCount > 0) {
-                    $DB->delete_records_select('report_usage_monitor_history', 'timecreated < ?', [$sixMonthsAgo]);
+                if ($minrecord && $yesterdayusers > $minrecord->usercount) {
+                    // Update the minimum record.
+                    $minrecord->timecreated = $yesterdaystart;
+                    $minrecord->usercount = $yesterdayusers;
+                    $DB->update_record('report_usage_monitor', $minrecord);
                     
-                    if (debugging('', DEBUG_DEVELOPER)) {
-                        mtrace("Removed $oldHistoryCount records older than 6 months from report_usage_monitor_history.");
-                    }
+                    mtrace("Updated record: replaced $minrecord->usercount with $yesterdayusers users");
+                } else {
+                    mtrace("Yesterday's count ($yesterdayusers) doesn't make it to top 10");
                 }
             }
-            
-            $transaction->allow_commit();
-            
-        } catch (Exception $e) {
-            $transaction->rollback($e);
-            debugging('users_daily: Error en procesamiento: ' . $e->getMessage(), DEBUG_DEVELOPER);
         }
         
-        if (debugging('', DEBUG_DEVELOPER)) {
-            mtrace("Tarea para calcular el top de accesos únicos diarios completada.");
+        // Calculate percentage for today.
+        $reportconfig = get_config('report_usage_monitor');
+        $userstoday = (int)($reportconfig->totalusersdaily ?? 0);
+        $maxusersthreshold = (int)($reportconfig->max_daily_users_threshold ?? 100);
+        $userspercent = helper::calculate_percentage($userstoday, $maxusersthreshold);
+        
+        // Determine warning class.
+        if ($userspercent < 70) {
+            $warningclass = 'bg-success';
+        } else if ($userspercent < 90) {
+            $warningclass = 'bg-warning';
+        } else {
+            $warningclass = 'bg-danger';
         }
+        
+        set_config('users_percent', $userspercent, 'report_usage_monitor');
+        set_config('users_warning_class', $warningclass, 'report_usage_monitor');
+        
+        // Clean up old history records (older than 6 months).
+        $sixmonthsago = time() - (180 * 24 * 60 * 60);
+        if ($DB->get_manager()->table_exists('report_usage_monitor_history')) {
+            $DB->delete_records_select('report_usage_monitor_history', 
+                                      'timecreated < :threshold', 
+                                      ['threshold' => $sixmonthsago]);
+        }
+        
+        mtrace("Daily users top calculation completed.");
+        
+        return true;
     }
 }

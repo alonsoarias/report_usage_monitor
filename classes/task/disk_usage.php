@@ -14,136 +14,178 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
+namespace report_usage_monitor\task;
+
+use report_usage_monitor\helper;
+
+defined('MOODLE_INTERNAL') || die();
+
 /**
- * Tarea programada para calcular el uso del disco.
+ * Scheduled task to calculate disk usage.
  *
  * @package     report_usage_monitor
  * @category    admin
  * @copyright   2023 Soporte IngeWeb <soporte@ingeweb.co>
  * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-
-namespace report_usage_monitor\task;
-
-defined('MOODLE_INTERNAL') || die();
-
-class disk_usage extends \core\task\scheduled_task
-{
-    public function get_name()
-    {
+class disk_usage extends \core\task\scheduled_task {
+    
+    /**
+     * Get task name.
+     *
+     * @return string
+     */
+    public function get_name() {
         return get_string('calculatediskusagetask', 'report_usage_monitor');
     }
-
-    public function execute()
-    {
+    
+    /**
+     * Execute the task.
+     *
+     * @return bool
+     */
+    public function execute() {
         global $DB, $CFG;
-        require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
-
-        if (debugging('', DEBUG_DEVELOPER)) {
-            mtrace("Iniciando tarea de cálculo de uso del disco...");
-        }
-
-        // Calcular el tamaño de la base de datos con la función refactorizada
-        $size_sql = size_database();
-        $size_database = $DB->get_records_sql($size_sql);
-        $totalusagereadabledb = 0;
         
-        foreach ($size_database as $item) {
-            $totalusagereadabledb = $item->size;
-            set_config('totalusagereadabledb', $totalusagereadabledb, 'report_usage_monitor');
-        }
-
-        // Calcular el tamaño del directorio dataroot
-        $totalusagedataroot = directory_size($CFG->dataroot);
-
-        // Calcular el tamaño del directorio dirroot
-        $totalusagedirroot = directory_size($CFG->dirroot);
-
-        // Calcular el total del uso del disco legible
-        $totalusagereadable = $totalusagedataroot + $totalusagedirroot;
-        set_config('totalusagereadable', $totalusagereadable, 'report_usage_monitor');
+        mtrace("Starting disk usage calculation...");
         
-        // Obtener umbrales y calcular porcentaje de uso
+        // Calculate database size.
+        $dbsize = helper::get_database_size();
+        set_config('totalusagereadabledb', $dbsize, 'report_usage_monitor');
+        
+        // Calculate dataroot size.
+        $datarootsize = helper::get_directory_size($CFG->dataroot);
+        
+        // Calculate dirroot size.
+        $dirrootsize = helper::get_directory_size($CFG->dirroot);
+        
+        // Total file system usage.
+        $totalusage = $datarootsize + $dirrootsize;
+        set_config('totalusagereadable', $totalusage, 'report_usage_monitor');
+        
+        // Get configured quota and calculate percentage.
         $reportconfig = get_config('report_usage_monitor');
-        $quotadisk_bytes = ((int) $reportconfig->disk_quota * 1024) * 1024 * 1024;
-        $total_disk_usage = $totalusagereadable + $totalusagereadabledb;
+        $quotabytes = ((int)($reportconfig->disk_quota ?? 10) * 1024 * 1024 * 1024);
+        $totaldiskusage = $totalusage + $dbsize;
         
-        // Precomputar el porcentaje y la clase de advertencia
-        $disk_percent = calculate_threshold_percentage($total_disk_usage, $quotadisk_bytes);
-        $disk_warning_class = ($disk_percent < 70) ? 'bg-success' : (($disk_percent < 90) ? 'bg-warning' : 'bg-danger');
+        // Calculate and store percentage.
+        $diskpercent = helper::calculate_percentage($totaldiskusage, $quotabytes);
+        set_config('disk_percent', $diskpercent, 'report_usage_monitor');
         
-        // Guardar valores precomputados
-        set_config('disk_percent', $disk_percent, 'report_usage_monitor');
-        set_config('disk_warning_class', $disk_warning_class, 'report_usage_monitor');
-        set_config('disk_usage_gb', display_size_in_gb($total_disk_usage, 2), 'report_usage_monitor');
-        set_config('quotadisk_gb', display_size_in_gb($quotadisk_bytes, 2), 'report_usage_monitor');
-        
-        // Análisis por directorios con la función refactorizada
-        $dir_analysis = analyze_disk_usage_by_directory($CFG->dataroot);
-        
-        // Asegurarse de que el valor de 'database' sea coherente con el calculado anteriormente
-        $dir_analysis['database'] = $totalusagereadabledb;
-        
-        // Guardar los resultados detallados como JSON en la configuración
-        set_config('dir_analysis', json_encode($dir_analysis), 'report_usage_monitor');
-        
-        // Obtener y guardar los cursos más grandes con la función refactorizada
-        $largest_courses = get_largest_courses(5);
-        set_config('largest_courses', json_encode($largest_courses), 'report_usage_monitor');
-        
-        // Guardar timestamp de última ejecución
-        $execution_time = time();
-        set_config('lastexecutioncalculatedisk', $execution_time, 'report_usage_monitor');
-        
-        // Registrar en el historial para poder mostrar gráficas de tendencia
-        if ($DB->get_manager()->table_exists('report_usage_monitor_history')) {
-            $record = new \stdClass();
-            $record->type = 'disk';
-            $record->percentage = $disk_percent;
-            $record->value = $total_disk_usage;
-            $record->threshold = $quotadisk_bytes;
-            $record->timecreated = $execution_time;
-            
-            try {
-                $DB->insert_record('report_usage_monitor_history', $record);
-                if (debugging('', DEBUG_DEVELOPER)) {
-                    mtrace("Uso de disco registrado en el historial.");
-                }
-            } catch (\Exception $e) {
-                if (debugging('', DEBUG_DEVELOPER)) {
-                    mtrace("Error al registrar el uso de disco: " . $e->getMessage());
-                }
-            }
+        // Determine warning class.
+        if ($diskpercent < 70) {
+            $warningclass = 'bg-success';
+        } else if ($diskpercent < 90) {
+            $warningclass = 'bg-warning';
+        } else {
+            $warningclass = 'bg-danger';
         }
-
-        // Calcular tasa de crecimiento para disco y guardarla
-        $growth_rate = calculate_growth_rate('disk');
-        $growth_history = !empty($reportconfig->disk_growth_history) ? 
-                          json_decode($reportconfig->disk_growth_history, true) : [];
-
-        // Añadir entrada actual a la historia de crecimiento
-        $growth_history[] = [
-            'timestamp' => $execution_time,
-            'rate' => $growth_rate,
-            'usage' => $total_disk_usage
+        set_config('disk_warning_class', $warningclass, 'report_usage_monitor');
+        
+        // Store formatted sizes.
+        set_config('disk_usage_gb', round($totaldiskusage / (1024 * 1024 * 1024), 2), 'report_usage_monitor');
+        set_config('quotadisk_gb', round($quotabytes / (1024 * 1024 * 1024), 2), 'report_usage_monitor');
+        
+        // Analyze disk usage by directory.
+        $diranalysis = $this->analyze_disk_usage_by_directory();
+        set_config('dir_analysis', json_encode($diranalysis), 'report_usage_monitor');
+        
+        // Get largest courses.
+        $largestcourses = helper::get_largest_courses(5);
+        $courses = [];
+        foreach ($largestcourses as $course) {
+            $courses[] = [
+                'id' => $course->id,
+                'fullname' => $course->fullname,
+                'shortname' => $course->shortname,
+                'filesize' => $course->filesize,
+                'percentage' => helper::calculate_percentage($course->filesize, $totaldiskusage),
+                'totalsize' => $course->filesize,
+                'backupsize' => 0,
+                'backupcount' => 0
+            ];
+        }
+        set_config('largest_courses', json_encode($courses), 'report_usage_monitor');
+        
+        // Store last execution timestamp.
+        set_config('lastexecutioncalculate', time(), 'report_usage_monitor');
+        set_config('lastexecutioncalculatedisk', time(), 'report_usage_monitor');
+        
+        // Log to history.
+        $this->log_to_history($diskpercent, $totaldiskusage, $quotabytes);
+        
+        mtrace("Disk usage calculation completed. Total: " . helper::format_bytes($totaldiskusage) . 
+               " (" . $diskpercent . "% of quota)");
+        
+        return true;
+    }
+    
+    /**
+     * Analyze disk usage by directory.
+     *
+     * @return array
+     */
+    private function analyze_disk_usage_by_directory() {
+        global $CFG;
+        
+        $analysis = [];
+        
+        // Key directories to analyze.
+        $directories = [
+            'filedir' => $CFG->dataroot . '/filedir',
+            'cache' => $CFG->dataroot . '/cache',
+            'temp' => $CFG->dataroot . '/temp',
+            'trashdir' => $CFG->dataroot . '/trashdir'
         ];
         
-        // Mantener solo las últimas 10 entradas
-        if (count($growth_history) > 10) {
-            $growth_history = array_slice($growth_history, -10);
+        $total = 0;
+        foreach ($directories as $key => $path) {
+            if (is_dir($path)) {
+                $size = helper::get_directory_size($path);
+                $analysis[$key] = $size;
+                $total += $size;
+            } else {
+                $analysis[$key] = 0;
+            }
         }
         
-        // Guardar historial de crecimiento actualizado
-        set_config('disk_growth_history', json_encode($growth_history), 'report_usage_monitor');
-
-        if (debugging('', DEBUG_DEVELOPER)) {
-            mtrace("Uso del disco calculado. Total base de datos: $totalusagereadabledb bytes, Total dataroot: $totalusagedataroot bytes, Total dirroot: $totalusagedirroot bytes, Total uso legible: $totalusagereadable bytes.");
-            mtrace("Análisis por directorios completado y guardado en configuración.");
-            mtrace("Información de cursos más grandes guardada en configuración.");
-            mtrace("Tasa de crecimiento mensual calculada: $growth_rate%");
-            mtrace("Tarea de cálculo de uso del disco completada.");
+        // Get total dataroot size.
+        $datarootsize = helper::get_directory_size($CFG->dataroot);
+        
+        // Calculate "others".
+        $analysis['others'] = max(0, $datarootsize - $total);
+        
+        // Add database size.
+        $analysis['database'] = helper::get_database_size();
+        
+        return $analysis;
+    }
+    
+    /**
+     * Log disk usage to history.
+     *
+     * @param float $percentage Current usage percentage
+     * @param int $value Current usage in bytes
+     * @param int $threshold Quota in bytes
+     */
+    private function log_to_history($percentage, $value, $threshold) {
+        global $DB;
+        
+        if (!$DB->get_manager()->table_exists('report_usage_monitor_history')) {
+            return;
         }
-
-        return true;
+        
+        $record = new \stdClass();
+        $record->type = 'disk';
+        $record->percentage = $percentage;
+        $record->value = $value;
+        $record->threshold = $threshold;
+        $record->timecreated = time();
+        
+        try {
+            $DB->insert_record('report_usage_monitor_history', $record);
+        } catch (\Exception $e) {
+            debugging('Failed to log disk usage to history: ' . $e->getMessage(), DEBUG_DEVELOPER);
+        }
     }
 }

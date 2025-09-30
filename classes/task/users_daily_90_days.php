@@ -14,112 +14,129 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
+namespace report_usage_monitor\task;
+
+use report_usage_monitor\helper;
+
+defined('MOODLE_INTERNAL') || die();
+
 /**
- * Tarea programada para calcular los usuarios principales en los últimos 90 días.
+ * Scheduled task to calculate maximum users in last 90 days.
  *
  * @package     report_usage_monitor
  * @category    admin
  * @copyright   2023 Soporte IngeWeb <soporte@ingeweb.co>
  * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-
-
-namespace report_usage_monitor\task;
-
-defined('MOODLE_INTERNAL') || die();
-
-/**
- * Tarea para calcular los usuarios principales en los últimos 90 días.
- */
-class users_daily_90_days extends \core\task\scheduled_task
-{
-    public function get_name()
-    {
+class users_daily_90_days extends \core\task\scheduled_task {
+    
+    /**
+     * Get task name.
+     *
+     * @return string
+     */
+    public function get_name() {
         return get_string('getlastusers90days', 'report_usage_monitor');
     }
-
-    public function execute()
-    {
-        global $DB, $CFG;
-        require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
-
-        if (debugging('', DEBUG_DEVELOPER)) {
-            mtrace("Iniciando tarea de cálculo de usuarios diarios en los últimos 90 días...");
-        }
-
-        // REFACTORIZADO: Usamos la consulta SQL sin necesidad de pasar un formato de fecha
-        $sql = max_userdaily_for_90_days();
+    
+    /**
+     * Execute the task.
+     *
+     * @return bool
+     */
+    public function execute() {
+        global $DB;
         
-        $max_users = 0;
-        $max_date = 0;
+        mtrace("Starting calculation of maximum users in last 90 days...");
         
-        // Iniciar transacción para asegurar consistencia de datos
-        $transaction = $DB->start_delegated_transaction();
+        $ninetydaysago = time() - (90 * 24 * 60 * 60);
+        $now = time();
         
-        try {
-            $users_90_days_records = $DB->get_records_sql($sql);
-
-            foreach ($users_90_days_records as $record) {
-                // Validar que la fecha sea un timestamp válido
-                if (!is_numeric($record->fecha) || $record->fecha <= 0) {
-                    debugging('users_daily_90_days: Timestamp inválido encontrado: ' . var_export($record->fecha, true), DEBUG_DEVELOPER);
-                    continue;
-                }
+        // Get max users in last 90 days grouped by day.
+        $sql = "SELECT MAX(usercount) as maxusers, 
+                       MIN(daytime) as maxdate
+                FROM (
+                    SELECT COUNT(DISTINCT userid) as usercount,
+                           DATE(FROM_UNIXTIME(timecreated)) as daydate,
+                           MIN(timecreated) as daytime
+                    FROM {logstore_standard_log}
+                    WHERE action = :action
+                      AND timecreated BETWEEN :from AND :to
+                    GROUP BY DATE(FROM_UNIXTIME(timecreated))
+                ) subquery
+                WHERE usercount = (
+                    SELECT MAX(usercount)
+                    FROM (
+                        SELECT COUNT(DISTINCT userid) as usercount
+                        FROM {logstore_standard_log}
+                        WHERE action = :action2
+                          AND timecreated BETWEEN :from2 AND :to2
+                        GROUP BY DATE(FROM_UNIXTIME(timecreated))
+                    ) maxquery
+                )";
+        
+        $params = [
+            'action' => 'loggedin',
+            'from' => $ninetydaysago,
+            'to' => $now,
+            'action2' => 'loggedin',
+            'from2' => $ninetydaysago,
+            'to2' => $now
+        ];
+        
+        // For database compatibility, use simpler query.
+        $sql = "SELECT COUNT(DISTINCT userid) as usercount,
+                       DATE(FROM_UNIXTIME(timecreated)) as daydate
+                FROM {logstore_standard_log}
+                WHERE action = :action
+                  AND timecreated BETWEEN :from AND :to
+                GROUP BY DATE(FROM_UNIXTIME(timecreated))
+                ORDER BY usercount DESC";
+        
+        $params = [
+            'action' => 'loggedin',
+            'from' => $ninetydaysago,
+            'to' => $now
+        ];
+        
+        $records = $DB->get_records_sql($sql, $params, 0, 1);
+        
+        if ($records) {
+            $record = reset($records);
+            $maxusers = $record->usercount;
+            
+            // Store the maximum.
+            set_config('max_userdaily_for_90_days_users', $maxusers, 'report_usage_monitor');
+            set_config('max_userdaily_for_90_days_date', time(), 'report_usage_monitor');
+            
+            // Log to history if needed.
+            if ($DB->get_manager()->table_exists('report_usage_monitor_history')) {
+                $reportconfig = get_config('report_usage_monitor');
+                $threshold = (int)($reportconfig->max_daily_users_threshold ?? 100);
                 
-                // La consulta ahora devuelve campos estandarizados
-                if (isset($record->usuarios)) {
-                    $max_users = $record->usuarios;
-                    $max_date = $record->fecha;
-
-                    set_config('max_userdaily_for_90_days_date', $record->fecha, 'report_usage_monitor');
-                    set_config('max_userdaily_for_90_days_users', $record->usuarios, 'report_usage_monitor');
-                }
-            }
-
-            // Registrar el valor máximo en el historial para trazabilidad
-            if ($max_users > 0 && $max_date > 0 && $DB->get_manager()->table_exists('report_usage_monitor_history')) {
-                // Verificar si ya existe un registro para esta fecha
-                $existing = $DB->get_record_sql(
-                    "SELECT id FROM {report_usage_monitor_history}
-                    WHERE type = 'users90d' AND timecreated = ?",
-                    [$max_date]
-                );
-
-                if (!$existing) {
-                    // Crear el registro histórico
-                    $reportconfig = get_config('report_usage_monitor');
-                    $threshold = $reportconfig->max_daily_users_threshold ?? 100;
-
-                    $record = new \stdClass();
-                    // Cambiado 'users_90_days' a 'users90d' para cumplir con la limitación de 10 caracteres
-                    $record->type = 'users90d';
-                    $record->percentage = calculate_threshold_percentage($max_users, $threshold);
-                    $record->value = $max_users;
-                    $record->threshold = $threshold;
-                    $record->timecreated = $max_date;
-
-                    $DB->insert_record('report_usage_monitor_history', $record);
-                    if (debugging('', DEBUG_DEVELOPER)) {
-                        mtrace("Máximo de usuarios 90 días registrado en el historial.");
-                    }
+                $historyrecord = new \stdClass();
+                $historyrecord->type = 'users90d';
+                $historyrecord->percentage = helper::calculate_percentage($maxusers, $threshold);
+                $historyrecord->value = $maxusers;
+                $historyrecord->threshold = $threshold;
+                $historyrecord->timecreated = time();
+                
+                try {
+                    $DB->insert_record('report_usage_monitor_history', $historyrecord);
+                } catch (\Exception $e) {
+                    debugging('Failed to log to history: ' . $e->getMessage(), DEBUG_DEVELOPER);
                 }
             }
             
-            // Guardar timestamp de última ejecución
-            $execution_time = time();
-            set_config('lastexecutioncalculateusers90days', $execution_time, 'report_usage_monitor');
-            
-            $transaction->allow_commit();
-            
-        } catch (Exception $e) {
-            $transaction->rollback($e);
-            debugging('users_daily_90_days: Error en procesamiento: ' . $e->getMessage(), DEBUG_DEVELOPER);
+            mtrace("Maximum users in last 90 days: $maxusers");
+        } else {
+            mtrace("No user data found for the last 90 days.");
         }
-
-        if (debugging('', DEBUG_DEVELOPER)) {
-            $formatted_date = ($max_date && is_numeric($max_date) && $max_date > 0) ? date('d/m/Y', (int)$max_date) : 'N/A';
-            mtrace("Usuarios principales en los últimos 90 días calculados: " . $max_users . " en fecha " . $formatted_date);
-            mtrace("Tarea de cálculo de usuarios principales en los últimos 90 días completada.");
-        }
+        
+        set_config('lastexecutioncalculateusers90days', time(), 'report_usage_monitor');
+        
+        mtrace("Task completed.");
+        
+        return true;
     }
 }

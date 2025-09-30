@@ -15,6 +15,8 @@
 // along with Moodle. If not, see <https://www.gnu.org/licenses/>.
 
 /**
+ * Version information for report_usage_monitor.
+ *
  * @package     report_usage_monitor
  * @category    admin
  * @copyright   2023 Soporte IngeWeb <soporte@ingeweb.co>
@@ -23,8 +25,8 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->component = 'report_usage_monitor'; // Nombre completo del plugin
-$plugin->version   = 2025030403;  // Versión actualizada para corrección de manejo de fechas
-$plugin->requires  = 2020061500;  // Versión mínima de Moodle requerida - Moodle 3.9
-$plugin->release   = '4.5.4';     // Versión legible actualizada con correcciones de fechas
-$plugin->maturity  = MATURITY_STABLE; // El nivel de madurez del plugin
+$plugin->component = 'report_usage_monitor';
+$plugin->version   = 2025030500;  // Version format: YYYYMMDDXX
+$plugin->requires  = 2020061500;  // Requires Moodle 3.9 or later.
+$plugin->release   = '4.5.5';
+$plugin->maturity  = MATURITY_STABLE;

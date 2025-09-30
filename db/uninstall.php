@@ -14,21 +14,31 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
+defined('MOODLE_INTERNAL') || die();
+
 /**
- * Código que se ejecuta antes de eliminar las tablas y los datos durante la desinstalación del complemento.
+ * Uninstall function for report_usage_monitor.
  *
  * @package     report_usage_monitor
  * @category    upgrade
  * @copyright   2023 Soporte IngeWeb <soporte@ingeweb.co>
- * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 o posterior
+ * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-
-defined('MOODLE_INTERNAL') || die();
 
 /**
- * Procedimiento de desinstalación personalizado.
+ * Custom uninstallation procedure.
  */
 function xmldb_report_usage_monitor_uninstall() {
-
+    global $DB;
+    
+    // Clean up any scheduled task data.
+    $DB->delete_records('task_scheduled', array('component' => 'report_usage_monitor'));
+    
+    // Clean up config data.
+    unset_all_config_for_plugin('report_usage_monitor');
+    
+    // Clean up pathtodu from system paths.
+    unset_config('pathtodu');
+    
     return true;
 }

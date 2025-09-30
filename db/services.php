@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Servicios externos del plugin report_usage_monitor.
+ * External services for report_usage_monitor plugin.
  *
  * @package    report_usage_monitor
  * @copyright  2025 Soporte IngeWeb <soporte@ingeweb.co>
@@ -29,7 +29,7 @@ $functions = array(
         'classname'     => 'report_usage_monitor_external',
         'methodname'    => 'get_monitor_stats',
         'classpath'     => 'report/usage_monitor/classes/external.php',
-        'description'   => 'Obtiene las estadísticas actuales de uso del sistema.',
+        'description'   => 'Get current system usage statistics.',
         'type'          => 'read',
         'capabilities'  => 'report/usage_monitor:view',
         'ajax'          => true,
@@ -38,17 +38,16 @@ $functions = array(
         'classname'     => 'report_usage_monitor_external',
         'methodname'    => 'get_notification_history',
         'classpath'     => 'report/usage_monitor/classes/external.php',
-        'description'   => 'Obtiene el historial de notificaciones enviadas.',
+        'description'   => 'Get notification history.',
         'type'          => 'read',
         'capabilities'  => 'report/usage_monitor:view',
         'ajax'          => true,
     ),
-    // Nuevos métodos GET y SET simplificados
     'report_usage_monitor_get_usage_data' => array(
         'classname'     => 'report_usage_monitor_external',
         'methodname'    => 'get_usage_data',
         'classpath'     => 'report/usage_monitor/classes/external.php',
-        'description'   => 'Obtiene los datos precalculados de usuarios y uso de disco.',
+        'description'   => 'Get precalculated usage data for disk and users.',
         'type'          => 'read',
         'capabilities'  => 'report/usage_monitor:view',
         'ajax'          => true,
@@ -57,14 +56,14 @@ $functions = array(
         'classname'     => 'report_usage_monitor_external',
         'methodname'    => 'set_usage_thresholds',
         'classpath'     => 'report/usage_monitor/classes/external.php',
-        'description'   => 'Configura los umbrales de usuarios y disco.',
+        'description'   => 'Configure user and disk thresholds.',
         'type'          => 'write',
         'capabilities'  => 'report/usage_monitor:manage',
         'ajax'          => true,
     ),
 );
 
-// Definimos los servicios
+// Define services.
 $services = array(
     'Usage Monitor API' => array(
         'functions' => array(
@@ -73,10 +72,8 @@ $services = array(
             'report_usage_monitor_get_usage_data',
             'report_usage_monitor_set_usage_thresholds',
         ),
-        'restrictedusers' => 0, // No es restringido por usuario
-        'enabled' => 1, // Habilitado por defecto
+        'restrictedusers' => 0,
+        'enabled' => 1,
         'shortname' => 'report_usage_monitor',
-        'downloadfiles' => 0,
-        'uploadfiles' => 0,
     ),
 );

@@ -14,104 +14,71 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
+namespace report_usage_monitor\task;
+
+use report_usage_monitor\helper;
+
+defined('MOODLE_INTERNAL') || die();
+
 /**
- * Tarea programada para el uso del disco, para ejecutar los informes programados.
+ * Task to calculate recently connected users.
  *
  * @package     report_usage_monitor
  * @category    admin
  * @copyright   2023 Soporte IngeWeb <soporte@ingeweb.co>
  * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-
-
-namespace report_usage_monitor\task;
-
-defined('MOODLE_INTERNAL') || die();
-
-/**
- * Tarea para calcular los usuarios conectados recientemente.
- */
-class last_users extends \core\task\scheduled_task
-{
-    public function get_name()
-    {
+class last_users extends \core\task\scheduled_task {
+    
+    /**
+     * Get task name.
+     *
+     * @return string
+     */
+    public function get_name() {
         return get_string('getlastusersconnected', 'report_usage_monitor');
     }
-
-    public function execute()
-    {
-        global $DB, $CFG;
-        require_once($CFG->dirroot . '/report/usage_monitor/locallib.php');
-
-        if (debugging('', DEBUG_DEVELOPER)) {
-            mtrace("Iniciando tarea de cálculo de usuarios conectados recientemente...");
-        }
-
-        // Iniciar transacción para garantizar consistencia de datos
-        $transaction = $DB->start_delegated_transaction();
+    
+    /**
+     * Execute the task.
+     *
+     * @return bool
+     */
+    public function execute() {
+        global $DB;
         
-        try {
-            // Recuperar los usuarios conectados recientemente para hoy.
-            $users = $DB->get_records_sql(users_today());
-            $users_today = 0;
-            
-            foreach ($users as $log) {
-                // Verificar que el timestamp es válido
-                if (!isset($log->timestamp_fecha) || !is_numeric($log->timestamp_fecha) || $log->timestamp_fecha <= 0) {
-                    debugging('last_users: Timestamp inválido en resultado de users_today(): ' . var_export($log, true), DEBUG_DEVELOPER);
-                    continue;
-                }
-                
-                if (!isset($log->conteo_accesos_unicos) || !is_numeric($log->conteo_accesos_unicos)) {
-                    debugging('last_users: Conteo de usuarios inválido: ' . var_export($log, true), DEBUG_DEVELOPER);
-                    continue;
-                }
-                
-                $users_today = $log->conteo_accesos_unicos;
-                set_config('totalusersdaily', $users_today, 'report_usage_monitor');
-                
-                if (debugging('', DEBUG_DEVELOPER)) {
-                    mtrace("Usuarios conectados hoy: $users_today para la fecha " . userdate($log->timestamp_fecha));
-                }
-            }
-
-            // Precomputar porcentajes para el dashboard
-            $reportconfig = get_config('report_usage_monitor');
-            $max_users_threshold = (int)($reportconfig->max_daily_users_threshold ?? 100);
-            $users_percent = calculate_threshold_percentage($users_today, $max_users_threshold);
-            $users_warning_class = ($users_percent < 70) ? 'bg-success' : (($users_percent < 90) ? 'bg-warning' : 'bg-danger');
-
-            // Guardar valores precomputados
-            set_config('users_percent', $users_percent, 'report_usage_monitor');
-            set_config('users_warning_class', $users_warning_class, 'report_usage_monitor');
-
-            // Guardar timestamp de última ejecución
-            $execution_time = time();
-            set_config('lastexecutioncalculateuserdaily', $execution_time, 'report_usage_monitor');
-            
-            // Permitir commit si todo ha ido bien
-            $transaction->allow_commit();
-            
-            if (debugging('', DEBUG_DEVELOPER)) {
-                mtrace("Usuarios conectados recientemente: $users_today.");
-                mtrace("Porcentaje del umbral: $users_percent%");
-                mtrace("Tarea completada con éxito.");
-            }
-        } catch (Exception $e) {
-            // Revertir cambios en caso de error
-            $transaction->rollback($e);
-            
-            debugging('last_users: Error en tarea de cálculo de usuarios: ' . $e->getMessage(), DEBUG_DEVELOPER);
-            
-            if (debugging('', DEBUG_DEVELOPER)) {
-                mtrace("Error durante el cálculo de usuarios: " . $e->getMessage());
-                mtrace("Se ha revertido cualquier cambio parcial.");
-            }
-            
-            // Permitir que la excepción se propague para registrar el fallo de la tarea
-            throw $e;
+        mtrace("Starting calculation of recently connected users...");
+        
+        // Calculate users for today.
+        $todaystart = helper::get_day_start();
+        $now = time();
+        
+        $userstoday = helper::get_users_logged_in($todaystart, $now);
+        set_config('totalusersdaily', $userstoday, 'report_usage_monitor');
+        
+        // Get threshold and calculate percentage.
+        $reportconfig = get_config('report_usage_monitor');
+        $maxusersthreshold = (int)($reportconfig->max_daily_users_threshold ?? 100);
+        $userspercent = helper::calculate_percentage($userstoday, $maxusersthreshold);
+        
+        // Determine warning class.
+        if ($userspercent < 70) {
+            $warningclass = 'bg-success';
+        } else if ($userspercent < 90) {
+            $warningclass = 'bg-warning';
+        } else {
+            $warningclass = 'bg-danger';
         }
-
+        
+        // Store calculated values.
+        set_config('users_percent', $userspercent, 'report_usage_monitor');
+        set_config('users_warning_class', $warningclass, 'report_usage_monitor');
+        set_config('lastexecution', time(), 'report_usage_monitor');
+        set_config('lastexecutioncalculateuserdaily', time(), 'report_usage_monitor');
+        
+        mtrace("Recently connected users: $userstoday ($userspercent% of threshold)");
+        mtrace("Task completed successfully.");
+        
         return true;
     }
 }
