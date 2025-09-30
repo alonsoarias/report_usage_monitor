@@ -53,6 +53,7 @@ $string['largest_courses'] = 'Largest Courses';
 $string['database'] = 'Database';
 $string['files_dir'] = 'Files';
 $string['cache'] = 'Cache';
+$string['trashdir'] = 'Recycle bin';
 $string['others'] = 'Others';
 $string['directory'] = 'Directory';
 $string['size'] = 'Size';

@@ -97,6 +97,7 @@ if (empty($diranalysis) || !is_array($diranalysis)) {
         'database' => 0,
         'filedir' => 0,
         'cache' => 0,
+        'trashdir' => 0,
         'others' => 0
     ];
 }
@@ -105,6 +106,7 @@ if (empty($diranalysis) || !is_array($diranalysis)) {
 $databasegb = round(($diranalysis['database'] ?? 0) / (1024 * 1024 * 1024), 2);
 $filedirgb = round(($diranalysis['filedir'] ?? 0) / (1024 * 1024 * 1024), 2);
 $cachegb = round(($diranalysis['cache'] ?? 0) / (1024 * 1024 * 1024), 2);
+$trashdirgb = round(($diranalysis['trashdir'] ?? 0) / (1024 * 1024 * 1024), 2);
 $othersgb = round(($diranalysis['others'] ?? 0) / (1024 * 1024 * 1024), 2);
 
 // Data for doughnut chart.
@@ -112,9 +114,10 @@ $doughnutlabels = [
     get_string('database', 'report_usage_monitor'),
     get_string('files_dir', 'report_usage_monitor'),
     get_string('cache', 'report_usage_monitor'),
+    get_string('trashdir', 'report_usage_monitor'),
     get_string('others', 'report_usage_monitor')
 ];
-$doughnutdata = [$databasegb, $filedirgb, $cachegb, $othersgb];
+$doughnutdata = [$databasegb, $filedirgb, $cachegb, $trashdirgb, $othersgb];
 
 // Get largest courses.
 $largestcourses = json_decode($reportconfig->largest_courses ?? '[]');
@@ -344,6 +347,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                                     'database' => get_string('database', 'report_usage_monitor'),
                                     'filedir' => get_string('files_dir', 'report_usage_monitor'),
                                     'cache' => get_string('cache', 'report_usage_monitor'),
+                                    'trashdir' => get_string('trashdir', 'report_usage_monitor'),
                                     'others' => get_string('others', 'report_usage_monitor'),
                                 ];
                                 foreach ($directories as $key => $label):
@@ -716,7 +720,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 labels: <?php echo json_encode($doughnutlabels); ?>,
                 datasets: [{
                     data: <?php echo json_encode($doughnutdata); ?>,
-                    backgroundColor: ["#007bff", "#28a745", "#ffc107", "#6c757d"],
+                    backgroundColor: ["#007bff", "#28a745", "#ffc107", "#17a2b8", "#6c757d"],
                     borderColor: "#ffffff",
                     borderWidth: 2,
                     hoverBorderWidth: 3,
