@@ -122,20 +122,10 @@ if (empty($largestcourses)) {
     $largestcourses = helper::get_largest_courses(5);
 }
 
-// Get last 10 days of user data.
+// Get last 10 days of user data using helper.
 $tendaysago = time() - (10 * 24 * 60 * 60);
 $yesterday = time() - (24 * 60 * 60);
-
-$sql = "SELECT DATE(FROM_UNIXTIME(timecreated)) as day,
-               COUNT(DISTINCT userid) as usercount
-        FROM {logstore_standard_log}
-        WHERE action = :action
-          AND timecreated BETWEEN :from AND :to
-        GROUP BY DATE(FROM_UNIXTIME(timecreated))
-        ORDER BY day DESC";
-
-$params = ['action' => 'loggedin', 'from' => $tendaysago, 'to' => $yesterday];
-$userdailyrecords = $DB->get_records_sql($sql, $params);
+$userdailyrecords = helper::get_user_daily_records($tendaysago, $yesterday);
 
 $last10dayslabels = [];
 $last10daysdata = [];
@@ -148,24 +138,14 @@ foreach ($userdailyrecords as $record) {
     $last10daysdataraw[] = (int)$record->usercount;
 }
 
-// Get top daily users.
-$topusers = $DB->get_records('report_usage_monitor', null, 'usercount DESC', '*', 0, 10);
+// Get top daily users using helper.
+$topusers = helper::get_top_daily_users(10);
 
-// Get system info.
-$totalcourses = $DB->count_records('course');
-$activeusers = $DB->count_records('user', ['deleted' => 0, 'suspended' => 0]) - 1;
-$suspendedusers = $DB->count_records('user', ['deleted' => 0, 'suspended' => 1]);
-$registeredusers = $activeusers + $suspendedusers;
-$backupmaxkept = get_config('backup', 'backup_auto_max_kept') ?? 0;
+// Get system info using helper.
+$systeminfo = helper::get_system_info();
 
-// Get disk usage history (last 30 days).
-$monthago = time() - (30 * 24 * 60 * 60);
-$sql = "SELECT timecreated, value, percentage 
-        FROM {report_usage_monitor_history} 
-        WHERE type = :type AND timecreated > :from 
-        ORDER BY timecreated ASC";
-
-$diskhistory = $DB->get_records_sql($sql, ['type' => 'disk', 'from' => $monthago]);
+// Get disk usage history using helper.
+$diskhistory = helper::get_usage_history(30, 'disk');
 
 $diskhistorylabels = [];
 $diskhistorydata = [];
@@ -194,6 +174,37 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 
 <div class="container-fluid mt-4">
+    <!-- Threshold Legend Card -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body py-2">
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <strong><?php echo get_string('threshold_conventions', 'report_usage_monitor'); ?>:</strong>
+                        </div>
+                        <div class="col">
+                            <span class="badge bg-success me-2">
+                                <i class="fa fa-check-circle"></i> <?php echo get_string('status_normal', 'report_usage_monitor'); ?> (&lt; 70%)
+                            </span>
+                            <span class="badge bg-warning me-2">
+                                <i class="fa fa-exclamation-triangle"></i> <?php echo get_string('status_warning', 'report_usage_monitor'); ?> (70% - 90%)
+                            </span>
+                            <span class="badge bg-danger">
+                                <i class="fa fa-times-circle"></i> <?php echo get_string('status_critical', 'report_usage_monitor'); ?> (&gt; 90%)
+                            </span>
+                        </div>
+                        <div class="col-auto">
+                            <small class="text-muted">
+                                <i class="fa fa-info-circle"></i> <?php echo get_string('threshold_info', 'report_usage_monitor'); ?>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Summary Cards Row -->
     <div class="row">
         <!-- Disk Usage Card -->
@@ -292,6 +303,13 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                 <div class="card-body" style="position:relative; min-height:400px;">
                     <?php if ($diskusagebytes > 0): ?>
                         <canvas id="chartjs-doughnut"></canvas>
+                        <div class="text-center mt-3">
+                            <small class="text-muted">
+                                <i class="fa fa-info-circle"></i> 
+                                <?php echo get_string('total_usage', 'report_usage_monitor'); ?>: <?php echo $diskusagegb; ?> GB 
+                                (<?php echo round($diskpercent, 1); ?>% <?php echo get_string('of_limit', 'report_usage_monitor'); ?>)
+                            </small>
+                        </div>
                     <?php else: ?>
                         <div class="alert alert-info">
                             <?php echo get_string('notcalculatedyet', 'report_usage_monitor'); ?>
@@ -336,7 +354,16 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                                 <tr>
                                     <td><?php echo $label; ?></td>
                                     <td><?php echo $gb . ' GB'; ?></td>
-                                    <td><?php echo $percent; ?>%</td>
+                                    <td>
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar bg-info" role="progressbar" 
+                                                 style="width: <?php echo $percent; ?>%"
+                                                 aria-valuenow="<?php echo $percent; ?>" 
+                                                 aria-valuemin="0" aria-valuemax="100">
+                                                <?php echo $percent; ?>%
+                                            </div>
+                                        </div>
+                                    </td>
                                 </tr>
                                 <?php endforeach; ?>
                             <?php else: ?>
@@ -407,7 +434,13 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                     <h5 class="mb-0"><?php echo get_string('disk_usage_history', 'report_usage_monitor'); ?></h5>
                 </div>
                 <div class="card-body">
-                    <canvas id="chartjs-disk-history" style="height: 300px;"></canvas>
+                    <canvas id="chartjs-disk-history" style="height: 400px;"></canvas>
+                    <div class="mt-3 text-center">
+                        <small class="text-muted">
+                            <i class="fa fa-info-circle"></i> 
+                            <?php echo get_string('chart_info', 'report_usage_monitor'); ?>
+                        </small>
+                    </div>
                 </div>
             </div>
         </div>
@@ -444,6 +477,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                                             <th><?php echo get_string('date', 'report_usage_monitor'); ?></th>
                                             <th><?php echo get_string('usersquantity', 'report_usage_monitor'); ?></th>
                                             <th><?php echo get_string('percentage', 'report_usage_monitor'); ?></th>
+                                            <th><?php echo get_string('status', 'report_usage_monitor'); ?></th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -452,21 +486,27 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                                                 <?php
                                                 $percent = helper::calculate_percentage($record->usercount, $maxusersthreshold);
                                                 $class = '';
+                                                $badge = '';
                                                 if ($percent >= 90) {
                                                     $class = 'text-danger';
+                                                    $badge = '<span class="badge bg-danger">' . get_string('status_critical', 'report_usage_monitor') . '</span>';
                                                 } else if ($percent >= 70) {
                                                     $class = 'text-warning';
+                                                    $badge = '<span class="badge bg-warning">' . get_string('status_warning', 'report_usage_monitor') . '</span>';
+                                                } else {
+                                                    $badge = '<span class="badge bg-success">' . get_string('status_normal', 'report_usage_monitor') . '</span>';
                                                 }
                                                 ?>
                                                 <tr>
                                                     <td><?php echo $record->day; ?></td>
                                                     <td><?php echo $record->usercount; ?></td>
                                                     <td class="<?php echo $class; ?>"><?php echo round($percent, 1); ?>%</td>
+                                                    <td><?php echo $badge; ?></td>
                                                 </tr>
                                             <?php endforeach; ?>
                                         <?php else: ?>
                                             <tr>
-                                                <td colspan="3" class="text-center">
+                                                <td colspan="4" class="text-center">
                                                     <?php echo get_string('notcalculatedyet', 'report_usage_monitor'); ?>
                                                 </td>
                                             </tr>
@@ -478,6 +518,12 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                         <div class="tab-pane fade" id="grafica10" role="tabpanel">
                             <?php if (!empty($last10dayslabels)): ?>
                                 <canvas id="chartjs-last10days" style="height: 400px;"></canvas>
+                                <div class="mt-3 text-center">
+                                    <small class="text-muted">
+                                        <i class="fa fa-info-circle"></i> 
+                                        <?php echo get_string('chart_info', 'report_usage_monitor'); ?>
+                                    </small>
+                                </div>
                             <?php else: ?>
                                 <div class="alert alert-info">
                                     <?php echo get_string('notcalculatedyet', 'report_usage_monitor'); ?>
@@ -504,6 +550,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                                 <th><?php echo get_string('date', 'report_usage_monitor'); ?></th>
                                 <th><?php echo get_string('usersquantity', 'report_usage_monitor'); ?></th>
                                 <th><?php echo get_string('percentage', 'report_usage_monitor'); ?></th>
+                                <th><?php echo get_string('status', 'report_usage_monitor'); ?></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -514,21 +561,27 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                                     $date = $timestamp ? userdate($timestamp, get_string('strftimedate')) : '-';
                                     $percent = helper::calculate_percentage($record->usercount, $maxusersthreshold);
                                     $class = '';
+                                    $badge = '';
                                     if ($percent >= 90) {
                                         $class = 'text-danger';
+                                        $badge = '<span class="badge bg-danger">' . get_string('status_critical', 'report_usage_monitor') . '</span>';
                                     } else if ($percent >= 70) {
                                         $class = 'text-warning';
+                                        $badge = '<span class="badge bg-warning">' . get_string('status_warning', 'report_usage_monitor') . '</span>';
+                                    } else {
+                                        $badge = '<span class="badge bg-success">' . get_string('status_normal', 'report_usage_monitor') . '</span>';
                                     }
                                     ?>
                                     <tr>
                                         <td><?php echo $date; ?></td>
                                         <td><?php echo $record->usercount; ?></td>
                                         <td class="<?php echo $class; ?>"><?php echo round($percent, 1); ?>%</td>
+                                        <td><?php echo $badge; ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php else: ?>
                                 <tr>
-                                    <td colspan="3" class="text-center">
+                                    <td colspan="4" class="text-center">
                                         <?php echo get_string('notcalculatedyet', 'report_usage_monitor'); ?>
                                     </td>
                                 </tr>
@@ -556,7 +609,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                                     <div class="small text-muted">
                                         <?php echo get_string('moodle_version', 'report_usage_monitor'); ?>
                                     </div>
-                                    <div class="h5"><?php echo $CFG->release; ?></div>
+                                    <div class="h5"><?php echo $systeminfo->moodlerelease; ?></div>
                                 </div>
                             </div>
                         </div>
@@ -566,7 +619,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                                     <div class="small text-muted">
                                         <?php echo get_string('total_courses', 'report_usage_monitor'); ?>
                                     </div>
-                                    <div class="h5"><?php echo $totalcourses; ?></div>
+                                    <div class="h5"><?php echo $systeminfo->totalcourses; ?></div>
                                 </div>
                             </div>
                         </div>
@@ -576,7 +629,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                                     <div class="small text-muted">
                                         <?php echo get_string('backup_per_course', 'report_usage_monitor'); ?>
                                     </div>
-                                    <div class="h5"><?php echo $backupmaxkept; ?></div>
+                                    <div class="h5"><?php echo $systeminfo->backupmaxkept; ?></div>
                                 </div>
                             </div>
                         </div>
@@ -587,7 +640,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                                         <?php echo get_string('registered_users', 'report_usage_monitor'); ?>
                                     </div>
                                     <div class="h5">
-                                        <?php echo $activeusers; ?>/<?php echo $suspendedusers; ?>
+                                        <?php echo $systeminfo->activeusers; ?>/<?php echo $systeminfo->suspendedusers; ?>
                                         <br>
                                         <small class="text-muted">
                                             <?php echo get_string('active_users', 'report_usage_monitor'); ?>/<?php echo get_string('suspended_users', 'report_usage_monitor'); ?>
@@ -612,7 +665,7 @@ echo $OUTPUT->heading(get_string('dashboard_title', 'report_usage_monitor'));
                         <div class="alert alert-<?php echo ($diskpercent > 90) ? 'danger' : 'warning'; ?>">
                             <h6><?php echo get_string('space_saving_tips', 'report_usage_monitor'); ?></h6>
                             <ul class="mb-0 small">
-                                <li><?php echo get_string('tip_backups', 'report_usage_monitor', $backupmaxkept); ?></li>
+                                <li><?php echo get_string('tip_backups', 'report_usage_monitor', $systeminfo->backupmaxkept); ?></li>
                                 <li><?php echo get_string('tip_files', 'report_usage_monitor'); ?></li>
                                 <li><?php echo get_string('tip_courses', 'report_usage_monitor'); ?></li>
                                 <li><?php echo get_string('tip_cache', 'report_usage_monitor'); ?></li>
@@ -663,20 +716,51 @@ document.addEventListener("DOMContentLoaded", function() {
                 labels: <?php echo json_encode($doughnutlabels); ?>,
                 datasets: [{
                     data: <?php echo json_encode($doughnutdata); ?>,
-                    backgroundColor: ["#007bff", "#28a745", "#ffc107", "#dee2e6"],
-                    borderColor: "transparent"
+                    backgroundColor: ["#007bff", "#28a745", "#ffc107", "#6c757d"],
+                    borderColor: "#ffffff",
+                    borderWidth: 2,
+                    hoverBorderWidth: 3,
+                    hoverOffset: 5
                 }]
             },
             options: {
                 maintainAspectRatio: false,
                 cutout: '65%',
                 plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            padding: 15,
+                            usePointStyle: true,
+                            font: {
+                                size: 12
+                            },
+                            generateLabels: function(chart) {
+                                const data = chart.data;
+                                const total = data.datasets[0].data.reduce((a, b) => a + b, 0);
+                                return data.labels.map((label, i) => ({
+                                    text: label + ' (' + ((data.datasets[0].data[i] / total) * 100).toFixed(1) + '%)',
+                                    fillStyle: data.datasets[0].backgroundColor[i],
+                                    strokeStyle: '#fff',
+                                    lineWidth: 2,
+                                    hidden: false,
+                                    index: i
+                                }));
+                            }
+                        }
+                    },
                     tooltip: {
                         callbacks: {
                             label: function(context) {
-                                return context.label + ': ' + context.parsed + ' GB';
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((value / total) * 100).toFixed(1);
+                                return label + ': ' + value.toFixed(2) + ' GB (' + percentage + '%)';
                             }
-                        }
+                        },
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        padding: 10
                     }
                 }
             }
@@ -688,39 +772,81 @@ document.addEventListener("DOMContentLoaded", function() {
     <?php if (!empty($last10dayslabels)): ?>
     var last10Ctx = document.getElementById("chartjs-last10days");
     if (last10Ctx) {
+        const usersData = <?php echo json_encode($last10daysdata); ?>;
+        const usersAvg = usersData.reduce((a, b) => a + b, 0) / usersData.length;
+        
         new Chart(last10Ctx, {
             type: "line",
             data: {
                 labels: <?php echo json_encode($last10dayslabels); ?>,
                 datasets: [
                     {
-                        label: "<?php echo get_string('usersquantity', 'report_usage_monitor'); ?>",
+                        label: "<?php echo get_string('users_percentage', 'report_usage_monitor'); ?>",
                         fill: true,
                         backgroundColor: "rgba(0, 123, 255, 0.1)",
                         borderColor: "#007bff",
-                        data: <?php echo json_encode($last10daysdata); ?>
+                        data: usersData,
+                        tension: 0.3,
+                        pointBackgroundColor: function(context) {
+                            const value = context.parsed.y;
+                            if (value < 70) return '#28a745';
+                            if (value < 90) return '#ffc107';
+                            return '#dc3545';
+                        },
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
                     },
                     {
                         label: "<?php echo get_string('warning70', 'report_usage_monitor'); ?>",
                         fill: false,
                         borderColor: "#ffc107",
                         borderDash: [5, 5],
+                        borderWidth: 2,
                         pointRadius: 0,
-                        data: Array(<?php echo count($last10dayslabels); ?>).fill(70)
+                        data: Array(<?php echo count($last10dayslabels); ?>).fill(70),
+                        pointHoverRadius: 0
                     },
                     {
                         label: "<?php echo get_string('critical90', 'report_usage_monitor'); ?>",
                         fill: false,
                         borderColor: "#dc3545",
                         borderDash: [5, 5],
+                        borderWidth: 2,
                         pointRadius: 0,
-                        data: Array(<?php echo count($last10dayslabels); ?>).fill(90)
+                        data: Array(<?php echo count($last10dayslabels); ?>).fill(90),
+                        pointHoverRadius: 0
+                    },
+                    {
+                        label: "<?php echo get_string('limit100', 'report_usage_monitor'); ?>",
+                        fill: false,
+                        borderColor: "#333333",
+                        borderDash: [10, 5],
+                        borderWidth: 3,
+                        pointRadius: 0,
+                        data: Array(<?php echo count($last10dayslabels); ?>).fill(100),
+                        pointHoverRadius: 0
+                    },
+                    {
+                        label: "<?php echo get_string('average', 'report_usage_monitor'); ?> (" + usersAvg.toFixed(1) + "%)",
+                        fill: false,
+                        borderColor: "rgba(128, 128, 128, 0.5)",
+                        borderDash: [3, 3],
+                        borderWidth: 1,
+                        pointRadius: 0,
+                        data: Array(<?php echo count($last10dayslabels); ?>).fill(usersAvg),
+                        pointHoverRadius: 0
                     }
                 ]
             },
             options: {
                 maintainAspectRatio: false,
                 responsive: true,
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                },
                 scales: {
                     y: {
                         beginAtZero: true,
@@ -728,21 +854,85 @@ document.addEventListener("DOMContentLoaded", function() {
                         ticks: {
                             callback: function(value) {
                                 return value + "%";
+                            },
+                            stepSize: 10
+                        },
+                        grid: {
+                            drawBorder: false,
+                            color: function(context) {
+                                if (context.tick.value === 70) return 'rgba(255, 193, 7, 0.2)';
+                                if (context.tick.value === 90) return 'rgba(220, 53, 69, 0.2)';
+                                if (context.tick.value === 100) return 'rgba(51, 51, 51, 0.3)';
+                                return 'rgba(0, 0, 0, 0.1)';
                             }
+                        }
+                    },
+                    x: {
+                        grid: {
+                            drawBorder: false,
+                            display: false
                         }
                     }
                 },
                 plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        align: 'end',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 15,
+                            font: {
+                                size: 11
+                            },
+                            generateLabels: function(chart) {
+                                return chart.data.datasets.map((dataset, i) => ({
+                                    text: dataset.label,
+                                    fillStyle: dataset.borderColor,
+                                    strokeStyle: dataset.borderColor,
+                                    lineWidth: dataset.borderWidth,
+                                    lineDash: dataset.borderDash,
+                                    hidden: !chart.isDatasetVisible(i),
+                                    index: i,
+                                    datasetIndex: i
+                                }));
+                            }
+                        },
+                        onClick: function(e, legendItem, legend) {
+                            const index = legendItem.index;
+                            const chart = legend.chart;
+                            const meta = chart.getDatasetMeta(index);
+                            
+                            // Toggle visibility
+                            meta.hidden = meta.hidden === null ? !chart.data.datasets[index].hidden : !meta.hidden;
+                            chart.update();
+                        }
+                    },
                     tooltip: {
+                        filter: function(tooltipItem) {
+                            return tooltipItem.datasetIndex === 0;
+                        },
                         callbacks: {
                             label: function(context) {
-                                if (context.dataset.label === "<?php echo get_string('usersquantity', 'report_usage_monitor'); ?>") {
-                                    var raw = <?php echo json_encode($last10daysdataraw); ?>;
-                                    return context.dataset.label + ": " + raw[context.dataIndex] + " (" + context.parsed.y + "%)";
+                                if (context.datasetIndex === 0) {
+                                    const raw = <?php echo json_encode($last10daysdataraw); ?>;
+                                    const percent = context.parsed.y;
+                                    const users = raw[context.dataIndex];
+                                    const status = percent < 70 ? '<?php echo get_string('status_normal', 'report_usage_monitor'); ?>' : 
+                                                  (percent < 90 ? '<?php echo get_string('status_warning', 'report_usage_monitor'); ?>' : 
+                                                  '<?php echo get_string('status_critical', 'report_usage_monitor'); ?>');
+                                    return [
+                                        '<?php echo get_string('usersquantity', 'report_usage_monitor'); ?>: ' + users,
+                                        '<?php echo get_string('percentage', 'report_usage_monitor'); ?>: ' + percent.toFixed(1) + '%',
+                                        '<?php echo get_string('status', 'report_usage_monitor'); ?>: ' + status
+                                    ];
                                 }
-                                return context.dataset.label;
+                                return null;
                             }
-                        }
+                        },
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        padding: 10,
+                        displayColors: false
                     }
                 }
             }
@@ -750,33 +940,168 @@ document.addEventListener("DOMContentLoaded", function() {
     }
     <?php endif; ?>
 
-    // Disk History Chart
+    // Disk History Chart - Similar to Users Chart
     <?php if (!empty($diskhistorylabels)): ?>
     var diskHistoryCtx = document.getElementById("chartjs-disk-history");
     if (diskHistoryCtx) {
+        const diskData = <?php echo json_encode($diskhistorydata); ?>;
+        const diskAvg = diskData.reduce((a, b) => a + b, 0) / diskData.length;
+        
         new Chart(diskHistoryCtx, {
             type: "line",
             data: {
                 labels: <?php echo json_encode($diskhistorylabels); ?>,
-                datasets: [{
-                    label: "<?php echo get_string('percentage_used', 'report_usage_monitor'); ?>",
-                    fill: true,
-                    backgroundColor: "rgba(0, 123, 255, 0.1)",
-                    borderColor: "#007bff",
-                    data: <?php echo json_encode($diskhistorydata); ?>,
-                    tension: 0.2
-                }]
+                datasets: [
+                    {
+                        label: "<?php echo get_string('disk_usage_percentage', 'report_usage_monitor'); ?>",
+                        fill: true,
+                        backgroundColor: "rgba(0, 123, 255, 0.1)",
+                        borderColor: "#007bff",
+                        data: diskData,
+                        tension: 0.3,
+                        pointBackgroundColor: function(context) {
+                            const value = context.parsed.y;
+                            if (value < 70) return '#28a745';
+                            if (value < 90) return '#ffc107';
+                            return '#dc3545';
+                        },
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    },
+                    {
+                        label: "<?php echo get_string('warning70', 'report_usage_monitor'); ?>",
+                        fill: false,
+                        borderColor: "#ffc107",
+                        borderDash: [5, 5],
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        data: Array(diskData.length).fill(70),
+                        pointHoverRadius: 0
+                    },
+                    {
+                        label: "<?php echo get_string('critical90', 'report_usage_monitor'); ?>",
+                        fill: false,
+                        borderColor: "#dc3545",
+                        borderDash: [5, 5],
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        data: Array(diskData.length).fill(90),
+                        pointHoverRadius: 0
+                    },
+                    {
+                        label: "<?php echo get_string('limit100', 'report_usage_monitor'); ?>",
+                        fill: false,
+                        borderColor: "#333333",
+                        borderDash: [10, 5],
+                        borderWidth: 3,
+                        pointRadius: 0,
+                        data: Array(diskData.length).fill(100),
+                        pointHoverRadius: 0
+                    },
+                    {
+                        label: "<?php echo get_string('average', 'report_usage_monitor'); ?> (" + diskAvg.toFixed(1) + "%)",
+                        fill: false,
+                        borderColor: "rgba(128, 128, 128, 0.5)",
+                        borderDash: [3, 3],
+                        borderWidth: 1,
+                        pointRadius: 0,
+                        data: Array(diskData.length).fill(diskAvg),
+                        pointHoverRadius: 0
+                    }
+                ]
             },
             options: {
                 maintainAspectRatio: false,
                 responsive: true,
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                },
                 scales: {
                     y: {
                         beginAtZero: true,
                         max: 100,
                         ticks: {
-                            callback: function(value) { return value + "%"; }
+                            callback: function(value) { 
+                                return value + "%"; 
+                            },
+                            stepSize: 10
+                        },
+                        grid: {
+                            drawBorder: false,
+                            color: function(context) {
+                                if (context.tick.value === 70) return 'rgba(255, 193, 7, 0.2)';
+                                if (context.tick.value === 90) return 'rgba(220, 53, 69, 0.2)';
+                                if (context.tick.value === 100) return 'rgba(51, 51, 51, 0.3)';
+                                return 'rgba(0, 0, 0, 0.1)';
+                            }
                         }
+                    },
+                    x: {
+                        grid: {
+                            drawBorder: false,
+                            display: false
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        align: 'end',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 15,
+                            font: {
+                                size: 11
+                            },
+                            generateLabels: function(chart) {
+                                return chart.data.datasets.map((dataset, i) => ({
+                                    text: dataset.label,
+                                    fillStyle: dataset.borderColor,
+                                    strokeStyle: dataset.borderColor,
+                                    lineWidth: dataset.borderWidth,
+                                    lineDash: dataset.borderDash,
+                                    hidden: !chart.isDatasetVisible(i),
+                                    index: i,
+                                    datasetIndex: i
+                                }));
+                            }
+                        },
+                        onClick: function(e, legendItem, legend) {
+                            const index = legendItem.index;
+                            const chart = legend.chart;
+                            const meta = chart.getDatasetMeta(index);
+                            
+                            // Toggle visibility
+                            meta.hidden = meta.hidden === null ? !chart.data.datasets[index].hidden : !meta.hidden;
+                            chart.update();
+                        }
+                    },
+                    tooltip: {
+                        filter: function(tooltipItem) {
+                            return tooltipItem.datasetIndex === 0;
+                        },
+                        callbacks: {
+                            label: function(context) {
+                                if (context.datasetIndex === 0) {
+                                    const value = context.parsed.y;
+                                    const status = value < 70 ? '<?php echo get_string('status_normal', 'report_usage_monitor'); ?>' : 
+                                                  (value < 90 ? '<?php echo get_string('status_warning', 'report_usage_monitor'); ?>' : 
+                                                  '<?php echo get_string('status_critical', 'report_usage_monitor'); ?>');
+                                    return [
+                                        context.dataset.label + ': ' + value.toFixed(1) + '%',
+                                        '<?php echo get_string('status', 'report_usage_monitor'); ?>: ' + status
+                                    ];
+                                }
+                                return null;
+                            }
+                        },
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        padding: 10,
+                        displayColors: false
                     }
                 }
             }
@@ -790,6 +1115,31 @@ document.addEventListener("DOMContentLoaded", function() {
 .bg-success { color: white; }
 .bg-warning { color: white; }
 .bg-danger { color: white; }
+.progress { position: relative; }
+.progress-bar { transition: width 0.6s ease; }
+canvas { max-height: 400px; }
+.badge { font-weight: 500; }
+.card-header .badge { font-size: 0.875rem; }
+.table .badge { font-size: 0.75rem; }
+.nav-tabs .nav-link { font-weight: 500; }
+.nav-tabs .nav-link.active { 
+    color: #007bff;
+    border-color: #dee2e6 #dee2e6 #fff;
+}
+/* Chart legend styling */
+.chart-container {
+    position: relative;
+    height: 400px;
+}
+/* Ensure legend items are clickable */
+canvas {
+    user-select: none;
+}
+/* Legend hover effect */
+.chart-legend-item:hover {
+    opacity: 0.7;
+    cursor: pointer;
+}
 </style>
 
 <?php

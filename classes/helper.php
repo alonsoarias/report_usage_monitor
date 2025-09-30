@@ -156,6 +156,52 @@ class helper {
     }
     
     /**
+     * Get daily user login records.
+     *
+     * @param int $from Start timestamp
+     * @param int $to End timestamp
+     * @return array Array of records with day and usercount
+     */
+    public static function get_user_daily_records($from, $to) {
+        global $DB;
+        
+        $from = self::validate_timestamp($from);
+        $to = self::validate_timestamp($to);
+        
+        $sql = "SELECT DATE(FROM_UNIXTIME(timecreated)) as day,
+                       COUNT(DISTINCT userid) as usercount
+                FROM {logstore_standard_log}
+                WHERE action = :action
+                  AND timecreated BETWEEN :from AND :to
+                GROUP BY DATE(FROM_UNIXTIME(timecreated))
+                ORDER BY day DESC";
+        
+        $params = ['action' => 'loggedin', 'from' => $from, 'to' => $to];
+        
+        return $DB->get_records_sql($sql, $params);
+    }
+    
+    /**
+     * Get disk usage history records.
+     *
+     * @param int $days Number of days to retrieve
+     * @param string $type Type of history (disk or users)
+     * @return array Array of history records
+     */
+    public static function get_usage_history($days = 30, $type = 'disk') {
+        global $DB;
+        
+        $from = time() - ($days * 24 * 60 * 60);
+        
+        $sql = "SELECT timecreated, value, percentage 
+                FROM {report_usage_monitor_history} 
+                WHERE type = :type AND timecreated > :from 
+                ORDER BY timecreated ASC";
+        
+        return $DB->get_records_sql($sql, ['type' => $type, 'from' => $from]);
+    }
+    
+    /**
      * Get database size.
      *
      * @return int Size in bytes
@@ -202,6 +248,18 @@ class helper {
         ];
         
         return $DB->get_records_sql($sql, $params, 0, $limit);
+    }
+    
+    /**
+     * Get top daily users records.
+     *
+     * @param int $limit Number of records to return
+     * @return array Array of top user records
+     */
+    public static function get_top_daily_users($limit = 10) {
+        global $DB;
+        
+        return $DB->get_records('report_usage_monitor', null, 'usercount DESC', '*', 0, $limit);
     }
     
     /**
@@ -254,5 +312,24 @@ class helper {
         }
         
         return null;
+    }
+    
+    /**
+     * Get system information.
+     *
+     * @return \stdClass Object with system info
+     */
+    public static function get_system_info() {
+        global $DB, $CFG;
+        
+        $info = new \stdClass();
+        $info->totalcourses = $DB->count_records('course');
+        $info->activeusers = $DB->count_records('user', ['deleted' => 0, 'suspended' => 0]) - 1;
+        $info->suspendedusers = $DB->count_records('user', ['deleted' => 0, 'suspended' => 1]);
+        $info->registeredusers = $info->activeusers + $info->suspendedusers;
+        $info->backupmaxkept = get_config('backup', 'backup_auto_max_kept') ?? 0;
+        $info->moodlerelease = $CFG->release;
+        
+        return $info;
     }
 }

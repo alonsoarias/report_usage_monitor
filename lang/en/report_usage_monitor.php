@@ -72,11 +72,24 @@ $string['active_users'] = 'active';
 $string['suspended_users'] = 'suspended';
 $string['recommendations'] = 'Recommendations';
 
-// Warning levels.
+// Warning levels and status.
 $string['warning70'] = 'Warning (70%)';
 $string['critical90'] = 'Critical (90%)';
 $string['limit100'] = 'Limit (100%)';
 $string['percent_of_threshold'] = '% of threshold';
+$string['threshold_conventions'] = 'Threshold Conventions';
+$string['status_normal'] = 'Normal';
+$string['status_warning'] = 'Warning';
+$string['status_critical'] = 'Critical';
+$string['status'] = 'Status';
+$string['average'] = 'Average';
+$string['trend'] = 'Trend';
+$string['total_usage'] = 'Total usage';
+$string['of_limit'] = 'of limit';
+$string['chart_info'] = 'Dashed lines represent warning (70%) and critical (90%) thresholds';
+$string['threshold_info'] = 'Colors indicate usage level relative to configured limit';
+$string['users_percentage'] = 'Users (%)';
+$string['disk_usage_percentage'] = 'Disk Usage (%)';
 
 // Recommendations.
 $string['space_saving_tips'] = 'Tips to save disk space:';
